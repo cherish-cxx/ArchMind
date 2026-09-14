@@ -42,6 +42,11 @@ public class AnalysisTaskExecutor {
             ProjectOverviewResponse overview = pipeline.overviewStage(projectId,
                     pct -> taskService.reportProgress(taskId, AnalysisStage.OVERVIEW, pct));
 
+            // 阶段四：核心类简要描述（挑核心类 → LLM 批量生成一句话简介 → 写回图节点）
+            taskService.enterStage(taskId, AnalysisStage.DESCRIBE);
+            pipeline.describeStage(projectId,
+                    pct -> taskService.reportProgress(taskId, AnalysisStage.DESCRIBE, pct));
+
             taskService.markSuccess(taskId, overview);
             log.info("分析任务完成 taskId={}, projectId={}", taskId, projectId);
         } catch (Throwable t) {

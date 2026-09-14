@@ -51,9 +51,9 @@ public class CodeGraphNeo4jWriter {
     private static final String MERGE_METHOD = """
             UNWIND $rows AS row
             MERGE (m:Method:CodeNode {projectId: row.projectId, uid: row.uid})
-            SET m.qualifiedName = row.qualifiedName, m.signature = row.signature, m.name = row.name,
-                m.returnType = row.returnType, m.fileId = row.fileId, m.startLine = row.startLine,
-                m.endLine = row.endLine, m.visibility = row.visibility,
+            SET m.owner = row.owner, m.qualifiedName = row.qualifiedName, m.signature = row.signature,
+                m.name = row.name, m.returnType = row.returnType, m.fileId = row.fileId,
+                m.startLine = row.startLine, m.endLine = row.endLine, m.visibility = row.visibility,
                 m.isStatic = row.isStatic, m.isConstructor = row.isConstructor
             """;
 
@@ -174,6 +174,7 @@ public class CodeGraphNeo4jWriter {
                     Map<String, Object> row = new HashMap<>();
                     row.put("projectId", projectId);
                     row.put("uid", methodUid(pm));
+                    row.put("owner", pm.getOwnerQualifiedName());
                     row.put("qualifiedName", pm.getQualifiedName());
                     row.put("signature", pm.getSignature());
                     row.put("name", pm.getName());

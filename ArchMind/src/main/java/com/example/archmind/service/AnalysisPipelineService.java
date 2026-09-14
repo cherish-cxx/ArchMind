@@ -15,4 +15,7 @@ public interface AnalysisPipelineService {
 
     /** 阶段三：概况生成（读 pom/README → 调 LLM → 落库） */
     ProjectOverviewResponse overviewStage(Long projectId, ProgressReporter reporter);
+
+    /** 阶段四：核心类简要描述（挑核心类 → LLM 批量生成一句话简介 → 写回图节点） */
+    void describeStage(Long projectId, ProgressReporter reporter);
 }

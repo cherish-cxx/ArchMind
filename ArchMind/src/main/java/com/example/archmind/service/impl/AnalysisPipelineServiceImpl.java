@@ -2,6 +2,7 @@ package com.example.archmind.service.impl;
 
 import com.example.archmind.dto.response.ProjectOverviewResponse;
 import com.example.archmind.service.AnalysisPipelineService;
+import com.example.archmind.service.ClassDescriptionService;
 import com.example.archmind.service.ProgressReporter;
 import com.example.archmind.service.ProjectOverviewService;
 import com.example.archmind.service.ast.CodeGraphService;
@@ -20,6 +21,7 @@ public class AnalysisPipelineServiceImpl implements AnalysisPipelineService {
 
     private final ProjectOverviewService projectOverviewService;
     private final CodeGraphService codeGraphService;
+    private final ClassDescriptionService classDescriptionService;
 
     @Override
     public void scanStage(Long projectId, ProgressReporter reporter) {
@@ -40,5 +42,10 @@ public class AnalysisPipelineServiceImpl implements AnalysisPipelineService {
         ProjectOverviewResponse response = projectOverviewService.generateOverview(projectId);
         reporter.report(100);
         return response;
+    }
+
+    @Override
+    public void describeStage(Long projectId, ProgressReporter reporter) {
+        classDescriptionService.describeCoreClasses(projectId, reporter);
     }
 }
