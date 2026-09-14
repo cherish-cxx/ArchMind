@@ -2,6 +2,7 @@ package com.example.archmind.service.impl;
 
 import com.example.archmind.model.ast.*;
 import com.example.archmind.service.ast.AstParserService;
+import com.example.archmind.service.ast.RelationResolver;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
@@ -28,7 +29,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 阶段 A 实现：JavaParser 逐文件抽取声明 + 悬空调用 + 作用域类型表。
+ * AST 解析流水线编排：A 逐文件抽声明与悬空调用 → B 建全项目索引 → C 消解关系产边。
  * 纯函数、零 IO，可单测。
  */
 @Service
@@ -49,10 +50,13 @@ public class AstParserServiceImpl implements AstParserService {
     @Override
     public ParsedProject parse(List<SourceFileView> files) {
         ParsedProject project = new ParsedProject();
+//        每一轮拿到一个文件对象，里面包含relativePath等等的文件内容
         for (SourceFileView file : files) {
             try {
                 ParseResult<CompilationUnit> result = parser.parse(file.content());
+//              解析没有语法错误，并且拿到AST语法树
                 if (result.isSuccessful() && result.getResult().isPresent()) {
+//                    调用extractFile把原始文件信息+AST打包成ParsedFile对象
                     ParsedFile pf = extractFile(file, result.getResult().get());
                     project.getFiles().add(pf);
                 } else {
@@ -63,6 +67,11 @@ public class AstParserServiceImpl implements AstParserService {
                 log.warn("AST 解析异常，跳过: {}", file.relativePath(), e);
             }
         }
+
+        // B：建全项目符号索引（类/方法字典）
+        ProjectIndex index = ProjectIndex.build(project);
+        // C：关系解析——拿字典给悬空调用与短名定名，产出边
+        project.setEdges(new RelationResolver(index).resolve(project));
         return project;
     }
 

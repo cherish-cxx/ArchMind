@@ -4,6 +4,7 @@ import com.example.archmind.dto.response.ProjectOverviewResponse;
 import com.example.archmind.service.AnalysisPipelineService;
 import com.example.archmind.service.ProgressReporter;
 import com.example.archmind.service.ProjectOverviewService;
+import com.example.archmind.service.ast.CodeGraphService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 public class AnalysisPipelineServiceImpl implements AnalysisPipelineService {
 
     private final ProjectOverviewService projectOverviewService;
+    private final CodeGraphService codeGraphService;
 
     @Override
     public void scanStage(Long projectId, ProgressReporter reporter) {
@@ -28,9 +30,8 @@ public class AnalysisPipelineServiceImpl implements AnalysisPipelineService {
 
     @Override
     public void astStage(Long projectId, ProgressReporter reporter) {
-        // TODO P1 第二刀：列出 java 文件 → JavaParser 解析 → 写 MySQL + Neo4j
-        // 形如：for (int i = 0; i < files.size(); i++) { ... reporter.report(i * 100 / files.size()); }
-        reporter.report(100);
+        // 定位源码 → JavaParser 解析 → 写入 Neo4j 图。失败直接抛出，由 Executor 落 FAILED
+        codeGraphService.rebuild(projectId, reporter);
     }
 
     @Override
