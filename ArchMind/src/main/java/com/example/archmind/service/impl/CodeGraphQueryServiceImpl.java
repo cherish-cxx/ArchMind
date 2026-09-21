@@ -5,6 +5,7 @@ import com.example.archmind.dto.response.ClassNodeDTO;
 import com.example.archmind.dto.response.ClassRelationsResponse;
 import com.example.archmind.dto.response.RelatedClassDTO;
 import com.example.archmind.service.ast.CodeGraphQueryService;
+import com.example.archmind.service.ast.RelationDirection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.neo4j.driver.Driver;
@@ -29,7 +30,7 @@ import java.util.Map;
 public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
 
     private static final String LIST_CLASSES =
-            "MATCH (c:Class {projectId: $pid}) RETURN c ORDER BY c.packageName, c.name";
+            "MATCH (c:Class {projectId: $pid}) RETURN c ORDER BY c.packageName, c.name LIMIT $limit";
 
     private static final String FIND_CENTER =
             "MATCH (c:Class {projectId: $pid, uid: $uid}) RETURN c";
@@ -76,8 +77,13 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
 
     @Override
     public List<ClassNodeDTO> listClasses(Long projectId) {
+        return listClasses(projectId, Integer.MAX_VALUE);
+    }
+
+    @Override
+    public List<ClassNodeDTO> listClasses(Long projectId, int limit) {
         try (Session session = driver.session()) {
-            Result result = session.run(LIST_CLASSES, Map.of("pid", projectId));
+            Result result = session.run(LIST_CLASSES, Map.of("pid", projectId, "limit", limit));
             List<ClassNodeDTO> list = new ArrayList<>();
             while (result.hasNext()) {
                 list.add(toClassNode(result.next().get("c")));
@@ -88,6 +94,11 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
 
     @Override
     public ClassRelationsResponse classRelations(Long projectId, String uid) {
+        return classRelations(projectId, uid, RelationDirection.BOTH);
+    }
+
+    @Override
+    public ClassRelationsResponse classRelations(Long projectId, String uid, RelationDirection direction) {
         try (Session session = driver.session()) {
             Map<String, Object> params = Map.of("pid", projectId, "uid", uid);
 
@@ -103,17 +114,21 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
             ClassRelationsResponse resp = new ClassRelationsResponse();
             resp.setCenter(center);
 
-            ClassRelationsResponse.Upstream up = new ClassRelationsResponse.Upstream();
-            up.setCallers(aggregateCalls(session.run(CALLERS, params)));
-            up.setDependents(aggregateDepends(session.run(DEPENDENTS, params)));
-            up.setSubclasses(aggregateInherit(session.run(SUBCLASSES, params)));
-            resp.setUpstream(up);
-
-            ClassRelationsResponse.Downstream down = new ClassRelationsResponse.Downstream();
-            down.setCallees(aggregateCalls(session.run(CALLEES, params)));
-            down.setDependencies(aggregateDepends(session.run(DEPENDENCIES, params)));
-            down.setParents(aggregateInherit(session.run(PARENTS, params)));
-            resp.setDownstream(down);
+            // 只跑需要的那一侧：原来固定跑 6 条 Cypher，单方向调用会白跑 5 条
+            if (direction != RelationDirection.DOWN) {
+                ClassRelationsResponse.Upstream up = new ClassRelationsResponse.Upstream();
+                up.setCallers(aggregateCalls(session.run(CALLERS, params)));
+                up.setDependents(aggregateDepends(session.run(DEPENDENTS, params)));
+                up.setSubclasses(aggregateInherit(session.run(SUBCLASSES, params)));
+                resp.setUpstream(up);
+            }
+            if (direction != RelationDirection.UP) {
+                ClassRelationsResponse.Downstream down = new ClassRelationsResponse.Downstream();
+                down.setCallees(aggregateCalls(session.run(CALLEES, params)));
+                down.setDependencies(aggregateDepends(session.run(DEPENDENCIES, params)));
+                down.setParents(aggregateInherit(session.run(PARENTS, params)));
+                resp.setDownstream(down);
+            }
 
             return resp;
         }

@@ -36,9 +36,24 @@ public class CodeGraphNeo4jWriter {
             "CREATE CONSTRAINT method_uid IF NOT EXISTS FOR (m:Method) REQUIRE (m.projectId, m.uid) IS UNIQUE";
     private static final String INDEX_PROJECT =
             "CREATE INDEX code_node_project IF NOT EXISTS FOR (n:CodeNode) ON (n.projectId)";
+    private static final String CONSTRAINT_GRAPH_META =
+            "CREATE CONSTRAINT graph_meta_project IF NOT EXISTS FOR (g:GraphMeta) REQUIRE g.projectId IS UNIQUE";
 
     private static final String CLEAR =
             "MATCH (n:CodeNode {projectId: $pid}) DETACH DELETE n";
+
+    /**
+     * 图版本号：每次重写图 +1。与图在同一个事务里递增，避免「图变了 rev 没变」或反之。
+     *
+     * <p>注意这个节点**故意不带 :CodeNode label** —— 上面 CLEAR 按 :CodeNode 清理，
+     * 带上就会被每次重建一起删掉，rev 永远回到 1，机制静默失效。</p>
+     */
+    private static final String MERGE_GRAPH_META = """
+            MERGE (g:GraphMeta {projectId: $pid})
+            ON CREATE SET g.rev = 1
+            ON MATCH SET g.rev = g.rev + 1
+            RETURN g.rev AS rev
+            """;
 
     private static final String MERGE_CLASS = """
             UNWIND $rows AS row
@@ -93,20 +108,22 @@ public class CodeGraphNeo4jWriter {
         this.driver = driver;
     }
 
-    /** 清旧图 → 写节点 → 写边，整个流程在一个写事务里。重跑安全（先清后写 + MERGE）。 */
+    /** 清旧图 → 写节点 → 写边 → 递增图版本，整个流程在一个写事务里。重跑安全（先清后写 + MERGE）。 */
     public void replaceProjectGraph(Long projectId, ParsedProject project) {
         ensureConstraints();
+        Long rev;
         try (Session session = driver.session()) {
-            session.executeWrite(tx -> {
+            rev = session.executeWrite(tx -> {
                 tx.run(CLEAR, Map.of("pid", projectId));
                 writeInBatches(tx, MERGE_CLASS, classRows(projectId, project));
                 writeInBatches(tx, MERGE_METHOD, methodRows(projectId, project));
                 writeEdges(tx, projectId, project.getEdges());
-                return null;
+                return tx.run(MERGE_GRAPH_META, Map.of("pid", projectId))
+                        .single().get("rev").asLong();
             });
         }
-        log.info("Neo4j 图写入完成 projectId={}, classes={}, methods={}, edges={}",
-                projectId, project.getFiles().stream().mapToInt(f -> f.getClasses().size()).sum(),
+        log.info("Neo4j 图写入完成 projectId={}, graphRev={}, classes={}, methods={}, edges={}",
+                projectId, rev, project.getFiles().stream().mapToInt(f -> f.getClasses().size()).sum(),
                 project.getFiles().stream()
                         .flatMap(f -> f.getClasses().stream())
                         .mapToInt(c -> c.getMethods().size()).sum(),
@@ -122,6 +139,7 @@ public class CodeGraphNeo4jWriter {
         try (Session session = driver.session()) {
             session.run(CONSTRAINT_CLASS).consume();
             session.run(CONSTRAINT_METHOD).consume();
+            session.run(CONSTRAINT_GRAPH_META).consume();
             session.run(INDEX_PROJECT).consume();
         }
     }

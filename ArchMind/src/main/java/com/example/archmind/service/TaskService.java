@@ -22,6 +22,7 @@ public interface TaskService {
     /** 项目最近一条任务；没有则返回 null（前端按"从未分析"处理） */
     TaskResponse getLatestByProject(Long projectId, Long currentUserId);
 
+
     // ==================== 状态机（只给 AnalysisTaskExecutor 调）====================
 
     void markRunning(Long taskId);

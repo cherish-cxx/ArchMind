@@ -59,3 +59,8 @@ upload:
   max-zip-size-mb: 500
   # git 超时时间，单位秒
   git-time-out-seconds: 60
+
+# 内部取数接口（/internal/**）：只给 Agent 服务调用，不映射公网端口
+internal:
+  # 与 Agent 服务共享的密钥；生产必须用 INTERNAL_TOKEN 环境变量覆盖
+  token: ${INTERNAL_TOKEN:dev-internal-token-change-me}

@@ -2,6 +2,8 @@ package com.example.archmind.config;
 
 import com.example.archmind.common.handler.AccessDeniedHandlerImpl;
 import com.example.archmind.common.handler.AuthenticationEntryPointImpl;
+import com.example.archmind.common.security.InternalTokenFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,6 +19,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Arrays;
 
@@ -24,6 +27,10 @@ import java.util.Arrays;
 @EnableWebSecurity
 @EnableMethodSecurity  // 启用方法级权限控制（@PreAuthorize）
 public class SecurityConfig {
+
+    /** 与 Agent 服务共享的内部密钥；生产环境用 INTERNAL_TOKEN 环境变量覆盖 */
+    @Value("${internal.token}")
+    private String internalToken;
 
     /**
      * 密码编码器
@@ -43,11 +50,21 @@ public class SecurityConfig {
     }
 
     /**
+     * 内部接口令牌过滤器（只作用于 {@code /internal/**}）。
+     * 不标 {@code @Component} —— 显式建成 Bean 挂进安全链，避免被 Servlet 容器重复注册一次。
+     */
+    @Bean
+    public InternalTokenFilter internalTokenFilter(ObjectMapper objectMapper) {
+        return new InternalTokenFilter(internalToken, objectMapper);
+    }
+
+    /**
      * 安全过滤器链
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            JwtAuthenticationFilter jwtAuthenticationFilter,
+                                           InternalTokenFilter internalTokenFilter,
                                            AuthenticationEntryPointImpl authenticationEntryPoint,
                                            AccessDeniedHandlerImpl accessDeniedHandler) throws Exception {
         http
@@ -72,7 +89,11 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/doc.html",
-                                "/webjars/**"
+                                "/webjars/**",
+                                // 内部取数接口：不放行会被 anyRequest().authenticated() 拦成 401，
+                                // 而调用方（Agent 服务）按设计拿不到 JWT。这里放行后由
+                                // InternalTokenFilter 用共享密钥把关。
+                                "/internal/**"
                         ).permitAll()
                         // 需要认证的路径
                         .requestMatchers("/api/**").authenticated()
@@ -87,7 +108,10 @@ public class SecurityConfig {
                 )
 
                 // 6. 添加 JWT 过滤器（在 UsernamePasswordAuthenticationFilter 之前）
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+
+                // 7. 内部接口令牌过滤器：只对 /internal/** 生效，其余路径直接放行
+                .addFilterBefore(internalTokenFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

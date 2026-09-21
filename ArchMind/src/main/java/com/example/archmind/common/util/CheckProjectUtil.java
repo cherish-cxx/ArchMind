@@ -26,6 +26,22 @@ public class CheckProjectUtil {
         checkOwnership(project);
     }
 
+    /**
+     * 内部接口专用：只确认项目存在，**不校验归属**。
+     *
+     * <p>{@code /internal/**} 没有登录态（无 JWT），拿不到当前用户，因此不能走
+     * {@link #checkProject}。租户边界不靠这里守 —— 靠「projectId 只由 Java 注入、
+     * Agent 不能指定」，且所有 Cypher 的 pid 由后端拼。</p>
+     */
+    public void checkProjectExists(Long projectId) {
+        if (projectId == null) {
+            throw new BusinessException("项目ID为空");
+        }
+        if (projectMapper.selectById(projectId) == null) {
+            throw new BusinessException("项目不存在: " + projectId);
+        }
+    }
+
     public Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof SecurityUser securityUser) {

@@ -1,0 +1,19 @@
+services:
+  backend:
+    build: ./backend
+    container_name: archmind-backend
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
+    volumes:
+      - ./code-workspace:/app/code-workspace
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: archmind-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
