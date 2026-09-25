@@ -177,19 +177,19 @@ item-service 12 / pay-service 12 / hm-api 11 / cart-service 10 / hm-gateway 10
 
 ### `gaps` 的 reason（打样后从 3 种增至 4 种）
 
-| reason                        | 含义         | Agent 该说什么              | V1 是否产出 |
-| ----------------------------- | ---------- | ----------------------- | ------- |
-| `REMOTE_SERVICE`              | 目标是 API 契约模块里的接口，实现在**另一个服务** | 「调用了 item-service / cart-service」 | ✅ |
-| `INTERFACE_NO_IMPLEMENTATION` | 接口在项目内没有任何实现类 | 「这是接口，项目内没有实现类，后续链路未解析」 | ✅ |
-| `NO_DOWNSTREAM_EDGE`          | 保留值 | — | ❌ 不产出（见下） |
-| `EXTERNAL_DEPENDENCY`         | 保留值 | — | ❌ 不产出（见下） |
+| reason                        | 含义                            | Agent 该说什么                        | V1 是否产出   |
+| ----------------------------- | ----------------------------- | --------------------------------- | --------- |
+| `REMOTE_SERVICE`              | 目标是 API 契约模块里的接口，实现在**另一个服务** | 「调用了 item-service / cart-service」 | ✅         |
+| `INTERFACE_NO_IMPLEMENTATION` | 接口在项目内没有任何实现类                 | 「这是接口，项目内没有实现类，后续链路未解析」           | ✅         |
+| `NO_DOWNSTREAM_EDGE`          | 保留值                           | —                                 | ❌ 不产出（见下） |
+| `EXTERNAL_DEPENDENCY`         | 保留值                           | —                                 | ❌ 不产出（见下） |
 
 **为什么加 `REMOTE_SERVICE`**：打样 trade-service 时发现，`OrderServiceImpl#createOrder` 的下游是 `CartClient` / `ItemClient` —— 它们**也是接口、也没有实现类**，和 Mapper 长得一模一样，但语义完全不同：
 
-|          | Mapper                | Feign Client              |
-| -------- | --------------------- | ------------------------- |
-| 实现在哪     | 运行时动态代理（SQL 未解析）      | **另一个服务里**                |
-| 该说       | 「SQL 映射未解析」           | 「**这通调用跑到别的服务去了**」        |
+|      | Mapper           | Feign Client       |
+| ---- | ---------------- | ------------------ |
+| 实现在哪 | 运行时动态代理（SQL 未解析） | **另一个服务里**         |
+| 该说   | 「SQL 映射未解析」      | 「**这通调用跑到别的服务去了**」 |
 
 只说 `INTERFACE_NO_IMPLEMENTATION` 会把「跨服务调用」讲成「未解析」，**丢掉微服务项目里最有价值的信息**。
 
@@ -205,11 +205,11 @@ item-service 12 / pay-service 12 / hm-api 11 / cart-service 10 / hm-gateway 10
 
 ### 实现中定下的三个细节
 
-| 细节 | 决定 | 理由 |
-| --- | --- | --- |
-| **自环边** | **不画**（本类方法调本类方法） | 类级视图里它只是个圈，信息价值低。但**不能中断遍历** —— 那条调用的下游还要继续走 |
-| **`ChainEdge.callCount`** | CALLS = 方法级调用边数；IMPLEMENTS = **配对成功的接口方法数** | 后者是诊断信号：接口 3 个方法而这里只有 2，说明有一个没扇出去 |
-| **UP 方向反向扇出** | 起点是**实现类**时，把它实现的接口上同签名方法的调用方也算进来 | `@Autowired` 注入的是接口，直接调实现类的人极少；不反向扇出，问「谁调用 OrderServiceImpl」会得到 **0** |
+| 细节                        | 决定                                          | 理由                                                                    |
+| ------------------------- | ------------------------------------------- | --------------------------------------------------------------------- |
+| **自环边**                   | **不画**（本类方法调本类方法）                           | 类级视图里它只是个圈，信息价值低。但**不能中断遍历** —— 那条调用的下游还要继续走                          |
+| **`ChainEdge.callCount`** | CALLS = 方法级调用边数；IMPLEMENTS = **配对成功的接口方法数** | 后者是诊断信号：接口 3 个方法而这里只有 2，说明有一个没扇出去                                     |
+| **UP 方向反向扇出**             | 起点是**实现类**时，把它实现的接口上同签名方法的调用方也算进来           | `@Autowired` 注入的是接口，直接调实现类的人极少；不反向扇出，问「谁调用 OrderServiceImpl」会得到 **0** |
 
 ---
 
@@ -296,10 +296,10 @@ LLM 看不了大图也不该看 —— 500 条方法级边喂进 prompt 是纯�
 
 ### ① 扇出**不计入** depth
 
-|          | 算                    | 不算（选它）              |
-| -------- | -------------------- | ------------------- |
-| hmall 上有效深度 | 约减半（Controller→接口→实现 吃掉 2 层） | 3 层全是真实类跳跃          |
-| 风险       | 核心场景只能讲 1–2 跳        | 需 `visited` 防「接口→实现→扇回接口」空转 |
+|             | 算                            | 不算（选它）                      |
+| ----------- | ---------------------------- | --------------------------- |
+| hmall 上有效深度 | 约减半（Controller→接口→实现 吃掉 2 层） | 3 层全是真实类跳跃                  |
+| 风险          | 核心场景只能讲 1–2 跳                | 需 `visited` 防「接口→实现→扇回接口」空转 |
 
 **理由**：`IOrderService#m` 和 `OrderServiceImpl#m` 是同一个方法的两面（声明 vs 代码）。从接口绕到实现**没有看到任何新东西**，只是终于找着门了。把「找门」算成走了路，用户会觉得预算莫名其妙就没了。
 
@@ -365,11 +365,11 @@ RETURN c.uid, c.owner, t.uid
 
 ## 8. 上限、截断与 evidence
 
-| 参数              | 值    | 落点                        |
-| --------------- | ---- | ------------------------- |
-| `maxDepth`      | 3    | 服务端 clamp（不信调用方传值）        |
-| `maxNodes`      | 40   | 每层截断，超出即 `truncated=true` |
-| 工具级超时           | 8s   | exec 层统一包                  |
+| 参数         | 值   | 落点                        |
+| ---------- | --- | ------------------------- |
+| `maxDepth` | 3   | 服务端 clamp（不信调用方传值）        |
+| `maxNodes` | 40  | 每层截断，超出即 `truncated=true` |
+| 工具级超时      | 8s  | exec 层统一包                 |
 
 **截断排序**：按 `(depth, class uid)` 排序后取前 N。
 
@@ -381,12 +381,12 @@ RETURN c.uid, c.owner, t.uid
 
 ## 9. P1 落点
 
-| 文件                                              | 内容                                       |
-| ----------------------------------------------- | ---------------------------------------- |
-| `service/ast/CodeGraphQueryService`             | 加 `callChain(...)` 接口方法                  |
-| `service/impl/CodeGraphQueryServiceImpl`        | 实现逐层 BFS（复用 `aggregateCalls` 折叠写法）       |
-| `dto/response/CallChainResponse`                | 新增：`nodes` / `edges` / `gaps` / `truncated` |
-| `controller/`（新 `/internal/tools/*`）            | `POST /internal/tools/call-chain` 转发     |
+| 文件                                       | 内容                                          |
+| ---------------------------------------- | ------------------------------------------- |
+| `service/ast/CodeGraphQueryService`      | 加 `callChain(...)` 接口方法                     |
+| `service/impl/CodeGraphQueryServiceImpl` | 实现逐层 BFS（复用 `aggregateCalls` 折叠写法）          |
+| `dto/response/CallChainResponse`         | 新增：`nodes` / `edges` / `gaps` / `truncated` |
+| `controller/`（新 `/internal/tools/*`）     | `POST /internal/tools/call-chain` 转发        |
 
 **P1 验收动作**：curl 直接打，hmall 上以 `IOrderService` 为起点、`DOWN` 方向 2 层，**人工对拍**是否与 §2 的链路一致。
 
@@ -394,13 +394,13 @@ RETURN c.uid, c.owner, t.uid
 
 ## 10. 未决与风险
 
-| # | 项                                    | 说明                                                        |
-| - | ------------------------------------ | --------------------------------------------------------- |
-| 1 | **两个 `OrderController`**              | 待确认 zip 是否装了两套 hmall。若是，属上传源头问题，需在 `classes` 层做去重或标注 |
-| 2 | **`graphRev` 尚无生成方式**                | 全项目无图版本号概念。建议在写图同事务内 `MERGE (:GraphMeta)` 递增（详见会话讨论），**注意该节点不能带 `:CodeNode` label**，否则每次重写图会被 `CLEAR` 清零 |
-| 3 | **`method-body` 尚未设计**                | P1 第二个新算法。链路（Method 行号 → `file` 表路径 → 磁盘切片）已明确，但切片粒度、`startLine` 是否含 javadoc、重载如何挑，**都要打样后定** |
-| 4 | **多实现类的扇出歧义**                        | 本次 hmall 上 `IOrderService` 只有 1 个实现，无歧义。但**设计上不能假设总是 1 个** —— 一个接口多实现是常态，此时应全部返回并标注歧义，让 Agent 说「这里有两个实现，不确定走哪个」，而不是随便选一个 |
-| 5 | **`RelationResolver` 的静默丢弃无日志**       | 定名失败时 `if (targetClass == null) return;` 不记日志。情况 B 类问题**在图上不可见**，排查困难。建议加 warn 日志（低成本） |
+| #   | 项                               | 说明                                                                                                                       |
+| --- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **两个 `OrderController`**        | 待确认 zip 是否装了两套 hmall。若是，属上传源头问题，需在 `classes` 层做去重或标注                                                                     |
+| 2   | **`graphRev` 尚无生成方式**           | 全项目无图版本号概念。建议在写图同事务内 `MERGE (:GraphMeta)` 递增（详见会话讨论），**注意该节点不能带 `:CodeNode` label**，否则每次重写图会被 `CLEAR` 清零                 |
+| 3   | **`method-body` 尚未设计**          | P1 第二个新算法。链路（Method 行号 → `file` 表路径 → 磁盘切片）已明确，但切片粒度、`startLine` 是否含 javadoc、重载如何挑，**都要打样后定**                            |
+| 4   | **多实现类的扇出歧义**                   | 本次 hmall 上 `IOrderService` 只有 1 个实现，无歧义。但**设计上不能假设总是 1 个** —— 一个接口多实现是常态，此时应全部返回并标注歧义，让 Agent 说「这里有两个实现，不确定走哪个」，而不是随便选一个 |
+| 5   | **`RelationResolver` 的静默丢弃无日志** | 定名失败时 `if (targetClass == null) return;` 不记日志。情况 B 类问题**在图上不可见**，排查困难。建议加 warn 日志（低成本）                                   |
 
 ---
 
@@ -413,13 +413,13 @@ RETURN c.uid, c.owner, t.uid
 
 对 `trade-service` 的 `OrderServiceImpl` 逐行比对真实源码：
 
-| # | 结论 | 证据 |
-| - | --- | --- |
-| 1 | **`startLine` 从第一个注解算起，不含 javadoc** | 类 `startLine=37` → 第 37 行是 `@Service`（类 javadoc 在 33–36，未计入）；`createOrder` `startLine=46` → 46=`@Override`、47=`@GlobalTransactional`、48 才是签名 |
-| 2 | `endLine` 是方法闭合 `}`，方法体完整 | `buildDetails` 118–132、`cancelOrder` 111–116 全部对齐 |
-| 3 | **接口方法是单行**（无方法体） | `IOrderService` 三个方法 `17-17` / `19-19` / `21-21`，源码确认为单行声明 |
-| 4 | `fileId` 一致，路径可 resolve | 类与其 4 个方法同一 `fileId`；`project_source.content` + `filePath` 能定位到磁盘文件 |
-| 5 | 重载真实存在但**天然不撞键** | `PageDTO.of` 有 5 个重载；`methodUid = owner#signature` 含参数类型，精确匹配即可 |
+| #   | 结论                                  | 证据                                                                                                                                           |
+| --- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **`startLine` 从第一个注解算起，不含 javadoc** | 类 `startLine=37` → 第 37 行是 `@Service`（类 javadoc 在 33–36，未计入）；`createOrder` `startLine=46` → 46=`@Override`、47=`@GlobalTransactional`、48 才是签名 |
+| 2   | `endLine` 是方法闭合 `}`，方法体完整           | `buildDetails` 118–132、`cancelOrder` 111–116 全部对齐                                                                                            |
+| 3   | **接口方法是单行**（无方法体）                   | `IOrderService` 三个方法 `17-17` / `19-19` / `21-21`，源码确认为单行声明                                                                                   |
+| 4   | `fileId` 一致，路径可 resolve             | 类与其 4 个方法同一 `fileId`；`project_source.content` + `filePath` 能定位到磁盘文件                                                                          |
+| 5   | 重载真实存在但**天然不撞键**                    | `PageDTO.of` 有 5 个重载；`methodUid = owner#signature` 含参数类型，精确匹配即可                                                                              |
 
 > **结论 1 是好消息**：`@GlobalTransactional`（Seata 分布式事务）会被自动切进去。若只从签名行开始切，这类关键语义就丢了 —— **不用额外写代码，AST 阶段的设计白送了这个红利**。
 >
