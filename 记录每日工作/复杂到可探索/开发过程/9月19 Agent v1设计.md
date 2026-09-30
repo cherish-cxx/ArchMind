@@ -119,7 +119,7 @@ async with httpx.AsyncClient() as c:
 ① 前端  → Java      POST /api/agent/ask        （公网入口，带 JWT）
 ② Java  → Python    POST /internal/agent/ask   （委托：这轮交给你）
 ③ Python → Java     POST /internal/tools/...   （取数：我要你手里的图数据）
-④ Java  → 前端      返回 message + uiCommands
+④ Java  →  前端      返回 message + uiCommands
 ```
 
 **`NAVIGATE` 类请求短路**：用户点「展开」「退回去」时只走 ①②④，**不调工具、不调 LLM**。这是最便宜的体验优化。
@@ -601,13 +601,13 @@ async def run_turn(ctx, user_msg) -> AgentResponse:
 
 ### B. 数据与状态
 
-| # | 问题 | 后果 | 防线 |
-| --- | --- | --- | --- |
-| **B1** | **viewport 与屏幕漂移** —— 若 `visibleNodes` 由后端推断 | Context 会说「点你看到的 X」，而屏幕上根本没有 X | 前端上报 + `rev` 单调递增 + ack 回执 |
-| **B2** | **Context 膨胀** —— 十轮之后塞入全部对话原文 | token 爆炸、成本失控、幻觉上升 | 只存 uid + 一句摘要，硬上限 60 节点 |
-| **B3** | **图的覆盖边界** —— AST 不解析 DI/多态，`@Autowired` 接口调用这条边可能是断的 | Agent 讲流程讲一半断掉 | 显式返回 `gaps`，**禁止 LLM 补全**。这不是 bug 是已知边界 |
-| **B4** | **⚠️ 图重建不是原子的** —— `replaceProjectGraph` 先 `DETACH DELETE` 再写 | **写到一半失败 = 旧图已经删了，新图没写完，这个项目的图就空了** | **异名写入 + 校验完整 + 原子切换**；至少加「图是否完整」标记位 |
-| **B5** | **模块是假节点** —— `modules_json` 由 LLM 只看 pom + README 生成，无 ID、无 `module→class` 边、keyFiles 未对账 | Agent 点进模块**拿不到任何真实关系**，第一步走死 | **V1 入口用「类」**，模块降级为 prompt 背景。（P3 领域拆分落地后再换回） |
+| #      | 问题                                                                                         | 后果                                  | 防线                                            |
+| ------ | ------------------------------------------------------------------------------------------ | ----------------------------------- | --------------------------------------------- |
+| **B1** | **viewport 与屏幕漂移** —— 若 `visibleNodes` 由后端推断                                               | Context 会说「点你看到的 X」，而屏幕上根本没有 X      | 前端上报 + `rev` 单调递增 + ack 回执                    |
+| **B2** | **Context 膨胀** —— 十轮之后塞入全部对话原文                                                             | token 爆炸、成本失控、幻觉上升                  | 只存 uid + 一句摘要，硬上限 60 节点                       |
+| **B3** | **图的覆盖边界** —— AST 不解析 DI/多态，`@Autowired` 接口调用这条边可能是断的                                      | Agent 讲流程讲一半断掉                      | 显式返回 `gaps`，**禁止 LLM 补全**。这不是 bug 是已知边界       |
+| **B4** | **⚠️ 图重建不是原子的** —— `replaceProjectGraph` 先 `DETACH DELETE` 再写                              | **写到一半失败 = 旧图已经删了，新图没写完，这个项目的图就空了** | **异名写入 + 校验完整 + 原子切换**；至少加「图是否完整」标记位          |
+| **B5** | **模块是假节点** —— `modules_json` 由 LLM 只看 pom + README 生成，无 ID、无 `module→class` 边、keyFiles 未对账 | Agent 点进模块**拿不到任何真实关系**，第一步走死       | **V1 入口用「类」**，模块降级为 prompt 背景。（P3 领域拆分落地后再换回） |
 
 > **B4 是本次核查中在现有代码里发现的最实在的工程缺陷**，不是理论问题。建议单独排期修。
 

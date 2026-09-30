@@ -11,19 +11,11 @@ Pydantic 的 `= 默认值` 只在「键不存在」时生效，对显式 null �
 from enum import StrEnum
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
-from pydantic.alias_generators import to_camel
+from pydantic import Field
+
+from app.models.base import CamelModel
 
 T = TypeVar("T")
-
-
-# ==================== 地基 ====================
-
-
-class CamelModel(BaseModel):
-    """所有契约模型的基类：Python 侧写蛇形，JSON 里自动是驼峰。"""
-
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 # ==================== 枚举（对应 Java 的 enum） ====================

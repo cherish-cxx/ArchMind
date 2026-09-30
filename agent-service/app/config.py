@@ -16,3 +16,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# 内部鉴权的请求头名。Java 侧 `InternalTokenFilter` 读的是同一个头，
+# Python 这边发（java_client）和收（api/agent）也都要它 —— 写在一处，改的时候不会只改一半。
+INTERNAL_TOKEN_HEADER = "X-Internal-Token"
