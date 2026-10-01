@@ -13,6 +13,7 @@ from enum import StrEnum
 from typing import Any
 
 from app.models.base import CamelModel
+from app.models.intent import Intent
 
 # ==================== 实体引用 ====================
 
@@ -74,11 +75,15 @@ class UICmd(CamelModel):
 
 
 class Suggestion(CamelModel):
-    """「下一步可以问什么」。闭环的发动机 —— 没有它，对话转不动。"""
+    """「下一步可以问什么」。闭环的发动机 —— 没有它，对话转不动。
+
+    `intent` 在 P2 是裸 `str`（那时枚举还没定义），P3 收紧成 `Intent`：
+    前端点一个建议就是发一轮 `ask`，这个字段最终会变成下一轮的 Intent ——
+    让它现在就是个枚举，错值在模型校验层就被拒，不用等前端点下去才发现。
+    """
 
     label: str
-    # intent 的枚举属于 P3（Intent 判定还没做），这里先放字符串
-    intent: str
+    intent: Intent
     slots: dict[str, Any] = {}
 
 
@@ -121,6 +126,3 @@ class AgentResponse(CamelModel):
     suggestions: list[Suggestion] = []
     steps: list[Step] = []
     meta: Meta
-
-    # ⚠️ P2 临时字段：原始信封，方便 curl 对拍。**P3 删掉**（那时该看的是 steps）
-    debug_tool_results: list[dict[str, Any]] = []

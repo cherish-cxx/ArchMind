@@ -12,9 +12,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.agent import get_llm_client
 from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.main import app
 from app.tools.java_client import JavaClient
+from fakes import FakeLLM
 
 # 测试 1 只关心「发出去的请求长什么样」，不关心响应。
 # 用 ok:false 的信封最省事：它对**所有**工具的返回模型都合法（data 可以是 None）
@@ -186,38 +188,55 @@ async def test_5_overview_on_unmapped_project(client, unmapped_project_id):
     assert env.data is not None
 
 
-# ==================== 测试 6：grounding —— citations ⊆ evidence ====================
+# ==================== 测试 6：grounding —— 幻觉引用被真的拦掉了 ====================
 
 
-def test_6_citations_are_grounded_in_evidence(require_java, project_id, chain_start):
-    """T4 那条 grounding 机制真的生效吗。
+def test_6_hallucinated_citation_and_uicmd_are_filtered(
+    require_java, project_id, chain_start
+):
+    """P3 的 grounding 端到端验证 —— 打**真 Java**，但把 LLM 换成剧本。
 
-    `message` 里引用的每个 uid，都必须能在**本轮** `tool.evidence` 里找到出处。
-    这是 9/19 §8-A2「让禁止编造从 prompt 口号变成可校验机制」的验证点 ——
-    后端只需检查 `citations[].uid` 是否出现在 evidence 里。
+    为什么必须换掉 LLM：这一条要验的是「拦截机制在真实数据上生不生效」，
+    不是「今天 DeepSeek 心情好不好」。真 LLM 进来，测试就变成不确定的了。
 
-    走 `/internal/agent/ask`（TestClient 会跑 lifespan，建出真的共享 client）。
+    P2 时这个测试读的是 `debugToolResults` 拿原始信封；P3 删了那个临时字段，
+    改成**从外面注入一个必然幻觉的引用**，直接断言它没能出现在结果里 ——
+    比原来更好：原来看的是「我们引用的都在 evidence 里」，
+    现在看的是「我们硬塞了一个不在 evidence 里的，它被丢掉了」，验证的是**拦截本身**。
     """
-    with TestClient(app) as c:
-        resp = c.post(
-            "/internal/agent/ask",
-            headers={INTERNAL_TOKEN_HEADER: settings.internal_token},
-            json={
-                "projectId": project_id,
-                "message": "T5 grounding check",
-                "focus": {"type": "CLASS", "uid": chain_start},
-            },
-        )
+    ghost = "com.hallucinated.GhostService"
+    # LLM #1 判意图；LLM #2 故意在 citedUids 里混进一个不存在的类
+    fake = FakeLLM(
+        [
+            json.dumps({"intent": "EXPLORE_FLOW", "confidence": 0.95}),
+            json.dumps({"message": "顺着调用链往下看。", "citedUids": [ghost, chain_start]}),
+        ]
+    )
+
+    app.dependency_overrides[get_llm_client] = lambda: fake
+    try:
+        with TestClient(app) as c:
+            resp = c.post(
+                "/internal/agent/ask",
+                headers={INTERNAL_TOKEN_HEADER: settings.internal_token},
+                json={
+                    "projectId": project_id,
+                    "message": "订单创建的流程是什么",
+                    "focus": {"type": "CLASS", "uid": chain_start},
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
 
-    envelope = body["debugToolResults"][0]
-    assert envelope["ok"] is True, f"工具没答成功，测不了 grounding：{envelope['note']}"
-
-    evidenced = {e["from"] for e in envelope["evidence"]}
-    evidenced |= {e["to"] for e in envelope["evidence"] if e.get("to")}
     cited = {x["uid"] for x in body["citations"]}
 
-    assert cited, "应该有 citations（T4 已接线）"
-    assert cited <= evidenced, f"引用了没有出处的 uid：{sorted(cited - evidenced)}"
+    assert ghost not in cited, f"★ 幻觉引用 {ghost} 没被拦住 —— guard 失效了"
+    assert chain_start in cited, f"真实节点 {chain_start} 应该在 evidence 里，却被误拦了"
+
+    # 出图命令必须指向被引用过的真实节点，不能凭空指向一个 uid
+    targets = [c["target"]["uid"] for c in body["uiCommands"] if c.get("target")]
+    assert targets, "call-chain 应该产出 SHOW_PATH"
+    assert set(targets) <= cited, f"UICommand 指向了没被引用的节点：{set(targets) - cited}"
