@@ -7,7 +7,10 @@ package com.example.archmind.service.ast;
  * 只要一个方向时会浪费 5 次查询。</p>
  */
 public enum RelationDirection {
+//    向左
     UP,
+//    向右
     DOWN,
+//    双向的
     BOTH
 }

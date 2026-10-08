@@ -77,12 +77,14 @@ public class MethodBodyServiceImpl implements MethodBodyService {
     @Override
     public MethodBodyResponse methodBody(Long projectId, String uid, String methodUid,
                                          int maxMethods, int maxLines) {
+//        校验参数是否为空
         if (projectId == null || (uid == null || uid.isBlank()) && (methodUid == null || methodUid.isBlank())) {
             throw new BusinessException("缺少 projectId 或 uid");
         }
+//        确定最大的输出范围
         int maxM = Math.max(1, Math.min(maxMethods, MAX_METHODS_HARD));
         int maxL = Math.max(1, Math.min(maxLines, MAX_LINES_HARD));
-
+//创建一个列表，并获取uid所映射的限制范围内的方法列表
         List<MInfo> selected = selectMethods(projectId, uid, methodUid, maxM);
         if (selected.isEmpty()) {
             throw new BusinessException("没有找到可切片的方法: " + (methodUid == null ? uid : methodUid));
@@ -99,7 +101,9 @@ public class MethodBodyServiceImpl implements MethodBodyService {
         for (MInfo m : selected) {
             // 接口方法没有方法体，跳到实现类再去切
             String resolvedFrom = null;
+//            如果这个方法属于接口类型
             if ("INTERFACE".equals(m.ownerKind())) {
+//                根据项目ID，接口，方法签名找到对饮过的实现类里的方法
                 MInfo impl = ifaceToImpl(projectId, m.owner(), m.signature());
                 if (impl != null) {
                     resolvedFrom = m.uid();
@@ -109,6 +113,9 @@ public class MethodBodyServiceImpl implements MethodBodyService {
                 }
             }
 
+            /**
+             *  新建一个结果里的方法信息对象
+             */
             MethodBodyResponse.MethodCode item = new MethodBodyResponse.MethodCode();
             item.setUid(m.uid());
             item.setOwner(m.owner());
@@ -119,6 +126,7 @@ public class MethodBodyServiceImpl implements MethodBodyService {
 
             String[] lines;
             try {
+//                根据文件路径，id读取这个源码文件的全部行，返回字符串数组，一行一条
                 lines = readLines(extractDir, m.fileId(), pathByFileId, linesByFileId);
             } catch (BusinessException e) {
                 item.setError(e.getMessage());
@@ -127,6 +135,9 @@ public class MethodBodyServiceImpl implements MethodBodyService {
                 break;
             }
 
+            /*
+              保护边界，行号最小是第1行，结束行不能超过文件总行数量
+             */
             int from = Math.max(1, m.startLine());
             int to = Math.min(lines.length, m.endLine());
             if (from > to) {
@@ -135,7 +146,7 @@ public class MethodBodyServiceImpl implements MethodBodyService {
                 resp.getMethods().add(item);
                 continue;
             }
-
+//计算当单个方法所占的行数，是否会超出预算
             int len = to - from + 1;
             if (len > budget) {
                 // 单个方法就超预算：切到剩余额度为止
@@ -149,10 +160,10 @@ public class MethodBodyServiceImpl implements MethodBodyService {
 
             item.setCode(join(lines, from, to));
             resp.getMethods().add(item);
-            budget -= len;
+            budget -= len;//总预算扣减当前方法消耗的行数
             if (budget <= 0) {
                 resp.setTruncated(true);
-                break;
+                break;//预算用完，结束
             }
         }
 
@@ -165,8 +176,10 @@ public class MethodBodyServiceImpl implements MethodBodyService {
     // ==================== 选方法 ====================
 
     private List<MInfo> selectMethods(Long pid, String uid, String methodUid, int maxMethods) {
+//        创建列表
         List<MInfo> list = new ArrayList<>();
         try (Session session = driver.session()) {
+//            校验的是methodUid参数存在，能够精确找到所需method
             if (methodUid != null && !methodUid.isBlank()) {
                 Result r = session.run(METHOD_BY_UID, Map.of("pid", pid, "methodUid", methodUid));
                 if (r.hasNext()) {
@@ -174,6 +187,7 @@ public class MethodBodyServiceImpl implements MethodBodyService {
                 }
                 return list;
             }
+//            如果methodUid参数不存在则根据uid，pid，limit来获取method
             Result r = session.run(METHODS_OF_CLASS,
                     Map.of("pid", pid, "uid", uid, "limit", maxMethods));
             while (r.hasNext()) {
@@ -188,23 +202,32 @@ public class MethodBodyServiceImpl implements MethodBodyService {
             return null;
         }
         try (Session session = driver.session()) {
+//            根据参数去查实现类
             Result r = session.run(IFACE_TO_IMPL,
                     Map.of("pid", pid, "ifaceUid", ifaceUid, "signature", signature));
             if (!r.hasNext()) {
                 return null;
             }
             Record rec = r.next();
-            return new MInfo(rec.get("uid").asString(), rec.get("owner").asString(),
-                    rec.get("signature").asString(), longOrNull(rec.get("fileId")),
-                    intOrZero(rec.get("startLine")), intOrZero(rec.get("endLine")),
+            return new MInfo(
+                    rec.get("uid").asString(),
+                    rec.get("owner").asString(),
+                    rec.get("signature").asString(),
+                    longOrNull(rec.get("fileId")),
+                    intOrZero(rec.get("startLine")),
+                    intOrZero(rec.get("endLine")),
                     "CLASS");
         }
     }
 
     private MInfo toMInfo(Record rec) {
-        return new MInfo(rec.get("uid").asString(), rec.get("owner").asString(),
-                rec.get("signature").asString(), longOrNull(rec.get("fileId")),
-                intOrZero(rec.get("startLine")), intOrZero(rec.get("endLine")),
+        return new MInfo(
+                rec.get("uid").asString(),
+                rec.get("owner").asString(),
+                rec.get("signature").asString(),
+                longOrNull(rec.get("fileId")),
+                intOrZero(rec.get("startLine")),
+                intOrZero(rec.get("endLine")),
                 str(rec.get("ownerKind")));
     }
 

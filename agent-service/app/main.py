@@ -24,14 +24,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     P3 新增 `llm_client` —— 和 java_client 同样的理由，同理同理，挂在同一个地方。
     """
+    # 服务器刚启动先跑这里：创建java客户端，llm客户端，并塞到app.state全局储物盒，此时还没有对发开放接口，用户请求进不来
     app.state.java_client = JavaClient()
     app.state.llm_client = LLMClient()
+    # 把控制权交给FastAPI，服务正式上线，开始监听端口，接收HTTP请求
     yield
+    # 清理代码：异步调用客户端的关闭防范，释放网络连接，资源关闭
     await app.state.java_client.aclose()
     await app.state.llm_client.aclose()
 
 
 app = FastAPI(title="ArchMind Agent Service", version="0.1.0", lifespan=lifespan)
+# 把agent中写的所有接口注册到app里，让主服务能识别这些接口
 app.include_router(agent_router)
 
 

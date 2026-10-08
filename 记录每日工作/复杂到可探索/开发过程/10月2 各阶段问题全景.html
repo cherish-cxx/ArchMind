@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>ArchMind · 从 AST 到 P3：每阶段踩到的坑</title>
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --contract:#2563eb; --contract-bg:#eff6ff;
+    --graph:#059669;    --graph-bg:#ecfdf5;
+    --env:#d97706;      --env-bg:#fffbeb;
+    --llm:#7c3aed;      --llm-bg:#f5f3ff;
+    --debt:#dc2626;     --debt-bg:#fef2f2;
+    --test:#0891b2;     --test-bg:#ecfeff;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:32px 28px 56px;
+    font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+    color:var(--ink); background:#f9fafb;
+  }
+  h1{font-size:21px;margin:0 0 6px;letter-spacing:.3px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+  .sub b{color:var(--ink)}
+
+  .legend{
+    display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;
+    padding:11px 15px;background:#fff;border:1px solid var(--line);
+    border-radius:9px;margin-bottom:22px;font-size:12.5px;
+  }
+  .legend .item{display:flex;align-items:center;gap:6px;color:#374151}
+  .dot{width:10px;height:10px;border-radius:3px;flex:none}
+  .d-contract{background:var(--contract)} .d-graph{background:var(--graph)}
+  .d-env{background:var(--env)}           .d-llm{background:var(--llm)}
+  .d-test{background:var(--test)}         .d-debt{background:var(--debt)}
+  .legend .sep{width:1px;height:16px;background:var(--line)}
+
+  .scroll{overflow-x:auto;padding-bottom:12px}
+  .timeline{display:flex;align-items:flex-start;min-width:min-content}
+
+  .stage{flex:0 0 268px;width:268px}
+  .head{
+    position:relative;background:#fff;border:1px solid var(--line);
+    border-top:4px solid var(--stage-color,#9ca3af);
+    border-radius:10px;padding:13px 15px 14px;
+    box-shadow:0 1px 2px rgba(16,24,40,.05);
+  }
+  .head .badge{
+    position:absolute;top:-13px;left:14px;
+    width:24px;height:24px;border-radius:50%;
+    background:var(--stage-color,#9ca3af);color:#fff;
+    font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  }
+  .head h3{margin:9px 0 3px;font-size:15px;letter-spacing:.2px}
+  .head .date{font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.3px}
+  .head .goal{font-size:12.5px;color:#4b5563;margin-top:7px;padding-top:7px;border-top:1px dashed var(--line)}
+
+  .problems{position:relative;margin:16px 0 0 15px;padding-left:16px}
+  .problems::before{
+    content:'';position:absolute;left:0;top:-16px;bottom:9px;
+    width:2px;background:#e2e6ec;border-radius:2px;
+  }
+  .problem{position:relative;background:#fff;border:1px solid var(--line);
+    border-left:3px solid var(--cat,var(--line));border-radius:7px;
+    padding:8px 11px 9px;margin-bottom:8px;
+  }
+  .problem::before{
+    content:'';position:absolute;left:-16px;top:15px;
+    width:14px;height:2px;background:#e2e6ec;
+  }
+  .p-title{font-size:12.8px;font-weight:600;line-height:1.5;color:#111827}
+  .p-note{font-size:12px;color:#4b5563;margin-top:4px;line-height:1.55}
+  .cat{
+    display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;
+    padding:1px 6px;border-radius:4px;margin-right:6px;vertical-align:1px;
+    color:var(--cat);background:var(--cat-bg);
+  }
+  .flag{font-size:11.5px;font-weight:700;margin-right:4px}
+  .flag.new{color:#b45309}
+  .flag.debt{color:var(--debt)}
+
+  .c-contract{--cat:var(--contract);--cat-bg:var(--contract-bg)}
+  .c-graph{--cat:var(--graph);--cat-bg:var(--graph-bg)}
+  .c-env{--cat:var(--env);--cat-bg:var(--env-bg)}
+  .c-llm{--cat:var(--llm);--cat-bg:var(--llm-bg)}
+  .c-test{--cat:var(--test);--cat-bg:var(--test-bg)}
+  .c-debt{--cat:var(--debt);--cat-bg:var(--debt-bg)}
+
+  .arrow{
+    flex:0 0 40px;display:flex;align-items:center;justify-content:center;
+    padding-top:34px;color:#c3cad4;font-size:20px;user-select:none;
+  }
+
+  .foot{
+    margin-top:26px;padding:15px 18px;background:#fff;border:1px solid var(--line);
+    border-radius:9px;font-size:12.8px;color:#374151;line-height:1.85;
+  }
+  .foot b{color:#111827}
+  .foot .k{color:var(--debt);font-weight:700}
+  .s0{--stage-color:#94a3b8} .s1{--stage-color:#059669}
+  .s2{--stage-color:#2563eb} .s3{--stage-color:#d97706}
+  .s4{--stage-color:#7c3aed}
+  @media print{body{background:#fff;padding:10px}}
+</style>
+</head>
+<body>
+
+<h1>ArchMind · 从 AST 分析到 P3：每一阶段踩到的坑</h1>
+<div class="sub">
+  主轴 = 阶段（一个节点一个阶段）· 分支 = 该阶段遇到的问题 ·
+  <b>★ 改变了设计的发现</b> · <b style="color:#dc2626">⚠ 至今未解决的遗留</b>
+</div>
+
+<div class="legend">
+  <span class="item"><span class="dot d-graph"></span>图谱 / AST</span>
+  <span class="item"><span class="dot d-contract"></span>契约 / 跨语言</span>
+  <span class="item"><span class="dot d-env"></span>工程 / 环境</span>
+  <span class="item"><span class="dot d-llm"></span>LLM</span>
+  <span class="item"><span class="dot d-test"></span>测试</span>
+  <span class="item"><span class="dot d-debt"></span>设计缺陷 / 债</span>
+</div>
+
+<div class="scroll">
+<div class="timeline">
+
+  <!-- ============ ⓪ 前置 ============ -->
+  <div class="stage s0">
+    <div class="head">
+      <div class="badge">⓪</div>
+      <h3>前置：异步任务骨架</h3>
+      <div class="date">9/11</div>
+      <div class="goal">让 analyze 不再阻塞 HTTP</div>
+    </div>
+    <div class="problems">
+      <div class="problem c-env">
+        <div class="p-title">同步 analyze 跑几十秒~几分钟，HTTP 请求直接超时</div>
+        <div class="p-note">→ 改成 task 表 + 线程池 + 状态机 + 进度轮询</div>
+      </div>
+      <div class="problem c-env">
+        <div class="p-title">上传与分析耦合：改一次代码要重传整个 zip</div>
+        <div class="p-note">→ 拆成两个动作（upload 同步快 / analyze 异步可重跑）</div>
+      </div>
+      <div class="problem c-env">
+        <div class="p-title">LLM 的结构化输出从没验证过</div>
+        <div class="p-note">→ 先单独验证 DeepSeek 的 json 输出模式再往下做</div>
+      </div>
+      <div class="problem c-debt">
+        <div class="p-title"><span class="flag debt">⚠</span>@Lazy 临时破循环依赖</div>
+        <div class="p-note">路线图自记的技术债，至今未还</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">▶</div>
+
+  <!-- ============ ① AST ============ -->
+  <div class="stage s1">
+    <div class="head">
+      <div class="badge">①</div>
+      <h3>AST 提取与落图</h3>
+      <div class="date">9/12 – 9/14</div>
+      <div class="goal">把源码变成「类 / 方法 / 调用关系」的图</div>
+    </div>
+    <div class="problems">
+      <div class="problem c-graph">
+        <div class="p-title"><span class="flag new">★</span>同名类消解不了，边连不上</div>
+        <div class="p-note">→ 分三阶段：解析声明 → 建 ProjectIndex 索引字典（全限定名/短名别名/方法三元组）→ 名字消解 + 按 receiver 分派</div>
+      </div>
+      <div class="problem c-graph">
+        <div class="p-title">AST 产物该进 MySQL 还是图库？</div>
+        <div class="p-note">→ 直接进 Neo4j；删掉 MySQL 版残留（CodeElement / CodeRelation 实体 + Mapper）</div>
+      </div>
+      <div class="problem c-env">
+        <div class="p-title">Neo4j 社区版<span style="color:#dc2626">禁 NODE KEY</span></div>
+        <div class="p-note">→ 换约束写法</div>
+      </div>
+      <div class="problem c-env">
+        <div class="p-title">SDN 的 Neo4jClient 不会自动配置</div>
+        <div class="p-note">classpath 里没有 starter-data-neo4j → 手写 Neo4jGraphConfig 暴露 bean</div>
+      </div>
+      <div class="problem c-graph">
+        <div class="p-title">hmall 的 impl 类在 <code>.impl</code> 子包</div>
+        <div class="p-note">猜错包名得到「类不存在」→ <b>白白怀疑了一轮 Java</b>。说明 Agent 必须拿全限定名，不能猜</div>
+      </div>
+      <div class="problem c-graph">
+        <div class="p-title">接口方法没有出边 → 撞 Service 接口就是死路</div>
+        <div class="p-note">这是 AST 语法的必然（接口方法无方法体），不是 bug</div>
+      </div>
+      <div class="problem c-debt">
+        <div class="p-title">设计文档说「图重建非原子」，核对后与现状不符</div>
+        <div class="p-note">写图其实已在一个 <code>session.executeWrite</code> 托管事务里</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">▶</div>
+
+  <!-- ============ ② P1 ============ -->
+  <div class="stage s2">
+    <div class="head">
+      <div class="badge">②</div>
+      <h3>P1 · Java 工具 API</h3>
+      <div class="date">9/21</div>
+      <div class="goal">5 个 /internal/tools/* 接口 + 2 个新算法</div>
+    </div>
+    <div class="problems">
+      <div class="problem c-graph">
+        <div class="p-title"><span class="flag new">★</span>变长 Cypher 表达不了「中途换关系类型」</div>
+        <div class="p-note">扇出要走 CALLS → IMPLEMENTS → 再回 CALLS → <b>弃用变长 Cypher</b>，改 Java 侧逐层 BFS</div>
+      </div>
+      <div class="problem c-graph">
+        <div class="p-title">撞接口是常态 → 反向扇出把死路变分支点</div>
+        <div class="p-note">沿 IMPLEMENTS 找到实现类，再按签名匹配。且<b>扇出不计 depth</b>——计了的话 depth≤2 永远穿不过接口</div>
+      </div>
+      <div class="problem c-graph">
+        <div class="p-title">method-body 的 startLine 从<b>第一个注解</b>算起</div>
+        <div class="p-note"><code>@GlobalTransactional</code> 这类会被切进去，javadoc 不会</div>
+      </div>
+      <div class="problem c-graph">
+        <div class="p-title">接口方法是<b>单行</b>，切片只能拿到签名</div>
+        <div class="p-note">→ 顺 IMPLEMENTS + signature 自动跳实现类，用 <code>resolvedFrom</code> 标明原 uid</div>
+      </div>
+      <div class="problem c-debt">
+        <div class="p-title"><span class="flag debt">⚠</span>UP 语义不一致</div>
+        <div class="p-note"><code>class-relations</code> 的 UP 只看直接 CALLS 边；<code>call-chain</code> 的 UP 带反向扇出 → <b>同一个问题两个数字</b></div>
+      </div>
+      <div class="problem c-graph">
+        <div class="p-title"><span class="flag debt">⚠</span>classes 默认 limit=40 有排序偏差</div>
+        <div class="p-note">返回的 40 条全是老单体包，<code>trade</code> 一个都没有 → 这条「让 LLM 在清单里选」的兜底基本失效</div>
+      </div>
+      <div class="problem c-contract">
+        <div class="p-title">设计写「maxNodes 硬上限 40」<b>是错的</b></div>
+        <div class="p-note">真值是 <code>MAX_NODES_HARD = 200</code>；Java 是 clamp 不是拒绝 → <b>预算必须 Python 显式传</b></div>
+      </div>
+      <div class="problem c-env">
+        <div class="p-title">mvnw spring-boot:run 会 fork 出独立 JVM</div>
+        <div class="p-note">停掉 Maven 进程，java 不会跟着退 → 得 taskkill 另找 PID</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">▶</div>
+
+  <!-- ============ ③ P2 ============ -->
+  <div class="stage s3">
+    <div class="head">
+      <div class="badge">③</div>
+      <h3>P2 · Python 契约 + java_client</h3>
+      <div class="date">9/25 – 9/30</div>
+      <div class="goal">给两边定下不会漂移的类型边界</div>
+    </div>
+    <div class="problems">
+      <div class="problem c-contract">
+        <div class="p-title"><span class="flag new">★</span>契约漂移：文档只写了信封字段名</div>
+        <div class="p-note">5 个工具的 data 载荷形状<b>只存在于 Java DTO 里</b> → 契约必须照代码抄，不能照文档抄</div>
+      </div>
+      <div class="problem c-contract">
+        <div class="p-title"><span class="flag new">★</span>参数静默降级（最阴的一个）</div>
+        <div class="p-note"><code>strArg</code>/<code>intArg</code> 找不到 key 就吃 fallback，<b>不抛异常不记日志</b> → HTTP 200、结果悄悄不对</div>
+      </div>
+      <div class="problem c-contract">
+        <div class="p-title">数字必须是 JSON number，不能是字符串</div>
+        <div class="p-note">发 <code>"2"</code> 同样落回默认值 2 —— <b>碰巧和想传的一样，所以更难发现</b>（传 "1" 才暴露）</div>
+      </div>
+      <div class="problem c-contract">
+        <div class="p-title">Jackson 没配 NON_NULL，显式 null 会发出来</div>
+        <div class="p-note">Pydantic 的 <code>= 默认值</code> <b>对「键不存在」生效、对显式 null 无效</b> → 可为空字段必须写 <code>| None</code></div>
+      </div>
+      <div class="problem c-contract">
+        <div class="p-title">graphRev=0 不是错误</div>
+        <div class="p-note">0 = 从未落图（或图建于版本号机制之前）→ 别当异常，也别拿它判断「图能不能用」</div>
+      </div>
+      <div class="problem c-contract">
+        <div class="p-title">gaps 只在 DOWN 方向产生</div>
+        <div class="p-note">UP 的空结果是合法的，不是「断链」</div>
+      </div>
+      <div class="problem c-test">
+        <div class="p-title">测试起点选错会<b>永远绿</b></div>
+        <div class="p-note"><code>IOrderService</code> 在 depth=1/2 下结果完全相同 → 用它测「参数有没有生效」跑一万遍也是绿；换 OrderController 才分得出 3 vs 8 个节点</div>
+      </div>
+      <div class="problem c-env">
+        <div class="p-title">系统代理劫持 localhost</div>
+        <div class="p-note">httpx 从注册表读代理 → 连 <code>localhost:8080</code> 都被丢给 7897 → 超时/502，<b>而同一台机器 curl 却正常</b>。须 <code>trust_env=False</code></div>
+      </div>
+      <div class="problem c-env">
+        <div class="p-title">curl 传中文 → 400 parsing the body</div>
+        <div class="p-note">命令行参数按本地代码页转码，产出的不是合法 UTF-8 → 须 <code>--data-binary @file</code></div>
+      </div>
+      <div class="problem c-test">
+        <div class="p-title">契约测试该 skip 不该 fail</div>
+        <div class="p-note">红只应该代表一件事：契约漂移了。环境问题不该制造假警报</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">▶</div>
+
+  <!-- ============ ④ P3 ============ -->
+  <div class="stage s4">
+    <div class="head">
+      <div class="badge">④</div>
+      <h3>P3 · Agent 循环</h3>
+      <div class="date">10/1</div>
+      <div class="goal">Intent 判定 + LLM 讲解 + 四道拦截</div>
+    </div>
+    <div class="problems">
+      <div class="problem c-llm">
+        <div class="p-title"><span class="flag new">★</span>json_object 模式有隐藏前置条件</div>
+        <div class="p-note">prompt 里<b>必须出现 "json" 字样</b>，否则 400 —— 而且报的错指向别处，极难查。专门写了条测试钉住它</div>
+      </div>
+      <div class="problem c-llm">
+        <div class="p-title"><span class="flag new">★</span>citations ⊆ evidence 的保证被削弱</div>
+        <div class="p-note">P2 是「先选 citations 再拼 message」，结构上不可能引用没出处的东西；<b>message 变成自由文本后拦不住了</b> → 只剩 prompt + 事后剔除</div>
+      </div>
+      <div class="problem c-llm">
+        <div class="p-title">想扫 message 里的类名 → 放弃</div>
+        <div class="p-note">LLM 写简单名、evidence 是全限定名，<b>必然大量误报</b>。天天误报的检查等于没有检查</div>
+      </div>
+      <div class="problem c-test">
+        <div class="p-title">LLM 和 Java 都不确定性，分支根本测不了</div>
+        <div class="p-note">→ 造 FakeLLM / FakeJava。FakeLLM 的剧本元素还能是<b>异常实例</b>，一轮里两层降级一起覆盖</div>
+      </div>
+      <div class="problem c-test">
+        <div class="p-title">路由直接从 app.state 拿 client，测试注不进去</div>
+        <div class="p-note">→ 改成 <code>Depends</code>，这才有 <code>dependency_overrides</code>。<b>这是那层单测能存在的前提</b></div>
+      </div>
+      <div class="problem c-debt">
+        <div class="p-title"><span class="flag debt">⚠</span>UP 路由 bug 在真实问答里暴露</div>
+        <div class="p-note">点中实现类问「谁调用了它」→ 答「只有它自己」；真实答案是 3 个类。问接口两者一致，<b>问实现类才岔开</b></div>
+      </div>
+      <div class="problem c-debt">
+        <div class="p-title">NAVIGATE 的「不调 LLM」做不到</div>
+        <div class="p-note">要判出它是 NAVIGATE，就得先调 LLM #1 → 真做到零 LLM 需要前端直接声明意图</div>
+      </div>
+      <div class="problem c-debt">
+        <div class="p-title">超时预算自相矛盾</div>
+        <div class="p-note">设计写「Java 代理 Python 8s」，但 Python 一轮要调两次 LLM → <b>LLM 一慢，网关就先掐断</b></div>
+      </div>
+      <div class="problem c-debt">
+        <div class="p-title">一轮只查一次图</div>
+        <div class="p-note">ReAct 多步规划（LLM 决定下一步调什么）<b>没做</b>，接缝留在 loop 里但未接</div>
+      </div>
+      <div class="problem c-contract">
+        <div class="p-title">Halt 后自检：留下的债</div>
+        <div class="p-note">deploy/.env 缺 INTERNAL_TOKEN · DEEPSEEK_API_KEY 存两处 · 上传后未清旧概况 · 删项目未清 task 行</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<div class="foot">
+  <b>怎么读这张图</b>：横向是阶段推进，纵向是每阶段撞到的问题。<br>
+  <b>★</b> 标的是<span style="color:#b45309;font-weight:700">「推翻了原设计」的发现</span>——这几条最值得在面试讲，
+  因为它们证明你是<b>按真实数据改的判断，不是照着文档抄</b>。<br>
+  <b class="k">⚠</b> 标的是<span class="k">至今没解决的遗留</span>，目前有 <b>6 条</b>：
+  UP 语义不一致 · classes 排序偏差 · NAVIGATE 零 LLM · 超时预算矛盾 · ReAct 未做 · 一批运维小债。<br>
+  <b>一个规律</b>：每阶段的坑可以归成三类 ——
+  <b>图谱类</b>（AST 表达能力的边界）、<b>契约类</b>（静默失败，最难查）、<b>环境类</b>（能骗过 curl 的假象）。
+  三类里<b>契约类最危险</b>，因为它不报错。
+</div>
+
+</body>
+</html>

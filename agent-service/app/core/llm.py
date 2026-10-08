@@ -59,6 +59,10 @@ class LLMResult:
     tokens_out: int
 
 
+"""
+这个类只是写接口契约，不写业务代码
+真正调用大模型网络的代码，在LLMClient类里，Completer只是永安里做类型约束
+"""
 class Completer(Protocol):
     """`classify_intent` / `explain` 真正依赖的**最小接口**。
 
@@ -109,11 +113,14 @@ class LLMClient:
         ⚠️ `json_mode=True` 时 DeepSeek（与 OpenAI 同规）**要求 prompt 里出现 "json" 字样**，
         否则返回 400。这条约束落在调用方（`core/prompt.py`）身上，不是这里。
         """
+
+        # 校验密钥
         if not settings.deepseek_api_key:
             raise LLMNotConfiguredError(
                 "DEEPSEEK_API_KEY 未配置 —— 检查 agent-service/.env 或进程环境变量"
             )
 
+        # 组装请求体payload
         payload: dict[str, object] = {
             "model": settings.llm_model,
             "messages": messages,
@@ -122,6 +129,7 @@ class LLMClient:
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 
+        #发送POST请求
         try:
             resp = await self._client.post(_CHAT_PATH, json=payload)
         except httpx.TransportError as e:
@@ -129,6 +137,7 @@ class LLMClient:
             # 分开只会逼它写两个 except 做同一件事。
             raise LLMTransportError(f"{type(e).__name__}: {e}") from e
 
+        # Http状态码
         if resp.status_code != 200:
             raise LLMResponseError(f"HTTP {resp.status_code}: {resp.text[:300]}")
 
@@ -141,6 +150,7 @@ class LLMClient:
         except (ValueError, KeyError, IndexError, TypeError) as e:
             raise LLMResponseError(f"响应形状不对：{type(e).__name__}: {e}") from e
 
+        # 封装返回的LLMResult
         result = LLMResult(
             text=text,
             tokens_in=int(usage.get("prompt_tokens", 0)),

@@ -38,16 +38,19 @@ _REV_PLACEHOLDER = 0
 
 
 async def run_turn(
-    ctx: AgentContext,
-    message: str,
-    java: JavaClient,
-    llm: Completer,
+    ctx: AgentContext,  #会话上下文对象
+    message: str, #用户本轮发来的提问文本
+    java: JavaClient, #依赖注入拿到的java服务客户端
+    llm: Completer, #大模型客户端用来调用LLM生成内容
 ) -> AgentResponse:
-    ctx.reset_turn_budget()
-    started = time.perf_counter()
-    steps: list[Step] = []
+    ctx.reset_turn_budget() #重置本轮对话的配额
+    started = time.perf_counter() #记录当前时间戳，用来统计本轮回答一共花了多少耗时
+    steps: list[Step] = [] #新建一个空列表，用来存放这一轮Agent执行的每一步记录
 
     # ── 1. Intent 判定 ──────────────────────────────────────────────────────
+    # 调用异步函数_classify 交给大模型判断用户这句话的意图
+    # intent_result（意图结果对象，包含识别出的意图类型+置信度conf）
+    # degraded_intent（布尔标记，True = LLM不可用，退化成老的规则模板来判断意图
     intent_result, degraded_intent = await _classify(ctx, message, llm)
     steps.append(
         Step(n=len(steps) + 1, type=StepType.INTENT,
@@ -131,11 +134,18 @@ async def _classify(
     """
     try:
         return await classify_intent(ctx, message, llm), False
-    except LLMNotConfiguredError:
+    except LLMNotConfiguredError: #配置缺失，不走降级直接异常
         raise
-    except LLMError as e:
+    except LLMError as e: #凡LLM运行时临时报错，超时，服务挂了，进入降级逻辑
+        """
+         如果`ctx.focus`有值 → 意图定为 **EXPLORE_FLOW（查询流程）**
+         如果`ctx.focus`为空 → 意图定为 **EXPLORE_OVERVIEW（概览查询）**
+         置信度直接写死 1.0（规则判定，百分百确定）
+         返回的第二个值`True`，代表**本次是降级模式**，回到上层就会在 step 日志打上`[规则降级]`标记-
+        """
         logger.warning("Intent 判定不可用，回落到规则：%s", e)
         fallback = (
+            # python的三元表达式写法：X if 条件 else Y
             IntentResult(intent=Intent.EXPLORE_FLOW, confidence=1.0)
             if ctx.focus is not None
             else IntentResult(intent=Intent.EXPLORE_OVERVIEW, confidence=1.0)

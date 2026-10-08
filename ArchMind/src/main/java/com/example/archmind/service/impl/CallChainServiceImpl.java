@@ -109,13 +109,17 @@ public class CallChainServiceImpl implements CallChainService {
     @Override
     public CallChainResponse callChain(Long projectId, String uid, String methodUid,
                                        ChainDirection direction, int maxDepth, int maxNodes) {
+//        参数校验必不可少
         if (projectId == null || uid == null || uid.isBlank()) {
             throw new BusinessException("缺少 projectId 或 uid");
         }
+//        由于调用关系是多次的，所以需要控制查询的深度，和节点的熟练g
         int depth = Math.max(1, Math.min(maxDepth, MAX_DEPTH_HARD));
         int nodes = Math.max(1, Math.min(maxNodes, MAX_NODES_HARD));
 
+//        新建缓存map，用来存放已经加载过的类信息，避免重复查，cache开始为空
         Map<String, ClassInfo> cache = new HashMap<>();
+
         ClassInfo start = loadClass(projectId, uid, cache);
         if (start == null) {
             throw new BusinessException("类不存在: " + uid);
@@ -412,26 +416,48 @@ public class CallChainServiceImpl implements CallChainService {
     }
 
     private ClassInfo loadClass(Long pid, String uid, Map<String, ClassInfo> cache) {
+//        先从缓存里，根据uid找对应的classInfo对象
         ClassInfo cached = cache.get(uid);
+//        如果cache不为空则return
         if (cached != null) {
             return cached;
         }
+//        这里完成将缺失的内容补全到cache中，由于cache是缓存，不是变量，所以不需要传递信息，当loadClasses完成后，那么就能够直接return
+//  List.of（把单个变量包装成一个只包含这一个元素的List集合
         loadClasses(pid, List.of(uid), cache);
+//        这里uid是搜索用的索引，拿到的是索引对应的完整ClassInfo全部信息
         return cache.get(uid);
     }
-
+/*
+* Iterable（可迭代集合，不能够直接传单个字符串）
+* Iterable不是具体集合，是一个接口：只要实现这个接口，就代表这个东西可以用for循环挨个遍历去除里面元素
+* 补充：
+* List是Iterable的一个子类，所以其实可以换成List<String> 但是就变成了只能够接受List，可接受的范围变小了
+* HashSet，LinkedHashSet都是Iterable的子类
+*
+* 所以由于我们只需要查一个uid，不能够直接传uid，所以需要List.of把单个值变成List
+* */
     private void loadClasses(Long pid, Iterable<String> uids, Map<String, ClassInfo> cache) {
         List<String> missing = new ArrayList<>();
+//        新建列表missing，判断缓存中是否有uid
+//        遍历传入的所有uids
         for (String u : uids) {
+//            如果cache里没有这个uids
             if (!cache.containsKey(u)) {
+//                记录到missing列表中
                 missing.add(u);
             }
         }
+//        如果missing为空也就是说明，每一处的查询判断都能够在cache中找到对应的uids，那么可以直接返回
         if (missing.isEmpty()) {
             return;
         }
+        /*建立Neo4j的通道
+        * 然后对条件参数，pid，uids：也就是缺失的uids进行查找
+        * */
         try (Session session = driver.session()) {
             Result r = session.run(BATCH_CLASS_INFO, Map.of("pid", pid, "uids", missing));
+//            连续读取数据库返回的每一条记录
             while (r.hasNext()) {
                 Record rec = r.next();
                 ClassInfo info = new ClassInfo(
@@ -444,6 +470,7 @@ public class CallChainServiceImpl implements CallChainService {
                         intOrNull(rec.get("startLine")),
                         intOrNull(rec.get("endLine")),
                         str(rec.get("module")));
+//                最后吧查到的类信息放进cache中，后续遇到该uid就不用进行查库
                 cache.put(info.uid(), info);
             }
         }
@@ -510,13 +537,18 @@ public class CallChainServiceImpl implements CallChainService {
 
     // ==================== 内部小类型 ====================
 
-    /** 一个方法引用：frontier 的元素 */
+    /** 一个方法引用：frontier 的元素
+     * Record（记录类），用来做纯数据载体，只存数据，步用手写getter，构造，hashCode等
+     * */
     private record MRef(String uid, String owner, String signature, int depth) {
     }
 
     private record HopRow(String fromMethod, String fromOwner, String toMethod,
                           String toOwner, String toSignature) {
     }
+    /** 这里的ClassInfo就是一个纯数据模型，专门装类的信息，没有业务方法，只用来承载查询出来的数据
+     *
+     */
 
     private record ClassInfo(String uid, String name, String kind, String packageName,
                              String filePath, String description, Integer startLine,

@@ -66,6 +66,7 @@ def parse_intent(text: str) -> IntentResult:
         # 最常见的就是 intent 不在六个枚举里（模型现场发明了一个）
         raise IntentParseError(f"字段校验失败：{e}") from e
 
+# ----------------真正调用大模型，让模型输出意图的底层函数-------------
 
 async def classify_intent(ctx: AgentContext, message: str, llm: Completer) -> IntentResult:
     """判定一轮问答的意图。
@@ -75,6 +76,8 @@ async def classify_intent(ctx: AgentContext, message: str, llm: Completer) -> In
     而这个区别只有循环那一层知道该怎么处理。在这里吞掉就等于把两者混为一谈 ——
     那正是 P2 在 java_client 里为 401 特意避免的坑。
     """
+    # intent_message拼好给LLM的提示词（系统prompt+用户消息+上下文信息）
+    # json_mode = true 强制大模型返回标记JSON字符串，方便后面解析意图
     raw = await llm.complete(intent_messages(ctx, message), json_mode=True)
 
     try:

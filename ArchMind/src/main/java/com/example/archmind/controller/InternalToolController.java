@@ -66,10 +66,15 @@ public class InternalToolController {
         Long projectId = request.getProjectId();
         try {
             checkProjectUtil.checkProjectExists(projectId);
+
+//            /** 鉴权后直接通过原有的方法（tryGetExistingOverview）* 来获取缓存，或者数据库中的数据*/
             ProjectOverviewResponse data = projectOverviewService.tryGetExistingOverview(projectId);
             if (data == null) {
+
+//            /** 不进行分析，只返回警示内容*/
                 return stamp(ToolEnvelope.failure("该项目尚未生成项目概况，请先完成分析"), projectId);
             }
+//将获取的data返回
             return stamp(ToolEnvelope.success(data), projectId);
         } catch (BusinessException e) {
             log.warn("overview 工具返回失败 projectId={}: {}", projectId, e.getMessage());
@@ -80,14 +85,20 @@ public class InternalToolController {
     /** 项目里有哪些类（兜底用：用户没给锚点时，让 LLM 在清单里选而不是硬猜） */
     @PostMapping("/classes")
     public ToolEnvelope<List<ClassNodeDTO>> classes(@RequestBody InternalToolRequest request) {
+
         Long projectId = request.getProjectId();
         try {
             checkProjectUtil.checkProjectExists(projectId);
+//            依旧先鉴权，然后获取节点数量
             int limit = clampLimit(request.getArgs());
 
             // 多取一条用于判断「是否还有更多」，省掉一次 count
             List<ClassNodeDTO> rows = codeGraphQueryService.listClasses(projectId, limit + 1);
+
+//          从Neo4j中完成获取后，首先需要对大小进行判断，是否节点数量大于limit，并记录为boolean
             boolean truncated = rows.size() > limit;
+//            如果超过limit上限，那么truncated为true，代表结果被阶段，还有更多数据没返回
+//            为ture那么就从0到limit范围中获取
             List<ClassNodeDTO> data =
                     truncated ? new ArrayList<>(rows.subList(0, limit)) : rows;
 
@@ -107,19 +118,22 @@ public class InternalToolController {
         Long projectId = request.getProjectId();
         try {
             checkProjectUtil.checkProjectExists(projectId);
+//            拿uid这个key的值，
             String uid = strArg(request.getArgs(), "uid");
             if (uid == null || uid.isBlank()) {
                 return stamp(ToolEnvelope.failure("缺少参数 uid（类的全限定名）"), projectId);
             }
+//            这里拿的是python参数中的direction
             RelationDirection direction = parseDirection(strArg(request.getArgs(), "direction"));
             if (direction == null) {
                 return stamp(ToolEnvelope.failure("direction 取值必须是 UP / DOWN / BOTH"), projectId);
             }
             int limit = clampLimit(request.getArgs());
-
+//          完成该参数的查询
             ClassRelationsResponse data =
                     codeGraphQueryService.classRelations(projectId, uid, direction);
             List<Evidence> evidence = new ArrayList<>();
+//            完成证明的补充，也就是收集
             boolean truncated = capRelations(data, limit, evidence);
             return stamp(ToolEnvelope.success(data, evidence, truncated), projectId);
         } catch (BusinessException e) {
@@ -141,11 +155,12 @@ public class InternalToolController {
             if (uid == null || uid.isBlank()) {
                 return stamp(ToolEnvelope.failure("缺少参数 uid（类的全限定名）"), projectId);
             }
+//            获取查询的走向
             ChainDirection direction = parseChainDirection(strArg(request.getArgs(), "direction"));
             if (direction == null) {
                 return stamp(ToolEnvelope.failure("direction 取值必须是 DOWN / UP"), projectId);
             }
-
+//           从参数中获取各种的参数并调用callChain
             CallChainResponse data = callChainService.callChain(
                     projectId,
                     uid,
@@ -170,8 +185,10 @@ public class InternalToolController {
         Long projectId = request.getProjectId();
         try {
             checkProjectUtil.checkProjectExists(projectId);
+//            依旧鉴权，鉴权后用uids，methodUids
             String uid = strArg(request.getArgs(), "uid");
             String methodUid = strArg(request.getArgs(), "methodUid");
+//            校验参数
             if (isBlank(uid) && isBlank(methodUid)) {
                 return stamp(ToolEnvelope.failure("需要 uid（类的全限定名）或 methodUid（方法 uid）"), projectId);
             }
@@ -303,8 +320,13 @@ public class InternalToolController {
     }
 
     private int clampLimit(Map<String, Object> args) {
+//        默认返回节点上限
         int limit = DEFAULT_LIMIT;
+//        args中有包括limit，direction，uid。这里需要获取limit
         Object raw = args == null ? null : args.get("limit");
+//        判断是否为数字类型，如果不是就转成int整数，复制给limit变量，不是数字的，limit就保存原有的值不变
+//        instanceof 作用是判断raw是不是Number的子类（Integer，long，double都属于Number）
+//        并且将raw的值赋值给新变量n
         if (raw instanceof Number n) {
             limit = n.intValue();
         }
@@ -325,12 +347,18 @@ public class InternalToolController {
         return s == null || s.isBlank();
     }
 
-    /** 不给 direction 时默认 BOTH；给了非法值返回 null，由调用方拒绝而不是静默兜底 */
+    /** 不给 direction 时默认 BOTH；给了非法值返回 null，由调用方拒绝而不是静默兜底
+     * 改方法目的是根据参数内信息，确定要进行查询的方向，UP/DOWN/BOTH，而不是开始查询的操作
+     * */
+
     private RelationDirection parseDirection(String raw) {
         if (raw == null || raw.isBlank()) {
+//            如果raw为空采用双向关系查询
             return RelationDirection.BOTH;
         }
         try {
+//            将参数中的内容全部转成大写（toUpperCase）
+//            valueOf是一个灭据自带静态放啊，根据字符串名字，找到对应的枚举对象，由于字符串必须和枚举常量名字完全一样（所以先统一转到大写）
             return RelationDirection.valueOf(raw.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return null;
@@ -339,9 +367,11 @@ public class InternalToolController {
 
     /** 不给 direction 时默认 DOWN —— 业务流程是主场景；给了非法值返回 null 让调用方拒绝 */
     private ChainDirection parseChainDirection(String raw) {
+//        调方是call-chain所以默认调用是往下走的也就是DOWN
         if (raw == null || raw.isBlank()) {
             return ChainDirection.DOWN;
         }
+//        还是同样的是枚举，这次只有UP，DOWN
         try {
             return ChainDirection.valueOf(raw.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {

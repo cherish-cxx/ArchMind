@@ -80,6 +80,13 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
         return listClasses(projectId, Integer.MAX_VALUE);
     }
 
+    /**
+     *
+     * @param projectId 项目Id
+     * @param limit
+     * 归根结底是通过Neo4j的session建立通信，cypher查询内容
+     * @return 所有被查询的列表加添加到list里
+     */
     @Override
     public List<ClassNodeDTO> listClasses(Long projectId, int limit) {
         try (Session session = driver.session()) {
@@ -97,13 +104,28 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
         return classRelations(projectId, uid, RelationDirection.BOTH);
     }
 
+    /**
+     *
+     * @param projectId 项目id
+     * @param uid 类id
+     * @param direction  描述
+     * @return 返回关系内容响应
+     * 实际流程：
+     * 1.建立通信
+     * 2.用projectId，和uid两个参数确定Neo4j的节点
+     * 3.根据查询的方向，用Cypher查找用户所选哟参数内容并记录到up/down中
+     */
     @Override
     public ClassRelationsResponse classRelations(Long projectId, String uid, RelationDirection direction) {
+//        先建立Neo4j的通信
         try (Session session = driver.session()) {
+//           将参数放以键值的方式存储到变量params
             Map<String, Object> params = Map.of("pid", projectId, "uid", uid);
 
             ClassNodeDTO center = null;
+//            将params与cypher一同合成查询语句，进行查询
             Result centerRes = session.run(FIND_CENTER, params);
+
             if (centerRes.hasNext()) {
                 center = toClassNode(centerRes.next().get("c"));
             }
