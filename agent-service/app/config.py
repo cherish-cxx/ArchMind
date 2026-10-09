@@ -1,4 +1,12 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# .env 用**绝对路径**。默认的 ".env" 是相对「当前工作目录」解析的 ——
+# 从别处（比如仓库根）启动服务就找不到它，于是**所有配置静默回落到默认值**：
+# Redis 连成本机 localhost:6379、DEEPSEEK_API_KEY 变成空串，而且不报任何错。
+# 从代码文件定位就没这个问题：无论从哪启动，都指向 agent-service/.env。
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -8,7 +16,7 @@ class Settings(BaseSettings):
     AGENT_PORT → agent_port、JAVA_BASE_URL → java_base_url。
     """
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=_ENV_FILE, env_file_encoding="utf-8")
 
     agent_port: int = 8000
     java_base_url: str = "http://localhost:8080"

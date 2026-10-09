@@ -4,3 +4,6 @@ __pycache__/
 .env
 .pytest_cache/
 .idea/
+
+# scripts/verify_p4_1.py 的临时状态（step1 生成、step3 删除，跑一半会残留）
+.verify_p4_1_state.json

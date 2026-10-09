@@ -44,8 +44,19 @@ app.include_router(agent_router)
 
 @app.get("/health")
 def health() -> dict:
-    """存活探针。P6 容器化后 compose 靠它判断服务起没起。"""
-    return {"status": "ok", "javaBaseUrl": settings.java_base_url}
+    """存活探针。P6 容器化后 compose 靠它判断服务起没起。
+
+    顺带报出**这个进程实际生效的配置** —— 曾经排查过一次「服务起来了但连的是
+    本机 Redis」，就是因为看不出它在连哪个地址，绕了不少路。
+    redisUrl 不含密码（密码在单独的 redis_password 字段里）。
+    """
+    return {
+        "status": "ok",
+        "javaBaseUrl": settings.java_base_url,
+        "redisUrl": settings.redis_url,
+        "redisDb": settings.redis_db,
+        "llmConfigured": bool(settings.deepseek_api_key),
+    }
 
 
 if __name__ == "__main__":
