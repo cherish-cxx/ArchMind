@@ -11,6 +11,7 @@
 """
 
 from app.core.llm import LLMResult
+from app.models.context import AgentContext
 from app.models.tool import CallChain, ClassNode, NodeKind, ToolEnvelope
 
 
@@ -156,3 +157,33 @@ def ok_chain() -> ToolEnvelope:
 
 def failed(note: str = "类不存在") -> ToolEnvelope:
     return ToolEnvelope(ok=False, data=None, evidence=[], truncated=False, note=note, graph_rev=1)
+
+
+class FakeContextStore:
+    """内存版 ContextStore（P4.1）。
+
+    **为什么需要它**：`test_contract.py` 走的是真 app（`TestClient(app)` 会跑 lifespan，
+    于是建一个真 `ContextStore` → 真连 Redis）。契约测试的红只应该代表「契约漂移了」，
+    不该因为本机没起 Redis 就红 —— 和 conftest 里「Java 不可达就 skip」是同一条铁律。
+
+    语义必须和真 store 对齐：**load 取不到就返回新建的，不返回 None**
+    （P3 的 `_load_context` 就是这个语义，换了存储也不变）。
+    """
+
+    def __init__(self) -> None:
+        self._data: dict[tuple[int, str], AgentContext] = {}
+
+    async def load(self, project_id: int, conversation_id: str) -> AgentContext:
+        key = (project_id, conversation_id)
+        if key not in self._data:
+            self._data[key] = AgentContext(conversation_id=conversation_id, project_id=project_id)
+        return self._data[key]
+
+    async def save(self, ctx: AgentContext) -> None:
+        self._data[(ctx.project_id, ctx.conversation_id)] = ctx
+
+    async def evict_project(self, project_id: int) -> int:
+        doomed = [k for k in self._data if k[0] == project_id]
+        for k in doomed:
+            del self._data[k]
+        return len(doomed)

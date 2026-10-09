@@ -47,6 +47,7 @@ P4 之后：
 | 接口 | 用途 | 关键动作 |
 | --- | --- | --- |
 | `POST /api/agent/ask` | 一轮问答 | JWT → **租户校验** → 补 `X-Internal-Token` → 转发 Python |
+| `POST /api/agent/navigate` | 点按钮导航（展开 / 退回去） | JWT → **租户校验** → 转发；**不调 LLM**（§3.3 决策） |
 | `GET /api/agent/conversations/{id}` | 恢复会话（刷新页面用） | 从 Python 读 Context 还原 |
 | `POST /api/agent/conversations/{id}/viewport` | 前端上报屏幕状态 | 转发 → Python 只接受 rev 递增 |
 | `POST /api/agent/conversations/{id}/ack` | UICommand 执行回执 | 转发 → Python 才写 `lastUiCommands` |
@@ -85,7 +86,7 @@ P4 之后：
 
 ---
 
-## 3. ⚠️ 三个必须先拍板的问题（不定会返工）
+## 3. ✅ 三个决策（P4.0 已拍板，2026-10-09）
 
 ### 3.1 Java 拿不到 evidence，怎么校验 `uiCommands`？
 
@@ -99,7 +100,17 @@ P4 之后：
 | C | Python 在响应里带上 evidence | 校验最强；契约要加字段，且字段会被 P5 前端看到 |
 
 **倾向 A 的理由**：P3 的 `guard.filter_ui_commands` 已在 Python 侧做过强校验，Java 这一层是**防御 Python 有 bug** 的第二道，「节点存在性」够用。
-**待拍板。**
+
+> **✅ 决策（2026-10-09）：采 A —— 弱校验，只验「uid 是这个项目的节点」。**
+>
+> **一处措辞纠正**：这不是「先弱、以后再补强」——**A 就是终态**。
+> 强校验的真相源是「**本轮查过什么**」（evidence），而这个信息只在 Python 手里：
+> 它是 Python 调 Java 工具时拿到的。Java 想复刻就得缓存每轮发出去的 evidence（方案 B），
+> 那等于把刚立起来的「Java 无状态网关」拆掉。**强校验的位置本来就在 Python**，
+> Java 这层是第二道，不存在「以后升级」。
+>
+> **落地提醒**：一条响应可能带 N 条 uiCommand，**别逐条查 Neo4j**，
+> batch 成一次 `WHERE uid IN [...]`。
 
 ### 3.2 ⚠️ 超时预算自相矛盾（必须改）
 
@@ -114,6 +125,19 @@ P4 之后：
 **建议改成**：Java 代理 Python **45–60s**（对齐整轮预算）；Python 调 Java 工具保持 **8s**；Python 单次 LLM 保持 **25s**。
 这样 8s 只用来保护「工具不该慢」，不误伤「LLM 本来就慢」。
 
+> **✅ 决策（2026-10-09）：按建议执行。**
+> Java 代理 Python **45–60s**；Python 调 Java 工具 **8s**（`TOOL_TIMEOUT_SECONDS`，已在 `java_client.py`）；
+> Python 单次 LLM **25s**（`settings.llm_timeout`，已配置）。
+>
+> **点明性质：这是「配置问题」，不是「拓扑问题」。** 很容易想到「让前端直连 Python 绕开网关」——
+> **那是错的**：绕开之后浏览器 / nginx 照样有超时，Python 照样要等 LLM 25s，
+> 只是把超时点从 Java 挪到了 nginx。**超时预算没配对，换拓扑不解决任何事。**
+> 何况绕开会丢掉整个 P4 的租户边界（前端直接给 Python 一个没人校验过的 `projectId`）。
+>
+> **流式（SSE）不在这条线上**：流式解决的是「用户干等 25s 觉得卡死」这个**感知延迟**，
+> 不是「连接被网关掐断」。而且流式连接活得更久，**会让超时问题更难**（要管 chunk 间隔而非总耗时）。
+> 归 P7（§0 已划），P4 不碰。
+
 ### 3.3 NAVIGATE 能不能做到零 LLM
 
 设计 §5：「用户点『展开』『退回去』时只走 ①②④，**不调工具、不调 LLM**」。
@@ -121,6 +145,18 @@ P4 之后：
 
 要做到零 LLM，只能让前端在点按钮时**直接声明意图**（如 `POST /api/agent/navigate {op: "BACK"}`），跳过判定。
 **现在拍板，P5 才不用改接口。**
+
+> **✅ 决策（2026-10-09）：采「前端声明意图」—— 点按钮直接声明，跳过 LLM #1。**
+>
+> P4.3 新增 `POST /api/agent/navigate {op: "BACK" | "EXPAND", target?}`，前端点「退回去 / 展开」时
+> **直接调它、不经过 `/ask`**，因此不调任何 LLM。
+>
+> **代价**：前端多一个接口要接（P5）。换来的正是设计 **E2**「用户点一下展开就烧一次 token」
+> 要避免的那条成本决策 —— 点击变成**零 token**。
+>
+> ⚠️ **`/ask` 那条路仍然保留 NAVIGATE 判定，别删。** 用户完全可能在输入框里打字说「退回去」，
+> 那就还是得靠 LLM #1 判出来。所以 `loop.py` 的 `_navigate` 分支**不动**——
+> 两条路殊途同归（都落到同一个焦点栈出栈逻辑）。
 
 ---
 

@@ -8,6 +8,7 @@ from app.api.agent import router as agent_router
 from app.config import settings
 from app.core.llm import LLMClient
 from app.tools.java_client import JavaClient
+from app.store.context_store import ContextStore
 
 
 @asynccontextmanager
@@ -27,11 +28,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 服务器刚启动先跑这里：创建java客户端，llm客户端，并塞到app.state全局储物盒，此时还没有对发开放接口，用户请求进不来
     app.state.java_client = JavaClient()
     app.state.llm_client = LLMClient()
+    app.state.context_store = ContextStore()
     # 把控制权交给FastAPI，服务正式上线，开始监听端口，接收HTTP请求
     yield
     # 清理代码：异步调用客户端的关闭防范，释放网络连接，资源关闭
     await app.state.java_client.aclose()
     await app.state.llm_client.aclose()
+    await app.state.context_store.aclose()
 
 
 app = FastAPI(title="ArchMind Agent Service", version="0.1.0", lifespan=lifespan)

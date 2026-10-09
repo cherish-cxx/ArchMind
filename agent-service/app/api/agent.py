@@ -8,7 +8,6 @@ Python **不是**给前端直接调的 —— 它是 Java 后面的内部服务�
 路由里如果出现 `if`，多半是编排漏到了这一层。
 """
 
-import logging
 import secrets
 import uuid
 
@@ -20,9 +19,10 @@ from app.core.loop import run_turn
 from app.models.context import AgentContext
 from app.models.protocol import AskRequest, EvictRequest
 from app.models.response import AgentResponse
+from app.store.context_store import ContextStore
 from app.tools.java_client import JavaClient
 
-logger = logging.getLogger(__name__)
+
 # 新建一个子路由“收纳盒”，何止里所有接口自动带上前缀internal/agent，在接口文档中归类到agent分组
 # prefix="/internal/agent" 使得所有接口能够自动拼装上该路径
 # tags=["agent"]只作用于swagger文档，把这一组接口归到名字叫agent的折叠分组里
@@ -48,35 +48,26 @@ def get_java_client(request: Request) -> JavaClient:
 def get_llm_client(request: Request) -> LLMClient:
     return request.app.state.llm_client
 
+def get_context_store(request:Request) ->ContextStore:
+    return request.app.state.context_store
 
-# ==================== 会话 Context（P3：内存版）====================
-#
-# ⚠️ **P3 的 Context 只活在进程内存里**，进程一重启就没了。
-# 这是有意的：Redis 持久化（db1，TTL 2h）是 P4 的事，届时只需把这两个函数换成
-# `store/context_store.py` 的读写，**模型与循环一行都不用改**。
-#
-# key 用 (projectId, conversationId)：projectId 参与做 key 是防御性的 ——
-# 万一 Java 侧串了 projectId，也不会让两个项目的对话互相污染 Context。
 
-# 变量名，开头下划线约定表示私有变量，意思是，这个变量只允许当前py文件内部使用，别的文件精良不要直接到哦如修改它
-# dict[]类型注解，代表这个是一个字典，Key的类型：tuple[int,str]元组，由证书+字符串组成
-# value的类型：agentContext（一个自定义的类实例
-# ={}：初始化，创建一个空字典
-_CONTEXTS: dict[tuple[int, str], AgentContext] = {}
+# ==================== 会话 Context（P4.1：已搬进 Redis db1）====================
+#
+# P3 时这里是进程级 dict（`_CONTEXTS`）：重启即丢，多 worker 时各存一份 ——
+# 第二轮到别的 worker 就当成新会话，**静默失忆**。P4.1 搬进 `store/context_store.py`。
+#
+# key 不变：`agent:ctx:{projectId}:{conversationId}`。
+# projectId 参与做 key 是防御性的 —— 万一 Java 侧串了 projectId，
+# 也不会让两个项目的对话互相污染 Context。
+#
+# ⚠️ 这里**不再有** `_CONTEXTS` / `_load_context`：存取全走 store，
+# 路由层只多 `await store.load(...)` / `await store.save(...)` 两行，
+# **run_turn 与 Context 模型一行都没改**。
 
 
 def _new_conversation_id() -> str:
     return f"c_{uuid.uuid4().hex[:16]}"
-
-
-def _load_context(project_id: int, conversation_id: str) -> AgentContext:
-    key = (project_id, conversation_id)
-    ctx = _CONTEXTS.get(key)
-    if ctx is None:
-        ctx = AgentContext(conversation_id=conversation_id, project_id=project_id)
-        _CONTEXTS[key] = ctx
-        logger.info("新建 Context projectId=%s conversationId=%s", project_id, conversation_id)
-    return ctx
 
 
 def _apply_focus(ctx: AgentContext, focus) -> None:
@@ -126,6 +117,7 @@ async def ask(
     req: AskRequest, #接收前端POST传过来的请求体，自动校验请求参数是否符合AskRequest模型
     java: JavaClient = Depends(get_java_client),#自动执行之前那个依赖函数，拿到全局的java客户端，变量名java
     llm: LLMClient = Depends(get_llm_client),#自动执行一阿里，拿到全局LLM客户端，变量名llm
+    store: ContextStore = Depends(get_context_store),
 ) -> AgentResponse:#返回值类型注解，返回agentResponse对象
     """执行一轮问答。
 
@@ -134,30 +126,27 @@ async def ask(
     """
     #看请求里有没有传conversation_id,如果传了，就用传过来的id，否则（or）就调用new，生成全新会话id
     conversation_id = req.conversation_id or _new_conversation_id()
-    #加载会话上下文，用projectId➕conversation_id作为key，去前面那个contexts字典里取出agentContext
-    ctx = _load_context(req.project_id, conversation_id)
+    #加载会话上下文：用 projectId + conversation_id 拼 key 从 Redis 取；取不到就是新会话
+    ctx = await store.load(req.project_id,conversation_id)
     # 把请求里的focus更新到会话上下文ctx里面
     _apply_focus(ctx, req.focus)
-
     """
     执行一轮Agent回答，把上下文，用户消息，java客户端，llm客户端传给run_turn函数
     run_turn内部会调用LLM生成回答，如果LLM调用失败，会自动降级到旧版本P2模板，不会直接崩掉整个请求
     """
     response = await run_turn(ctx, req.message, java, llm)
+    await store.save(ctx)
     # loop 不知道 conversation_id 是新生成的还是回传的（那是路由层的事），所以在这里补上
     response.conversation_id = conversation_id
     return response
 
 
 @router.post("/admin/evict", dependencies=[Depends(require_internal_token)])
-async def evict(req: EvictRequest) -> dict:
+async def evict(req: EvictRequest, store: ContextStore = Depends(get_context_store)) -> dict:
     """项目删除时清掉它的全部会话 Context。
 
-    P3 的 Context 在内存里，所以这里能真正清干净；
-    P4 换成 Redis 后，这里改成按 key 前缀删 —— 接口形状不变。
+    P4.1 起走 Redis 前缀删（`store.evict_project`）。
+    **响应形状与 P3 完全一致** —— 这样 P4.3 的 Java 网关不用跟着改。
     """
-    doomed = [k for k in _CONTEXTS if k[0] == req.project_id]
-    for k in doomed:
-        del _CONTEXTS[k]
-    logger.info("清掉 projectId=%s 的 %d 个 Context", req.project_id, len(doomed))
-    return {"ok": True, "note": f"已清理 {len(doomed)} 个会话 Context"}
+    n = await store.evict_project(req.project_id)
+    return {"ok": True, "note": f"已清理 {n} 个会话 Context"}
