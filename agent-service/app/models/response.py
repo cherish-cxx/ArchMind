@@ -121,6 +121,10 @@ class AgentResponse(CamelModel):
 
     conversation_id: str | None = None   # P4 才有；P2 一律 None
     message: str
+    #: ★ P4.2：请求带了 cid、但 Redis 里的 Context 已过期（TTL 2h）。
+    #: **给前端一个能直接分支的布尔**，而不是让它去匹配文案。
+    #: 前端据此把那个会话窗口置灰，并提示「对话已过期，请开始新的对话」。
+    session_expired: bool = False
     citations: list[Citation] = []
     ui_commands: list[UICmd] = []
     suggestions: list[Suggestion] = []

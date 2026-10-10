@@ -32,9 +32,11 @@ from app.tools.java_client import InternalAuthError, JavaClient, ToolTransportEr
 
 logger = logging.getLogger(__name__)
 
-#: P3 还没有 viewport（前端上报是 P4），所以 UICommand 的 rev 固定 0。
-#: 留 0 而不是 None：字段是 int，且 P4 接上 viewport 后这里会换成 ctx.viewport.rev。
-_REV_PLACEHOLDER = 0
+# UICommand 的 `rev` 一律取 `ctx.viewport.rev` —— 标出「这条命令基于哪个版本的屏幕」。
+# 前端执行前对比自己的 rev，**旧的就丢**，防止后端基于旧屏幕的命令把新屏幕覆盖回去。
+# 这和 `/viewport` 上报那边的 rev 锁是**同一个机制的两端**。
+# （P3 这里写死 0，因为那时还没有 viewport —— 注释当时就写了「P4 接上 viewport 后
+#   这里会换成 ctx.viewport.rev」。P4.2 兑现了。）
 
 
 async def run_turn(
@@ -182,11 +184,11 @@ def _navigate(ctx: AgentContext, steps: list[Step], started: float) -> AgentResp
     if ctx.focus_stack:
         uid = ctx.focus_stack.pop()
         ctx.focus = NodeRef(type=NodeRefType.CLASS, uid=uid)
-        cmd = UICmd(op=UiOp.FOCUS_NODE, target=ctx.focus, rev=_REV_PLACEHOLDER)
+        cmd = UICmd(op=UiOp.FOCUS_NODE, target=ctx.focus, rev=ctx.viewport.rev)
         msg = f"好，回到上一个：{uid.rsplit('.', 1)[-1]}"
     else:
         ctx.focus = None
-        cmd = UICmd(op=UiOp.CLEAR_VIEW, rev=_REV_PLACEHOLDER)
+        cmd = UICmd(op=UiOp.CLEAR_VIEW, rev=ctx.viewport.rev)
         msg = "已经在最开始了，帮你清空视图。"
 
     return AgentResponse(
@@ -275,13 +277,13 @@ def _ui_commands(
     data = env.data
     if getattr(data, "start", None) is not None:                 # call-chain
         target = NodeRef(type=NodeRefType.CLASS, uid=data.start.qualified_name)
-        return [UICmd(op=UiOp.SHOW_PATH, target=target, rev=_REV_PLACEHOLDER)]
+        return [UICmd(op=UiOp.SHOW_PATH, target=target, rev=ctx.viewport.rev)]
     if getattr(data, "center", None) is not None:                # class-relations
         return [UICmd(op=UiOp.FOCUS_NODE,
                       target=NodeRef(type=NodeRefType.CLASS, uid=data.center.qualified_name),
-                      rev=_REV_PLACEHOLDER)]
+                      rev=ctx.viewport.rev)]
     if ctx.focus is not None:                                    # method-body 等，就聚焦当前锚点
-        return [UICmd(op=UiOp.FOCUS_NODE, target=ctx.focus, rev=_REV_PLACEHOLDER)]
+        return [UICmd(op=UiOp.FOCUS_NODE, target=ctx.focus, rev=ctx.viewport.rev)]
     return []
 
 

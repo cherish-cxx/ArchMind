@@ -11,14 +11,14 @@ Python **不是**给前端直接调的 —— 它是 Java 后面的内部服务�
 import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 
 from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.core.llm import LLMClient
 from app.core.loop import run_turn
-from app.models.context import AgentContext
-from app.models.protocol import AskRequest, EvictRequest
-from app.models.response import AgentResponse
+from app.models.context import AgentContext, Viewport
+from app.models.protocol import AskRequest, EvictRequest, ViewportReport
+from app.models.response import AgentResponse, Meta
 from app.store.context_store import ContextStore
 from app.tools.java_client import JavaClient
 
@@ -126,8 +126,18 @@ async def ask(
     """
     #看请求里有没有传conversation_id,如果传了，就用传过来的id，否则（or）就调用new，生成全新会话id
     conversation_id = req.conversation_id or _new_conversation_id()
-    #加载会话上下文：用 projectId + conversation_id 拼 key 从 Redis 取；取不到就是新会话
-    ctx = await store.load(req.project_id,conversation_id)
+    if req.conversation_id is None:
+        # 没带 cid = 新会话。这是**唯一**该走「创建」的路径。
+        ctx = AgentContext(conversation_id=conversation_id, project_id=req.project_id)
+    else:
+        # 带了 cid，就去 Redis 取那份 Context。
+        ctx = await store.load_or_none(req.project_id, conversation_id)
+        if ctx is None:
+            # 带了 cid 却找不到 → **会话已过期**（TTL 2h 是既定语义，必然发生）。
+            # 判据是「有没有带 cid」，不是「上下文在不在」——
+            # cid 是后端发的，带了就说明这是一个**曾经存在**的会话。
+            # **不静默开一个新的**：那样用户会在上文丢失的情况下收到一个看似正常的答案。
+            return _session_expired(conversation_id)
     # 把请求里的focus更新到会话上下文ctx里面
     _apply_focus(ctx, req.focus)
     """
@@ -139,6 +149,95 @@ async def ask(
     # loop 不知道 conversation_id 是新生成的还是回传的（那是路由层的事），所以在这里补上
     response.conversation_id = conversation_id
     return response
+
+
+def _session_expired(conversation_id: str) -> AgentResponse:
+    """带了 cid 但 Context 已不在 —— 会话过期。**如实说，绝不悄悄重开一个。**
+
+    它和 `store.load_or_none` / viewport 的拒绝是**同一件事的三个出口**，
+    所以 reason 统一用 `SESSION_GONE`，前端只用认这一个值。
+    """
+    return AgentResponse(
+        conversation_id=conversation_id,
+        message="这段对话已经过期（超过 2 小时没有活动），内容不再保留。请开始新的对话。",
+        session_expired=True,
+        # intent 是个裸 str（不是那六个的封闭枚举）：这里**根本没有 LLM 参与**，
+        # 是路由层直接拒绝的。那条「封闭枚举」规则约束的是 **LLM 不许发明意图**，
+        # 不是不许路由层表达自己的状态。
+        meta=Meta(intent="SESSION_GONE", confidence=1.0, graph_rev=0, latency_ms=0),
+    )
+
+
+# ==================== 屏幕状态上报 + 会话读回（P4.2）====================
+#
+# 这两条是**反向通道**：上面的 ask / evict 是「Java 让 Python 干活」，
+# 这两条是「前端告诉后端屏幕上发生了什么」和「前端把会话要回去」。
+#
+# ⚠️ 它们用 `store.load_or_none`，而不是 `store.load`。语义差别见那两处注释：
+#    在 `/ask` 上「会话不存在」是**新会话**，在这里是**会话已过期**。
+#    同一个 `raw is None`，含义完全不同 —— 所以要用两个方法，而不是一个带开关的。
+
+
+@router.post("/viewport", dependencies=[Depends(require_internal_token)])
+async def viewport(req: ViewportReport, store: ContextStore = Depends(get_context_store)) -> dict:
+    """前端上报屏幕状态。后端**只接受比当前更大的 rev**，快照直接覆盖。
+
+    **不创建会话** —— 理由见 `ViewportReport` 的类注释。
+
+    响应里**永远回带当前 rev**：前端据此跳到最新。
+    没有它，前端被拒之后只会一直重发自己那个旧 rev，永远同步不上。
+    """
+    ctx = await store.load_or_none(req.project_id, req.conversation_id)
+    if ctx is None:
+        # 会话已过期。**不建** —— 见上面那段「同一个 raw is None」。
+        return {"accepted": False, "reason": "SESSION_GONE", "rev": None}
+
+    if req.rev <= ctx.viewport.rev:
+        # 旧快照：乱序到达（网络重传 / 用户开了两个标签页）。
+        return {"accepted": False, "reason": "STALE_REV", "rev": ctx.viewport.rev}
+
+    # 截断（硬上限 60）在模型里做 —— 前端的报告是**不可信输入**，它说「我没截断」不算数。
+    ctx.viewport = Viewport.from_report(
+        rev=req.rev,
+        visible_nodes=req.visible_nodes,
+        visible_relations=req.visible_relations,
+        focused_node=req.focused_node,
+    )
+    await store.save(ctx)
+    return {"accepted": True, "reason": None, "rev": ctx.viewport.rev}
+
+
+@router.get("/conversations/{conversation_id}", dependencies=[Depends(require_internal_token)])
+async def get_conversation(
+    conversation_id: str,
+    project_id: int = Query(alias="projectId"),
+    store: ContextStore = Depends(get_context_store),
+) -> dict:
+    """读回会话 —— **刷新页面时恢复屏幕用**。
+
+    只给恢复屏幕必需的**两样**：
+
+      - `viewport`：照它把图重画出来（快照驱动，不重放任何命令）
+      - `focus`：当前锚点在哪
+
+    **不给 `history`** —— 那是 Agent 的内部记忆（而且存的是摘要），
+    前端恢复屏幕用不上，给了只是白白扩大接口面。
+
+    `project_id` 走 query 参数（由 Java 注入），和 body 里那个字段同义。
+    会话不存在时 `exists: false`，前端据此把那个会话窗口置灰。
+    """
+    ctx = await store.load_or_none(project_id, conversation_id)
+    if ctx is None:
+        return {"exists": False, "reason": "SESSION_GONE"}
+    return {
+        "exists": True,
+        "reason": None,
+        # mode="json"：显式转成 JSON 安全的原始类型（枚举 → 字符串）
+        # by_alias：显式写死，理由同 store.save 那处
+        "viewport": ctx.viewport.model_dump(mode="json", by_alias=True),
+        "focus": (ctx.focus.model_dump(mode="json", by_alias=True)
+                  if ctx.focus is not None else None),
+    }
 
 
 @router.post("/admin/evict", dependencies=[Depends(require_internal_token)])

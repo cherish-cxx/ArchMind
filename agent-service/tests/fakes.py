@@ -179,6 +179,10 @@ class FakeContextStore:
             self._data[key] = AgentContext(conversation_id=conversation_id, project_id=project_id)
         return self._data[key]
 
+    async def load_or_none(self, project_id: int, conversation_id: str) -> AgentContext | None:
+        """语义必须和真 store 一致：**不存在返回 None，不创建**（P4.2 决策 A）。"""
+        return self._data.get((project_id, conversation_id))
+
     async def save(self, ctx: AgentContext) -> None:
         self._data[(ctx.project_id, ctx.conversation_id)] = ctx
 
@@ -187,3 +191,20 @@ class FakeContextStore:
         for k in doomed:
             del self._data[k]
         return len(doomed)
+
+    # ── 同步辅助：给测试用 ────────────────────────────────────────────────
+    # 真 store 的方法是 async，但测试函数大多是同步的，await 不了。
+    # 这两个只在替身上有，真 store 不需要（生产代码永远 async 上下文）。
+
+    def seed(self, project_id: int, conversation_id: str, **kwargs) -> AgentContext:
+        """塞一个**已存在**的会话。
+
+        测试 viewport 上报前必须先有会话 —— 因为那条路由**不会**自己创建（决策 A）。
+        """
+        ctx = AgentContext(conversation_id=conversation_id, project_id=project_id, **kwargs)
+        self._data[(project_id, conversation_id)] = ctx
+        return ctx
+
+    def peek(self, project_id: int, conversation_id: str) -> AgentContext | None:
+        """同步读，用来断言「写进去了没」/「有没有被偷偷创建」。"""
+        return self._data.get((project_id, conversation_id))

@@ -62,7 +62,7 @@ class ContextStore:
             return AgentContext(conversation_id=conversation_id, project_id=project_id)
         try:
             # 读取到了字符串raw，这个字符串是之前存进去的JSON
-            # model_validate_json是Pydantic的方法，把JOSN字符串直接解析成AgentCOntext
+            # model_validate_json是Pydantic的方法，把JOSN字符串直接解析成AgentContext
             return AgentContext.model_validate_json(raw)
         except ValidationError:
             # 这里和 java_client 的契约漂移**不一样**，别混：
@@ -73,6 +73,34 @@ class ContextStore:
             logger.warning("Context 反序列化失败，按新会话重建 projectId=%s conversationId=%s",
                            project_id, conversation_id)
             return AgentContext(conversation_id=conversation_id, project_id=project_id)
+
+    async def load_or_none(self, project_id: int, conversation_id: str) -> AgentContext | None:
+        """读一个**已存在**的 Context；不存在（或数据坏了）返回 `None`，**绝不创建**。
+
+        和 `load` 的差别在**语义**，不在实现：
+          - `load`          「没有就开一个新的」   → 服务 `/ask`（新会话就是从一句提问开始的）
+          - `load_or_none`  「要么给我现成的，要么说没有」 → 服务 `/viewport` 和会话读回
+
+        **为什么那两个调用点上「不存在」必须返回 None**：在那边它意味着**会话已过期**
+        （TTL 2h 是既定语义，必然发生，不是边缘情况）。静默建一个空的会把这件事埋掉 ——
+        用户接着提问时才发现「它失忆了」，而且**毫无提示**，比直接报错难查得多。
+        这和 P4.1「Redis 挂了要报错别降级」是同一条原则：把「不存在」如实说出来。
+
+        **为什么不用 `exists()` + `load()`**：两次往返，且中间 TTL 可能刚好过期 ——
+        `load` 会偷偷建一个，防线就漏了（TOCTOU）。一次读，不存在就是不存在，原子。
+        """
+        # 用上面写好的_key（）拼出redis的key
+        raw = await self._redis.get(self._key(project_id, conversation_id))
+        if raw is None:
+            return None
+        try:
+            return AgentContext.model_validate_json(raw)
+        except ValidationError:
+            # 坏了也当「没有」—— 重建等于创建，和这个方法的名字矛盾。
+            # 用户下次 /ask 时 load 会顺手把它重建出来，两条路殊途同归。
+            logger.warning("Context 反序列化失败，按「不存在」处理 projectId=%s conversationId=%s",
+                           project_id, conversation_id)
+            return None
 
     async def save(self, ctx: AgentContext) -> None:
         await self._redis.set(
