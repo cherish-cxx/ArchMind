@@ -16,9 +16,12 @@ import org.neo4j.driver.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 用底层 Driver 直查 Neo4j。每条边 6 个方向各一条 Cypher，Java 侧按「目标类」聚合成类级关联。
@@ -72,6 +75,10 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
             MATCH (c:Class {projectId: $pid, uid: $uid})-[r:EXTENDS|IMPLEMENTS]->(t:Class {projectId: $pid})
             RETURN t AS cc, type(r) AS rel
             """;
+
+    // P4.3 网关的 uiCommands 弱校验：这批 uid 里哪些真的存在。一次 IN，不逐条查。
+    private static final String EXISTING_UIDS =
+            "MATCH (c:Class {projectId: $pid}) WHERE c.uid IN $uids RETURN c.uid AS uid";
 
     private final Driver driver;
 
@@ -153,6 +160,28 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
             }
 
             return resp;
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>空集合直接短路，不发查询 —— 澄清轮 / 空响应没有 uiCommand，
+     * 不该为它白跑一次 Neo4j。</p>
+     */
+    @Override
+    public Set<String> existingClassUids(Long projectId, Collection<String> uids) {
+        if (uids == null || uids.isEmpty()) {
+            return Set.of();
+        }
+        try (Session session = driver.session()) {
+            Result result = session.run(
+                    EXISTING_UIDS, Map.of("pid", projectId, "uids", List.copyOf(uids)));
+            Set<String> found = new HashSet<>();
+            while (result.hasNext()) {
+                found.add(result.next().get("uid").asString());
+            }
+            return found;
         }
     }
 

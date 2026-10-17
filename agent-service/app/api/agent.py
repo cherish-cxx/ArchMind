@@ -9,15 +9,23 @@ Python **不是**给前端直接调的 —— 它是 Java 后面的内部服务�
 """
 
 import secrets
+import time
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 
 from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.core.llm import LLMClient
+from app.core.loop import navigate as apply_navigation
 from app.core.loop import run_turn
 from app.models.context import AgentContext, Viewport
-from app.models.protocol import AskRequest, EvictRequest, ViewportReport
+from app.models.protocol import (
+    AskRequest,
+    EvictRequest,
+    NavigateOp,
+    NavigateRequest,
+    ViewportReport,
+)
 from app.models.response import AgentResponse, Meta
 from app.store.context_store import ContextStore
 from app.tools.java_client import JavaClient
@@ -110,7 +118,7 @@ async def require_internal_token(
 """
 response_model = agentResponse返回结果自动校验格式，并生成接口文档
 dependencies=[Depends(require_internal_token)：进入这个接口函数之前，先执行这个依赖：
-    校验内部调用token，token不对直接拒绝请求，进不到下面的代码
+校验内部调用token，token不对直接拒绝请求，进不到下面的代码
 """
 @router.post("/ask", response_model=AgentResponse, dependencies=[Depends(require_internal_token)])
 async def ask(
@@ -166,6 +174,56 @@ def _session_expired(conversation_id: str) -> AgentResponse:
         # 不是不许路由层表达自己的状态。
         meta=Meta(intent="SESSION_GONE", confidence=1.0, graph_rev=0, latency_ms=0),
     )
+
+
+# ==================== 零 LLM 导航（P4.3）====================
+#
+# 这条路是「前端**点按钮**，直接声明意图」—— 设计 §3.3 的决策，
+# 目的只有一个：**点击变成零 token**（E2：用户点一下展开就烧一次 token 是要避免的）。
+#
+# ⚠️ `/ask` 那条路的 NAVIGATE 判定**保留**（loop.py 的 `run_turn` 里那个分支不动）——
+#    用户完全可能在输入框里**打字**说「退回去」，那就还是得靠 LLM #1 判出来。
+#    两条路殊途同归到 `loop.navigate` 这一个函数。
+
+
+@router.post("/navigate", response_model=AgentResponse,
+             dependencies=[Depends(require_internal_token)])
+async def navigate(
+    req: NavigateRequest,
+    store: ContextStore = Depends(get_context_store),
+) -> AgentResponse:
+    """导航：只动焦点，**一次 LLM 都不调**。
+
+    注意这里**没有 `llm` 依赖** —— 这不是省事，是**物理上保证**它调不了 LLM：
+    参数里没有 llm，就没有误调的可能。测「零 LLM」时也就不需要注入假 LLM。
+    """
+    if req.op is not NavigateOp.BACK:
+        # EXPAND 的语义在 loop 里**从来不存在**（navigate() 只做出栈/清空）。
+        # 如实回一句「还没做」，**不静默当成 BACK 执行** —— 那会让用户以为展开成功了。
+        return AgentResponse(
+            conversation_id=req.conversation_id,
+            message="「展开」这个操作还没做，目前只支持「退回去」。",
+            meta=Meta(intent="NAVIGATE_UNSUPPORTED", confidence=1.0,
+                      graph_rev=0, latency_ms=0),
+        )
+
+    # 同 /viewport：用 load_or_none **不用 load**。
+    # 同一个 `raw is None`，在 /ask 是「新会话」，在这里是「**会话已过期**」——
+    # 导航针对的是一个已存在的会话（栈在它的 Context 里），不建空的。
+    ctx = await store.load_or_none(req.project_id, req.conversation_id)
+    if ctx is None:
+        return _session_expired(req.conversation_id)
+
+    started = time.perf_counter()
+    # steps 传空列表、started 现取：这条路没有 INTENT 步（没判意图），
+    # 计时也只从这一刻算 —— 那些都是 /ask 那条路才有的东西。
+    resp = apply_navigation(ctx, [], started)
+
+    # ★ 必须 save：apply_navigation 的副作用是 pop 焦点栈 + 改 ctx.focus，
+    #   不存的话这次出栈就丢了，下次「退回去」会退到同一个地方。
+    await store.save(ctx)
+    resp.conversation_id = req.conversation_id
+    return resp
 
 
 # ==================== 屏幕状态上报 + 会话读回（P4.2）====================

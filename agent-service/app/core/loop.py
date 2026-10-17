@@ -66,7 +66,7 @@ async def run_turn(
         return _clarify(ctx, intent_result, steps, started)
 
     if intent_result.intent is Intent.NAVIGATE:
-        return _navigate(ctx, steps, started)
+        return navigate(ctx, steps, started)
 
     if intent_result.intent is Intent.OUT_OF_SCOPE:
         return _refuse(ctx, intent_result, steps, started)
@@ -179,8 +179,18 @@ def _clarify(
     )
 
 
-def _navigate(ctx: AgentContext, steps: list[Step], started: float) -> AgentResponse:
-    """纯导航：只动焦点，不查图、不调 LLM #2（E2：省掉一半成本）。"""
+def navigate(ctx: AgentContext, steps: list[Step], started: float) -> AgentResponse:
+    """纯导航：只动焦点，不查图、不调 LLM #2（E2：省掉一半成本）。
+
+    **有两个调用方**，这是 P4.3 把它从 `_navigate` 提为公开的原因：
+
+      - `run_turn`：用户**打字**说「退回去」，要靠 LLM #1 判出 NAVIGATE 才走到这里
+      - `api/agent.py` 的 `POST /navigate`（P4.3）：前端**点按钮**直接声明意图，
+        跳过 LLM #1 —— 那条路零 token，代价是要自己补 `steps` / `started`
+
+    副作用是 **pop `focus_stack` 并改 `ctx.focus`** —— 调用方（尤其新路由）
+    **必须 `store.save(ctx)`**，否则这次出栈不会持久化。
+    """
     if ctx.focus_stack:
         uid = ctx.focus_stack.pop()
         ctx.focus = NodeRef(type=NodeRefType.CLASS, uid=uid)

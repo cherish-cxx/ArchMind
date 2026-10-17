@@ -64,3 +64,13 @@ upload:
 internal:
   # 与 Agent 服务共享的密钥；生产必须用 INTERNAL_TOKEN 环境变量覆盖
   token: ${INTERNAL_TOKEN:dev-internal-token-change-me}
+
+# 转发给 Python agent-service 的配置（/api/agent/** 网关用）
+agent:
+  # agent-service 地址。容器化后容器里的 localhost 指向容器自己，必须用环境变量覆盖
+  base-url: ${AGENT_BASE_URL:http://localhost:8000}
+  # 长耗时接口（ask / navigate / viewport）超时，必须 > Python 一轮最坏 58s。
+  # 级联超时链：nginx(90s) > 这里(70s) > Python 一轮(58s) > 单次 LLM(25s) > 工具(8s)
+  timeout-ms: ${AGENT_TIMEOUT_MS:70000}
+  # 清理类接口（evict）超时：删项目不能被 Python 拖住
+  evict-timeout-ms: ${AGENT_EVICT_TIMEOUT_MS:3000}

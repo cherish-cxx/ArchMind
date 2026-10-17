@@ -17,6 +17,7 @@ import com.example.archmind.entity.Project;
 import com.example.archmind.entity.ProjectOverview;
 import com.example.archmind.entity.ProjectSource;
 import com.example.archmind.service.ProjectService;
+import com.example.archmind.service.agent.AgentClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,6 +45,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final UploadProperties uploadProperties;
     private final CheckProjectUtil checkProjectUtil;
     private final RedisUtil redisUtil;
+    private final AgentClient agentClient;
 
     @Override
     public ProjectResponse createProject(Long userId, ProjectCreateRequest request) {
@@ -101,6 +103,16 @@ public class ProjectServiceImpl implements ProjectService {
 
         // 清理该项目 overview 的 Redis 读缓存（key 不存在时无害）
         redisUtil.delete(ProjectOverviewServiceImpl.OVERVIEW_CACHE_KEY_PREFIX + projectId);
+
+        // P4.3：清掉 Agent 侧该项目的全部会话 Context（在 Python 的 Redis db1 里）。
+        // 与上面的删磁盘是**同一类**副作用：尽力而为，失败只告警，不影响删除结果 ——
+        // 留一点孤儿 Context，远比「因为 Python 挂了就删不掉项目」可接受。
+        // 走 AgentClient 的**短超时**实例（3s），不会把删除操作拖住。
+        try {
+            agentClient.evictProject(projectId);
+        } catch (Exception e) {
+            log.warn("清理 Agent 会话 Context 失败 projectId={}: {}", projectId, e.getMessage());
+        }
     }
 
     private void deleteDirectory(Path dir) {

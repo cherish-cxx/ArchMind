@@ -20,6 +20,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -183,5 +184,30 @@ class CodeGraphQueryServiceImplTest {
         when(session.run(anyString(), anyMap())).thenReturn(empty);
 
         assertThrows(BusinessException.class, () -> service.classRelations(1L, "com.x.Nope"));
+    }
+
+    // ==================== P4.3：uiCommands 弱校验的批量查询 ====================
+
+    @Test
+    void existingClassUidsReturnsOnlyTheOnesThatExist() {
+        // 查询只 SELECT c.uid AS uid（不是节点），所以这里按普通字符串列来假造
+        Result rows = resultOf(List.of(
+                record("uid", strVal("com.x.A")),
+                record("uid", strVal("com.x.C"))));
+        when(session.run(anyString(), anyMap())).thenReturn(rows);
+
+        Set<String> found = service.existingClassUids(1L, List.of("com.x.A", "com.x.B", "com.x.C"));
+
+        assertEquals(Set.of("com.x.A", "com.x.C"), found);
+        assertFalse(found.contains("com.x.B"));
+        // 一次查询搞定，不是逐条 —— N 条命令只该有一次往返
+        verify(session, times(1)).run(anyString(), anyMap());
+    }
+
+    @Test
+    void existingClassUidsDoesNotTouchTheDatabaseForEmptyInput() {
+        // 空集合直接短路：澄清轮 / 空响应没有 uiCommand，不该为它白跑一次 Neo4j
+        assertTrue(service.existingClassUids(1L, List.of()).isEmpty());
+        verifyNoInteractions(session);
     }
 }
