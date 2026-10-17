@@ -185,7 +185,7 @@ class JavaClient:
         return await self._post(_PATH_METHOD_BODY, project_id, args, ToolEnvelope[MethodBody])
 
     # ── 唯一的 HTTP 出口 ────────────────────────────────────────────────────
-
+    # 这里是Java client的唯一HTTP出口，所有5个工具方法全部复用这个使用方法完成网络请求
     async def _post(
         self,
         path: str,
@@ -193,26 +193,31 @@ class JavaClient:
         args: dict[str, Any],
         envelope: type[ToolEnvelope[TModel]],
     ) -> ToolEnvelope[TModel]:
-        """发一个请求、收一个信封。所有 HTTP 细节只在这里出现。
+        """
+        发一个请求、收一个信封。所有 HTTP 细节只在这里出现。
 
         **不能只看 HTTP status**：Java 侧所有「工具答不了」都是 200 + `ok:false`
         （`ToolEnvelope` 的明确设计，避免把业务结果变成 500）。
         """
         # projectId 由 Java 注入，不是用户身份 —— 内部接口不收 JWT，租户边界靠这个字段守
+        # 组装请求体，Python字典，后续加给json=body
         body = {"projectId": project_id, "args": args}
         try:
+            # 异步POST网络请求
             resp = await self._client.post(path, json=body)
         except httpx.TransportError as e:
             # 连不上 / 超时 / 连接被重置 —— 都没拿到信封
             logger.warning("工具调用失败 path=%s: %s", path, e)
             raise ToolTransportError(f"{path} 调用失败: {e}") from e
-
+        # 401场景代表java的过滤器校验共享Token失败
+        # 请求地道Tomcat，先走过滤链，InternalTokenFilter识别这个接口，取出请求头里的token密钥对比，发现不对直接401
         if resp.status_code == 401:
             logger.error("内部接口鉴权失败 path=%s —— 查两边 INTERNAL_TOKEN 是否一致", path)
             raise InternalAuthError(
                 "Java 侧拒绝鉴权（401）：INTERNAL_TOKEN 与 application.yml 不一致"
             )
-
+        # 这里的200说明：鉴权通过，请求走到了java1的InternalToolController，Controller执行完毕返回响应
+        #但是只能说明鉴权成功不能代表业务没问题
         if resp.status_code != 200:
             logger.warning("工具调用返回 HTTP %s path=%s", resp.status_code, path)
             raise ToolTransportError(

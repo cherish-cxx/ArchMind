@@ -66,13 +66,14 @@ public String generateRefreshToken(Long userId, String username) {
                 .signWith(getSecretKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
-
+//此处做的是校验，拦截请求的落点在JwtAuthenticationFilter
     public Claims parseToken(String token) {
         try {
             return Jwts.parser()
-                    .verifyWith(getSecretKey())
-                    .requireIssuer(issuer)
+                    .verifyWith(getSecretKey()) //签名是否正确
+                    .requireIssuer(issuer)  //签发者是否正确
                     .build()
+                    //是否过期
                     .parseSignedClaims(token)
                     .getPayload();
         } catch (ExpiredJwtException e) {

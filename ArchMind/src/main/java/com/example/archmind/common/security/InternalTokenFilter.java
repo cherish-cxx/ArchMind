@@ -32,30 +32,44 @@ public class InternalTokenFilter extends OncePerRequestFilter {
     private final byte[] expectedToken;
     private final ObjectMapper objectMapper;
 
+//注入对象
     public InternalTokenFilter(String token, ObjectMapper objectMapper) {
         this.expectedToken = token.getBytes(StandardCharsets.UTF_8);
         this.objectMapper = objectMapper;
     }
+//Filter 过滤器
+    /**
+     * request：请求对啊行，拿到请求地址，请求头，参数
+     * Response：响应对象，用来返回状态码
+     * FilterChain：过滤器链 `filterChain.doFilter()` = **放行，继续执行后面的过滤器**
+     * 不做保护范围的接口本过滤器不做任何校验,直接交个过滤器下一个Filter
+     * 只有命中前缀的内部接口,才强校验这个内部Token
+     */
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+//        如果请求地址不是以指定的 "/internal/"开头直接方向,不做token检验
+//        该过滤器是局部拦截器,只负责保护该internal这一组接口,不是全局鉴权,不是所有接口都要校验这个内部token
         if (!request.getRequestURI().startsWith(PREFIX)) {
             filterChain.doFilter(request, response);
             return;
         }
-
+//从请求头HEADER字段取出HEADER
         String token = request.getHeader(HEADER);
         // 定长比较，避免逐字符短路带来的时序侧信道
+//        token不为空并且使用messageDigest.isEqual做字节数组对比
         if (token != null
                 && MessageDigest.isEqual(expectedToken, token.getBytes(StandardCharsets.UTF_8))) {
             filterChain.doFilter(request, response);
             return;
         }
-
+//      鉴权失败打印请求方法+请求URL
         log.warn("内部接口鉴权失败: {} {}", request.getMethod(), request.getRequestURI());
+//        设置HTTP状态码:SC_UNAUTHORIZED==401
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+//        设置响应类型为JSON
         response.setContentType("application/json;charset=UTF-8");
         objectMapper.writeValue(response.getOutputStream(),
                 Result.fail(ResultCode.UNAUTHORIZED.getCode(), "内部接口鉴权失败"));

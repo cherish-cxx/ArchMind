@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # 各 25s 仍留余量，且单次挂死也不会把整轮拖过网关那道 60s。
     llm_timeout: float = 25.0
 
-#     ——————————Redis db1：context——————————————
+    #     ——————————Redis db1：context——————————————
     redis_url:str = "redis://localhost:6379"
     redis_db:int = 1
     redis_password:str = ""

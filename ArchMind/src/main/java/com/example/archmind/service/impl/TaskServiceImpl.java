@@ -70,7 +70,11 @@ public class TaskServiceImpl implements TaskService {
         this.executor = executor;
     }
 
-    /** 启动兜底：应用重启后，内存队列里的任务已丢失，把遗留的 PENDING/RUNNING 标成 FAILED，避免僵尸卡住 */
+    /**
+     * 启动兜底：应用重启后，内存队列里的任务已丢失，把遗留的 PENDING/RUNNING 标成 FAILED，避免僵尸卡住
+     * 这里是一个隐式调用，调用者不是我，而是IOC容器
+     * @PostConstruct 是Sping的生命周期注解，语义是：容器吧这个bean的依赖注入完成后，对外提供服务之前，自动调用它一次
+     * */
     @PostConstruct
     public void resetStaleTasks() {
         try {
@@ -89,6 +93,15 @@ public class TaskServiceImpl implements TaskService {
 
     // ==================== 提交分析任务 ====================
 
+    /** submitAnalysis这里是被项目分析接口调用
+     * 参数
+     * Long projectId, Long userId, boolean force
+     * 实现逻辑：
+     * 对已有概括的项目，不创建任务，直接合成已完成的响应，直接到数据库拿
+     * 对于没有概括的新项目，先进行上锁，避免多个请求，并将该项目信息以及目前分析状态入库
+     * 核心：开启异步分析，并同时return task。避免同步超时
+     *
+     */
     @Override
     public TaskResponse submitAnalysis(Long projectId, Long userId, boolean force) {
         // 快路径：非强刷且已有概况 → 不建任务、不占线程，直接合成"已完成"响应(已经完成分析的就会走这一条路)
@@ -129,7 +142,7 @@ public class TaskServiceImpl implements TaskService {
             redisUtil.delete(lockKey);   // 落库失败要放锁，否则该项目被永久锁死
             throw new BusinessException("创建分析任务失败: " + e.getMessage());
         }
-
+//其实是被AOP代理拦去线程池，如果去掉注解就变成了同步跑了
         executor.run(task.getId(), projectId, userId);
         return toResponse(task);
     }

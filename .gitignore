@@ -1,5 +1,6 @@
 .claude/settings.local.json
 .obsidian/
+.claudian/
 
 # 项目打包产物（不纳入版本控制）
 ArchMind.zip

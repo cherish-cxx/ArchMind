@@ -181,7 +181,7 @@ public class AuthServiceImpl implements AuthService {
         String tokenKey = TOKEN_PREFIX+cleanToken;
         return redisUtil.hasKey(tokenKey);
     }
-
+//做的只是从token中取出UserId
     public Long getUserIdFromToken(String token){
         String cleanToken =cleanToken(token);
 

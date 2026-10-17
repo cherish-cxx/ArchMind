@@ -41,7 +41,7 @@ public class CheckProjectUtil {
             throw new BusinessException("项目不存在: " + projectId);
         }
     }
-
+//从SpringSecurity上下文拿到当前登录用户，返回UserId，不是从token中取
     public Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof SecurityUser securityUser) {
@@ -49,7 +49,7 @@ public class CheckProjectUtil {
         }
         return null;
     }
-
+//这里来鉴权该用户是否有操作该项目的权限
     private void checkOwnership(Project project) {
         Long userId = getCurrentUserId();
         if (userId != null && project.getUserId() != null && !userId.equals(project.getUserId())) {

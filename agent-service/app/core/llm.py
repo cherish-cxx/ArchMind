@@ -140,7 +140,7 @@ class LLMClient:
         # Http状态码
         if resp.status_code != 200:
             raise LLMResponseError(f"HTTP {resp.status_code}: {resp.text[:300]}")
-
+        # 解析返回JSON，组装LLMResult对象
         try:
             body = resp.json()
             text = body["choices"][0]["message"]["content"]
