@@ -12,8 +12,11 @@ P3 只换 `message` 的来源（模板 → LLM），不产生接口变更。
 from enum import StrEnum
 from typing import Any
 
+from pydantic import Field
+
 from app.models.base import CamelModel
 from app.models.intent import Intent
+from app.models.tool import GapReason, NodeKind, RelationType
 
 # ==================== 实体引用 ====================
 
@@ -74,6 +77,54 @@ class UICmd(CamelModel):
     rev: int
 
 
+# ==================== 图数据（P5） ====================
+# 命令（UICmd）只说「看哪里」；这里才是「那里有什么、怎么连」。
+# 两者是**两个输入**：命令改变视图状态，数据填充图 store。
+
+
+class GraphNode(CamelModel):
+    """前端渲染用的节点。uid 是身份，name/kind 是显示信息。"""
+
+    uid: str
+    name: str | None = None
+    kind: NodeKind | None = None
+    package_name: str | None = None
+    module: str | None = None
+    depth: int | None = None          # 仅 call-chain 有
+    via_fanout: bool = False
+    edge_count: int | None = None
+
+
+class GraphEdge(CamelModel):
+    """一条要画出来的边。`from_` 在 Python 是关键字，JSON 里仍是 `from`。"""
+
+    from_: str = Field(alias="from")
+    to: str
+    rel: RelationType
+    call_count: int = 1
+    via_fanout: bool = False
+
+
+class GraphGap(CamelModel):
+    """链路断点：前端用「虚线/未解析」标出来，不能画成没这回事。"""
+
+    at: str
+    reason: GapReason
+
+
+class GraphPatch(CamelModel):
+    """一轮回答对应的证据子图。
+
+    前端把它 **upsert** 进现有画布（不是替换整张图）。
+    `truncated=True` 表示达到上限被截断 —— 必须让用户看见「这里不是全部」。
+    """
+
+    nodes: list[GraphNode] = []
+    edges: list[GraphEdge] = []
+    gaps: list[GraphGap] = []
+    truncated: bool = False
+
+
 class Suggestion(CamelModel):
     """「下一步可以问什么」。闭环的发动机 —— 没有它，对话转不动。
 
@@ -127,6 +178,8 @@ class AgentResponse(CamelModel):
     session_expired: bool = False
     citations: list[Citation] = []
     ui_commands: list[UICmd] = []
+    #: P5：本轮用于渲染的证据子图。None = 这轮没有图数据（不是「图是空的」）。
+    graph: GraphPatch | None = None
     suggestions: list[Suggestion] = []
     steps: list[Step] = []
     meta: Meta

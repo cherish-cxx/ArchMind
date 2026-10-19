@@ -38,6 +38,14 @@ public class AgentResponse {
 
     private List<UiCommand> uiCommands = new ArrayList<>();
 
+    /**
+     * P5：本轮用于渲染的证据子图。
+     *
+     * <p>命令（{@code uiCommands}）只说「看哪里」，这个字段说「那里有什么、怎么连」。
+     * {@code null} 表示这轮没有图数据（不是「图是空的」）。</p>
+     */
+    private Graph graph;
+
     private List<Suggestion> suggestions = new ArrayList<>();
 
     /** 本轮执行了哪些步骤，给用户回放、给自己审计。 */
@@ -92,5 +100,53 @@ public class AgentResponse {
         /** 让上层能发现「我讲的是旧图」。 */
         private Integer graphRev;
         private Integer latencyMs;
+    }
+
+    // ==================== P5：图数据 ====================
+
+    /**
+     * 本轮回答对应的证据子图。前端 upsert 进现有画布。
+     *
+     * <p>字段名逐一对齐 Python {@code GraphPatch}；list 必须初始化成空集合，
+     * 不能留 null（Python 侧 Pydantic 对 {@code null} 不会回落默认值）。</p>
+     */
+    @Data
+    public static class Graph {
+        private List<GraphNode> nodes = new ArrayList<>();
+        private List<GraphEdge> edges = new ArrayList<>();
+        private List<GraphGap> gaps = new ArrayList<>();
+        private boolean truncated;
+    }
+
+    /** 一个可渲染的类节点。 */
+    @Data
+    public static class GraphNode {
+        private String uid;
+        private String name;
+        /** CLASS / INTERFACE / ENUM —— 用 String 接，理由同 {@link Meta#intent}。 */
+        private String kind;
+        private String packageName;
+        private String module;
+        private Integer depth;
+        private boolean viaFanout;
+        private Integer edgeCount;
+    }
+
+    /** 一条可渲染的边。{@code from} 在 Java 里是合法标识符。 */
+    @Data
+    public static class GraphEdge {
+        private String from;
+        private String to;
+        /** CALLS / EXTENDS / IMPLEMENTS / DEPENDS */
+        private String rel;
+        private Integer callCount;
+        private boolean viaFanout;
+    }
+
+    /** 链路断点：前端要把它画成「未解析」，不能当成不存在。 */
+    @Data
+    public static class GraphGap {
+        private String at;
+        private String reason;
     }
 }

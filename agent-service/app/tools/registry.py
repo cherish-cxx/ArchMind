@@ -47,7 +47,16 @@ class ToolInvocation:
     uid: str | None
     slots: Slots
 
-
+""" 
+这里是python类型别名，不是业务执行代码，制作类型标注，运行时不会执行任何逻辑，用来描述一类异步函数长什么样
+ToolHandler给这个函数起个名字，后面代码直接复用这个名字
+Callable[参数列表，返回类型]:Python typing库表示可调用对象
+"[JavaClient", ToolInvocation]：代表这个函数必须接收 2 个参数
+参数 1：JavaClient 对象
+参数 2：ToolInvocation 对象
+Awaitable[...]：代表这是async 异步函数，调用它必须加await；
+Awaitable[ToolEnvelope[Any]]：await之后拿到的返回值，必须是ToolEnvelope对象，里面可以装任意业务数据Any。
+"""
 ToolHandler = Callable[["JavaClient", ToolInvocation], Awaitable[ToolEnvelope[Any]]]
 
 
@@ -62,6 +71,7 @@ class ToolSpec:
 
     name: str
     handler: ToolHandler
+    # 是否需要锚点true/false
     needs_anchor: bool
     summary: str
 
@@ -118,7 +128,7 @@ TOOLS: dict[str, ToolSpec] = {
 }
 
 #: intent → 工具名。**NAVIGATE / OUT_OF_SCOPE 不在表里** —— 它们不查图，
-#: 由循环单独短路处理。查不到就是「这个 intent 不该调工具」，不是漏配。
+#: 由循环单独短路处理。查不到就是「这个 intent 不该调工具」，不是漏配。用来匹配目前的五个方法名
 INTENT_TOOL: dict[Intent, str] = {
     Intent.EXPLORE_OVERVIEW: "overview",
     Intent.EXPLORE_FLOW: "call-chain",
@@ -146,17 +156,18 @@ def plan(intent: Intent, ctx: AgentContext) -> ToolSpec | None:
       - NAVIGATE / OUT_OF_SCOPE：设计如此，根本不查图
       - 工具需要锚点但当前没有：调下去必然 `ok:false`，不如提前拦住并告诉用户「先点个类」
     """
+    # 匹配方法名：overview等
     name = INTENT_TOOL.get(intent)
     if name is None:
         logger.debug("intent=%s 不产生工具调用（设计如此）", intent)
         return None
-
+    # anchor翻译：锚点
     spec = TOOLS[name]
     if spec.needs_anchor and ctx.focus is None:
         logger.info("intent=%s 需要锚点但当前无 focus —— 提前拦住，不空跑一次工具", intent)
         return None
     return spec
 
-
+# 上下文中获取项目id，被定的类的uid，
 def build_invocation(ctx: AgentContext, slots: Slots) -> ToolInvocation:
     return ToolInvocation(project_id=ctx.project_id, uid=resolve_uid(ctx, slots), slots=slots)

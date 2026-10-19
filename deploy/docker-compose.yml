@@ -5,8 +5,40 @@ services:
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      # 关键：指向 compose 服务名，而不是 localhost
+      - AGENT_BASE_URL=http://agent-service:8000
+      - INTERNAL_TOKEN=${INTERNAL_TOKEN}
     volumes:
-      - ./code-workspace:/app/code-workspace
+      # 上传文件落盘目录。默认 ./code-workspace（相对 deploy/）：
+      # 服务器上的旧部署就是这个位置，改掉会让已上传项目“消失”。
+      - ${WORKSPACE_DIR:-./code-workspace}:/app/code-workspace
+    depends_on:
+      - agent-service
+    restart: unless-stopped
+
+  agent-service:
+    build:
+      context: ../agent-service        # 构建上下文是源码目录，不是 deploy 下
+      # BuildKit 默认构建网络下 pip 取不到包索引（报 from versions: none），
+      # 用宿主网络构建；只影响 docker build，不影响运行时网络。
+      network: host
+    container_name: archmind-agent
+    environment:
+      - JAVA_BASE_URL=http://backend:8080
+      - INTERNAL_TOKEN=${INTERNAL_TOKEN}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - REDIS_URL=redis://172.21.160.203:6379
+      - REDIS_DB=1
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    expose:
+      - "8000"                          # 只对内，不发布到宿主机
+    healthcheck:
+      # slim 镜像没有 curl/wget，用 Python 自检
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   frontend:

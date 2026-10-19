@@ -13,3 +13,6 @@ code-workspace/
 deploy/.env
 deploy/backend/app.jar
 deploy/frontend/dist/
+
+# 临时部署包（含 .env 密钥，传完即删）
+archmind-deploy.tar.gz

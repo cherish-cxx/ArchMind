@@ -10,6 +10,7 @@ import time
 
 from app.core.explain import ExplainResult, explain
 from app.core.guard import evidence_uids, filter_ui_commands
+from app.core.graph import build_graph_patch
 from app.core.intent import classify_intent
 from app.core.llm import Completer, LLMError, LLMNotConfiguredError
 from app.models.context import AgentContext, HistoryItem
@@ -17,6 +18,7 @@ from app.models.intent import Intent, IntentResult
 from app.models.response import (
     AgentResponse,
     Citation,
+    GraphPatch,
     Meta,
     NodeRef,
     NodeRefType,
@@ -78,8 +80,11 @@ async def run_turn(
         return _need_anchor(ctx, intent_result, steps, started)
 
     # ── 4. 取数 ────────────────────────────────────────────────────────────
+    # **组装一次工具调用的完整入参对象 `ToolInvocation`**，把会话上下文、LLM 提取的槽位，加工成工具 handler 统一接收的入参结构体。
     inv = registry.build_invocation(ctx, intent_result.slots)
+    # 记录准备调用工具的这一刻时间点，后面用来算这个工具花了多少毫秒
     tool_started = time.perf_counter()
+    # 真正调用选中的工具，把准备好的客户端的参数传进去等待工具返回结果，结果存到envelope
     try:
         envelope = await spec.handler(java, inv)
     except InternalAuthError:
@@ -116,8 +121,11 @@ async def run_turn(
         logger.warning("丢弃了 %d 条指向不存在节点的 UICommand：%s",
                        len(dropped), [c.op.value for c in dropped])
 
+    # P5：把本轮 tool 的真实子图一起带回前端。命令说「看哪里」，它说「那里有什么」。
+    graph = build_graph_patch(envelope)
+
     _remember(ctx, message, explanation, intent_result)
-    return _response(ctx, explanation.message, explanation.citations, kept,
+    return _response(ctx, explanation.message, explanation.citations, kept, graph,
                      _suggestions(intent_result.intent, ctx), steps, intent_result,
                      envelope.graph_rev, started)
 
@@ -353,14 +361,15 @@ def _remember(
 
 def _response(
     ctx: AgentContext, message: str, citations: list[Citation], commands: list[UICmd],
-    suggestions: list[Suggestion], steps: list[Step], intent_result: IntentResult,
-    graph_rev: int, started: float,
+    graph: GraphPatch | None, suggestions: list[Suggestion], steps: list[Step],
+    intent_result: IntentResult, graph_rev: int, started: float,
 ) -> AgentResponse:
     return AgentResponse(
         conversation_id=ctx.conversation_id,
         message=message,
         citations=citations,
         ui_commands=commands,
+        graph=graph,
         suggestions=suggestions,
         steps=steps,
         meta=Meta(intent=intent_result.intent.value, confidence=intent_result.confidence,
