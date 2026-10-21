@@ -1,7 +1,7 @@
 services:
   backend:
     build:
-      context: ../ArchMind/ArchMind      # Java 模块目录（含 Dockerfile）
+      context: ../ArchMind                # Java 模块目录（含 Dockerfile）
       # 与 agent-service 同理：BuildKit 默认构建网络取不到 Maven 仓库
       network: host
     container_name: archmind-backend
