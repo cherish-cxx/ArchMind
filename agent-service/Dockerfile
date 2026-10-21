@@ -5,9 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # 先拷依赖清单再装包：只要 requirements.txt 没变，这层就命中缓存
-# 国内构建默认走阿里云源，可用 --build-arg PIP_INDEX_URL=... 覆盖
-# （清华源曾按 IP 黑名单拒绝服务器出口 IP，返回 403；阿里云未出现此问题）
-ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+# 国内构建默认走腾讯云源，可用 --build-arg PIP_INDEX_URL=... 覆盖
+# （2026-10-21 实测：阿里云、清华对服务器出口 IP 均返回 403，腾讯云与 pypi.org 正常）
+ARG PIP_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple/
 COPY requirements.txt .
 RUN pip install --no-cache-dir -i "$PIP_INDEX_URL" -r requirements.txt
 
