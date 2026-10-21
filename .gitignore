@@ -8,11 +8,9 @@ ArchMind.zip
 # 上传产物（代码仓库运行后落盘的 workspace）
 code-workspace/
 
-# 部署目录：只提交 compose / Dockerfile / .env.example
-# 构建产物与本地密钥不入库
+# 部署目录：只提交 compose / 脚本 / .env.example
+# 本地密钥不入库；镜像在服务器上从源码构建
 deploy/.env
-deploy/backend/app.jar
-deploy/frontend/dist/
 
 # 临时部署包（含 .env 密钥，传完即删）
 archmind-deploy.tar.gz
