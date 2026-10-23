@@ -1,13 +1,10 @@
 package com.example.archmind.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.archmind.common.exception.BusinessException;
 import com.example.archmind.dao.FileEntityMapper;
-import com.example.archmind.dao.ProjectSourceMapper;
 import com.example.archmind.dto.response.MethodBodyResponse;
 import com.example.archmind.entity.FileEntity;
-import com.example.archmind.entity.ProjectSource;
-import com.example.archmind.service.FileContentService;
+import com.example.archmind.service.SourceSliceService;
 import com.example.archmind.service.ast.MethodBodyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +16,6 @@ import org.neo4j.driver.Value;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -70,9 +66,8 @@ public class MethodBodyServiceImpl implements MethodBodyService {
             """;
 
     private final Driver driver;
-    private final ProjectSourceMapper projectSourceMapper;
     private final FileEntityMapper fileEntityMapper;
-    private final FileContentService fileContentService;
+    private final SourceSliceService sourceSliceService;
 
     @Override
     public MethodBodyResponse methodBody(Long projectId, String uid, String methodUid,
@@ -93,7 +88,7 @@ public class MethodBodyServiceImpl implements MethodBodyService {
         MethodBodyResponse resp = new MethodBodyResponse();
         List<String> notes = new ArrayList<>();
 
-        Path extractDir = resolveExtractDir(projectId);
+        Path extractDir = sourceSliceService.resolveExtractDir(projectId);
         Map<Long, String> pathByFileId = new HashMap<>();
         Map<Long, String[]> linesByFileId = new HashMap<>();
 
@@ -233,20 +228,6 @@ public class MethodBodyServiceImpl implements MethodBodyService {
 
     // ==================== 读文件并切片 ====================
 
-    /** 解压根目录来自 project_source.content —— 与 ProjectOverviewServiceImpl 用的是同一套约定 */
-    private Path resolveExtractDir(Long projectId) {
-        ProjectSource source = projectSourceMapper.selectOne(
-                new LambdaQueryWrapper<ProjectSource>()
-                        .eq(ProjectSource::getProjectId, projectId)
-                        .isNotNull(ProjectSource::getFileId)
-                        .orderByDesc(ProjectSource::getId)
-                        .last("limit 1"));
-        if (source == null || source.getContent() == null) {
-            throw new BusinessException("该项目尚未上传源码或未完成扫描");
-        }
-        return Paths.get(source.getContent()).toAbsolutePath().normalize();
-    }
-
     private String[] readLines(Path extractDir, Long fileId,
                                Map<Long, String> pathByFileId, Map<Long, String[]> linesByFileId) {
         String[] cached = linesByFileId.get(fileId);
@@ -264,14 +245,7 @@ public class MethodBodyServiceImpl implements MethodBodyService {
             throw new BusinessException("file 表里找不到 fileId=" + fileId);
         }
 
-        // 路径穿越防护：filePath 来自自家库，但 normalize 之后仍须落在项目解压目录内
-        Path absolute = extractDir.resolve(relative).normalize();
-        if (!absolute.startsWith(extractDir)) {
-            throw new BusinessException("路径越出项目工作区: " + relative);
-        }
-
-        // readTextContent 自带 NOFOLLOW_LINKS 与 10MB 上限，超限/二进制会抛 BusinessException
-        String[] lines = fileContentService.readTextContent(absolute).split("\\R", -1);
+        String[] lines = sourceSliceService.readLines(extractDir, relative);
         linesByFileId.put(fileId, lines);
         return lines;
     }

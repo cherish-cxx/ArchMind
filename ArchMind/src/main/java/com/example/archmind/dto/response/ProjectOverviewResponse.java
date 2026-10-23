@@ -12,6 +12,8 @@ public class ProjectOverviewResponse {
     private List<TechStackItem> techStack;
     private Architecture architecture;
     private List<ModuleItem> modules;
+    /** 非持久化：由 file.language 按文件数聚合，供前端在 techStack 缺"语言"时兜底 */
+    private List<String> languages;
 
     @Data public static class TechStackItem {
         private String name; private String category; private String version; private String role;

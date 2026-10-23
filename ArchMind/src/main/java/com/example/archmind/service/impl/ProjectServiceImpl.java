@@ -80,9 +80,12 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteProject(Long projectId) {
-
         checkProjectUtil.checkProject(projectId);
+        deleteProjectData(projectId);
+    }
 
+    @Override
+    public void deleteProjectData(Long projectId) {
         if (projectId == null) {
             throw new BusinessException("项目ID为空");
         }

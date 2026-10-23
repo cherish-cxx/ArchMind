@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.archmind.common.exception.BusinessException;
 import com.example.archmind.common.util.RedisUtil;
 import com.example.archmind.dao.FileEntityMapper;
+import com.example.archmind.dao.LanguageCount;
 import com.example.archmind.dao.ProjectOverviewMapper;
 import com.example.archmind.dao.ProjectSourceMapper;
 import com.example.archmind.dto.response.ProjectOverviewResponse;
@@ -12,6 +13,7 @@ import com.example.archmind.entity.ProjectOverview;
 import com.example.archmind.entity.ProjectSource;
 import com.example.archmind.service.FileContentService;
 import com.example.archmind.service.ProjectOverviewService;
+import com.example.archmind.service.TechStackNormalizer;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -25,6 +27,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -77,6 +80,10 @@ public class ProjectOverviewServiceImpl implements ProjectOverviewService {
         // 5. 调用 LLM 得到结构化概况
         ProjectOverviewResponse response = callLlm(prompt);
 
+        // 5.1 category 收敛到封闭枚举 + 用 file.language 补一个可兜底的 languages
+        TechStackNormalizer.normalizeInPlace(response.getTechStack());
+        fillLanguages(projectId, response);
+
         // 6. 落库（幂等覆盖）并写缓存
         saveOverview(projectId, response);
         cacheOverview(projectId, response);
@@ -88,16 +95,23 @@ public class ProjectOverviewServiceImpl implements ProjectOverviewService {
     public ProjectOverviewResponse tryGetExistingOverview(Long projectId) {
         ProjectOverviewResponse cached = readCachedOverview(projectId);
         if (cached != null) {
+            fillLanguages(projectId, cached);
             return cached;
         }
         ProjectOverview overview = selectExisting(projectId);
-        return overview == null ? null : toResponse(overview);
+        if (overview == null) {
+            return null;
+        }
+        ProjectOverviewResponse response = toResponse(overview);
+        fillLanguages(projectId, response);
+        return response;
     }
 
     @Override
     public ProjectOverviewResponse projectDatabaseOverview(Long projectId) {
         ProjectOverviewResponse cached = readCachedOverview(projectId);
         if (cached != null) {
+            fillLanguages(projectId, cached);
             return cached;
         }
         ProjectOverview overview = selectExisting(projectId);
@@ -105,8 +119,26 @@ public class ProjectOverviewServiceImpl implements ProjectOverviewService {
             throw new BusinessException("该项目尚未分析，请先点击分析生成概况");
         }
         ProjectOverviewResponse response = toResponse(overview);
+        fillLanguages(projectId, response);
         cacheOverview(projectId, response);
         return response;
+    }
+
+    /** 技术栈已归一化；languages 用 file 表的语言分布兜底（取前 6 个） */
+    private void fillLanguages(Long projectId, ProjectOverviewResponse response) {
+        if (response == null) {
+            return;
+        }
+        TechStackNormalizer.normalizeInPlace(response.getTechStack());
+        if (response.getLanguages() != null && !response.getLanguages().isEmpty()) {
+            return;
+        }
+        List<LanguageCount> stats = fileEntityMapper.selectLanguageStats(projectId);
+        response.setLanguages(stats.stream()
+                .map(LanguageCount::getLanguage)
+                .filter(Objects::nonNull)
+                .limit(6)
+                .toList());
     }
 //
     private String overviewCacheKey(Long projectId) {
@@ -152,8 +184,8 @@ public class ProjectOverviewServiceImpl implements ProjectOverviewService {
         response.setProjectType(overview.getProjectType());
         response.setSummary(overview.getSummary());
         response.setDescription(overview.getDescription());
-        response.setTechStack(readJson(overview.getTechStackJson(),
-                new TypeReference<List<ProjectOverviewResponse.TechStackItem>>() {}));
+        response.setTechStack(TechStackNormalizer.normalizeInPlace(readJson(overview.getTechStackJson(),
+                new TypeReference<List<ProjectOverviewResponse.TechStackItem>>() {})));
         response.setArchitecture(readJson(overview.getArchitectureJson(),
                 new TypeReference<ProjectOverviewResponse.Architecture>() {}));
         response.setModules(readJson(overview.getModulesJson(),
@@ -250,7 +282,8 @@ public class ProjectOverviewServiceImpl implements ProjectOverviewService {
         sb.append("要求：\n");
         sb.append("1. projectType 取以下枚举之一：后端服务 / 前端应用 / 全栈应用 / 库 / 工具 / 其他。\n");
         sb.append("2. summary 一句话概括项目；description 用 2-4 句话详细描述用途。\n");
-        sb.append("3. techStack 归纳用到的框架/中间件（name/category/version/role）。\n");
+        sb.append("3. techStack 归纳用到的框架/中间件（name/category/version/role）；")
+                .append("category 必须且只能取以下之一：语言 / 框架 / 中间件 / 数据库 / 构建工具 / 测试 / 工具 / 其他。\n");
         sb.append("4. architecture 给出高层架构：style 取 分层/单体/微服务/其他，layers 列出分层名，description 说明。\n");
         sb.append("5. modules 归纳主要代码模块（name/responsibility/keyFiles）。\n");
         sb.append("6. 全部用中文，只输出 JSON，不要输出解释或代码块标记。\n\n");

@@ -4,6 +4,8 @@ import com.example.archmind.common.result.Result;
 import com.example.archmind.common.util.CheckProjectUtil;
 import com.example.archmind.dto.response.ClassNodeDTO;
 import com.example.archmind.dto.response.ClassRelationsResponse;
+import com.example.archmind.dto.response.ClassSourceResponse;
+import com.example.archmind.service.ClassSourceService;
 import com.example.archmind.service.ast.CodeGraphQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +21,7 @@ import java.util.List;
 public class CodeGraphController {
 
     private final CodeGraphQueryService codeGraphQueryService;
+    private final ClassSourceService classSourceService;
     private final CheckProjectUtil checkProjectUtil;
 
     /** 项目全部类清单，前端「代码探索」的入口 */
@@ -34,5 +37,14 @@ public class CodeGraphController {
                                                         @RequestParam String uid) {
         checkProjectUtil.checkProject(projectId);
         return Result.success(codeGraphQueryService.classRelations(projectId, uid));
+    }
+
+    /** 点某个类 → 打开代码抽屉：按类节点记录的文件与行区间切出源码 */
+    @GetMapping("/{projectId}/class/source")
+    public Result<ClassSourceResponse> classSource(@PathVariable Long projectId,
+                                                   @RequestParam String uid,
+                                                   @RequestParam(defaultValue = "2000") int maxLines) {
+        checkProjectUtil.checkProject(projectId);
+        return Result.success(classSourceService.classSource(projectId, uid, maxLines));
     }
 }

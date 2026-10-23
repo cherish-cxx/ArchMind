@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "projectFixture": "test-demos/src/demo-layered-service",
+  "description": "R1 的 5 条 golden question：为 R4 评测打底。期望值只描述入口与工具选择，不锁定具体措辞。",
+  "questions": [
+    {
+      "id": "GQ-01",
+      "question": "这个项目是做什么的？用了哪些技术？",
+      "expectedIntent": "EXPLORE_OVERVIEW",
+      "expectedToolCalls": ["overview"],
+      "expectedAnchorUids": [],
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "GQ-02",
+      "question": "下单的调用链是怎样的？",
+      "expectedIntent": "EXPLORE_FLOW",
+      "expectedToolCalls": ["call-chain"],
+      "expectedAnchorUids": [
+        "com.example.demo.controller.OrderController",
+        "com.example.demo.service.OrderService",
+        "com.example.demo.service.impl.OrderServiceImpl",
+        "com.example.demo.repository.OrderRepository"
+      ],
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "GQ-03",
+      "question": "OrderServiceImpl 被谁调用？",
+      "expectedIntent": "EXPLORE_RELATION",
+      "expectedToolCalls": ["class-relations"],
+      "expectedAnchorUids": [
+        "com.example.demo.service.impl.OrderServiceImpl",
+        "com.example.demo.controller.OrderController"
+      ],
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "GQ-04",
+      "question": "OrderRepository 有哪些实现类？",
+      "expectedIntent": "EXPLORE_RELATION",
+      "expectedToolCalls": ["class-relations"],
+      "expectedAnchorUids": [
+        "com.example.demo.repository.OrderRepository",
+        "com.example.demo.repository.impl.InMemoryOrderRepository"
+      ],
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "GQ-05",
+      "question": "订单创建时如果库存不足会被拦截吗？",
+      "expectedIntent": "EXPLORE_FLOW",
+      "expectedToolCalls": ["call-chain", "method-body"],
+      "expectedAnchorUids": ["com.example.demo.service.impl.OrderServiceImpl"],
+      "mustDiscloseGap": true
+    }
+  ]
+}

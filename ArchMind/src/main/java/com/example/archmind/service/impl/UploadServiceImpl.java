@@ -48,6 +48,11 @@ public class UploadServiceImpl implements UploadService {
     private final CheckProjectUtil checkProjectUtil;
 
     @Override
+    public void validateZip(MultipartFile file) {
+        validateFile(file);
+    }
+
+    @Override
     public UploadResponse upload(Long projectId, MultipartFile file) {
         // 1. 安全基础校验
         validateFile(file);
