@@ -1,6 +1,10 @@
 .claude/settings.local.json
+.claude/launch.json
 .obsidian/
 .claudian/
+
+# IDE 本地配置
+.idea/
 
 # 项目打包产物（不纳入版本控制）
 ArchMind.zip
