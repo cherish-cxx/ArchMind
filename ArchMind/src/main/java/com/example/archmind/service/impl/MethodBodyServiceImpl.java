@@ -35,7 +35,14 @@ public class MethodBodyServiceImpl implements MethodBodyService {
 
     /** 硬上限：防止 prompt 被代码撑爆 */
     private static final int MAX_METHODS_HARD = 3;
-    private static final int MAX_LINES_HARD = 120;
+    /**
+     * 单次切片的总行数上限。
+     *
+     * <p>方法级锁定（给了 methodUid）只切 1 个方法，120 行很容易把带事务的长方法切成半截，
+     * 所以上限放到 300。类级调用方仍显式传 120（{@code java_client.DEFAULT_MAX_LINES}），
+     * 老行为不变。</p>
+     */
+    private static final int MAX_LINES_HARD = 300;
 
     /** public 优先，再按行号 —— 用户问「这个类怎么实现的」想看的是对外方法，不是私有辅助 */
     private static final String METHODS_OF_CLASS = """

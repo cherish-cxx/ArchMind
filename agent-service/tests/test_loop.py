@@ -15,15 +15,19 @@ from app.models.context import AgentContext
 from app.models.intent import Intent
 from app.models.response import NodeRef, NodeRefType
 from app.tools.java_client import InternalAuthError, ToolTransportError
-from fakes import ORDER_CONTROLLER, ORDER_SERVICE, FakeJava, FakeLLM, failed, ok_chain, ok_overview
+from fakes import (
+    LOCKED_CODE, LOCKED_METHOD, ORDER_CONTROLLER, ORDER_SERVICE,
+    FakeJava, FakeLLM, failed, ok_chain, ok_method_body, ok_overview,
+)
 
 PROJECT_ID = 7
 GHOST = "com.hallucinated.GhostService"
 
 
-def _ctx(focus_uid: str | None = ORDER_CONTROLLER) -> AgentContext:
+def _ctx(focus_uid: str | None = ORDER_CONTROLLER, method_uid: str | None = None) -> AgentContext:
     focus = NodeRef(type=NodeRefType.CLASS, uid=focus_uid) if focus_uid else None
-    return AgentContext(conversation_id="c1", project_id=PROJECT_ID, focus=focus)
+    return AgentContext(conversation_id="c1", project_id=PROJECT_ID, focus=focus,
+                        method_uid=method_uid)
 
 
 def _intent(intent: Intent, confidence: float = 0.95, **slots) -> str:
@@ -86,6 +90,54 @@ async def test_direction_from_slots_reaches_the_tool():
     await run_turn(_ctx(), "谁调用它", java, llm)
 
     assert java.kwargs[0]["direction"].value == "UP"
+
+
+# ==================== 锁定方法的源码进上下文 ====================
+
+
+async def test_locked_method_source_reaches_the_explain_prompt():
+    """锁了方法，代码就必须在本轮讲解的输入里 —— 否则讲解只有类名，答不出方法里的依据。"""
+    java = FakeJava(ok_chain(), method_body_envelope=ok_method_body())
+    llm = FakeLLM([
+        _intent(Intent.EXPLORE_FLOW, direction="UP"),
+        _explain("调用方是 OrderController。", [ORDER_CONTROLLER]),
+    ])
+
+    r = await run_turn(_ctx(focus_uid=ORDER_SERVICE, method_uid=LOCKED_METHOD), "谁调用了它", java, llm)
+
+    assert java.calls == [
+        ("call-chain", PROJECT_ID, ORDER_SERVICE),
+        ("method-body", PROJECT_ID, None),
+    ]
+    assert java.kwargs[1]["method_uid"] == LOCKED_METHOD
+    explain_prompt = llm.calls[1]["messages"][-1]["content"]
+    assert "tokenCache.remove(token)" in explain_prompt, "方法源码没进讲解 prompt"
+    assert [s.type.value for s in r.steps] == ["INTENT", "TOOL", "TOOL", "LLM"]
+
+
+async def test_explore_code_does_not_fetch_the_locked_method_twice():
+    """EXPLORE_CODE 的主工具本来就是 method-body，不能再补一次。"""
+    java = FakeJava(ok_method_body(), method_body_envelope=ok_method_body())
+    llm = FakeLLM([_intent(Intent.EXPLORE_CODE), _explain("它清掉令牌缓存。")])
+
+    await run_turn(_ctx(method_uid=LOCKED_METHOD), "这个方法做了什么", java, llm)
+
+    assert java.calls == [("method-body", PROJECT_ID, None)]
+
+
+async def test_missing_locked_method_source_still_answers_from_the_graph():
+    """源码取不到是次要信息缺失，不该把这一轮一起拖垮。"""
+    java = FakeJava(ok_chain(), method_body_envelope=failed("指定方法不存在"))
+    llm = FakeLLM([
+        _intent(Intent.EXPLORE_FLOW, direction="UP"),
+        _explain("调用方是 OrderController。", [ORDER_CONTROLLER]),
+    ])
+
+    r = await run_turn(_ctx(focus_uid=ORDER_SERVICE, method_uid=LOCKED_METHOD), "谁调用了它", java, llm)
+
+    assert len(java.calls) == 2, "源码取失败也只该打这两次"
+    assert r.message == "调用方是 OrderController。"
+    assert [s.type.value for s in r.steps] == ["INTENT", "TOOL", "LLM"], "失败的附加调用不记 step"
 
 
 # ==================== 三条不查图的分支 ====================

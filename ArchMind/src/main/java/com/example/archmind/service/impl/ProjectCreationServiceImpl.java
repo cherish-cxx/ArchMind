@@ -47,6 +47,7 @@ public class ProjectCreationServiceImpl implements ProjectCreationService {
             throw new BusinessException("未获取到登录用户");
         }
         validateRequest(request);
+//        直接做大小校验
         uploadService.validateZip(file);
 
         String key = idempotencyKey == null || idempotencyKey.isBlank()

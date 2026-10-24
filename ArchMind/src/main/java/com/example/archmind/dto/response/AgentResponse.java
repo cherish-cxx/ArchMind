@@ -25,6 +25,17 @@ public class AgentResponse {
 
     private String message;
 
+    /** 一句话结论。和 {@code sections} 一起给前端做逐段渲染；降级时为 null。 */
+    private String headline;
+
+    /**
+     * 结构化讲解：**唯一真相**。{@code message} 由它拼出来（降级时反过来，sections 为空）。
+     *
+     * <p>段落是引用的最小单位：一段话共享一组出处。顶层 {@code citations} 是各段
+     * {@code citedUids} 的并集，旧前端读它不受影响。</p>
+     */
+    private List<Section> sections = new ArrayList<>();
+
     /**
      * 请求带了 cid 但 Redis 里的 Context 已过期（TTL 2h）。
      *
@@ -60,6 +71,19 @@ public class AgentResponse {
     public static class Citation {
         private String uid;
         private String kind;
+    }
+
+    /**
+     * 讲解的一段。{@code body} 是 Markdown。
+     *
+     * <p>{@code citedUids} **可以为空** —— 空表示这段在讲图的边界或做负向断言，
+     * 图上没有对应的边可引。别把它当成漏填。</p>
+     */
+    @Data
+    public static class Section {
+        private String title;
+        private String body;
+        private List<String> citedUids = new ArrayList<>();
     }
 
     /**

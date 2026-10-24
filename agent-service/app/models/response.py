@@ -53,6 +53,19 @@ class Citation(CamelModel):
     kind: NodeRefType
 
 
+class Section(CamelModel):
+    """讲解的一段。**段落是引用的最小单位** —— 一段话共享一组出处。
+
+    `body` 是 Markdown。`cited_uids` **允许为空**：空数组不是「忘了填」，而是
+    「这段在讲图的边界 / 做负向断言，图上没有对应的边可引」。
+    别把它当缺省值「顺手补上」—— 补了就等于伪造出处。
+    """
+
+    title: str = ""
+    body: str
+    cited_uids: list[str] = []
+
+
 class UiOp(StrEnum):
     """V1 只做 4 个（9月19 §4-③ 从 9 个砍下来的）。
 
@@ -172,6 +185,11 @@ class AgentResponse(CamelModel):
 
     conversation_id: str | None = None   # P4 才有；P2 一律 None
     message: str
+    #: 一句话结论。和 `sections` 一起给前端做逐段渲染；降级时为 None。
+    headline: str | None = None
+    #: 结构化讲解：**唯一真相**。`message` 由它拼出来（降级时反过来，sections 为空）。
+    #: 顶层 `citations` 是各段 citedUids 的并集，旧前端读它不受影响。
+    sections: list[Section] = []
     #: ★ P4.2：请求带了 cid、但 Redis 里的 Context 已过期（TTL 2h）。
     #: **给前端一个能直接分支的布尔**，而不是让它去匹配文案。
     #: 前端据此把那个会话窗口置灰，并提示「对话已过期，请开始新的对话」。

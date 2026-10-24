@@ -68,9 +68,18 @@ class FakeJava:
     `AttributeError` 炸出来。这正是想要的效果：接口变了，测试当场就红。
     """
 
-    def __init__(self, envelope: ToolEnvelope | None = None, *, raises: Exception | None = None) -> None:
+    def __init__(
+        self,
+        envelope: ToolEnvelope | None = None,
+        *,
+        raises: Exception | None = None,
+        method_body_envelope: ToolEnvelope | None = None,
+    ) -> None:
         self._envelope = envelope if envelope is not None else ok_overview()
         self._raises = raises
+        #: method-body 单独的信封。锁定方法时一轮会打两次 Java（主工具 + 方法源码），
+        #: 用一个信封冒充两个工具，会让「代码真的进了 prompt」这条断言测不出来。
+        self._method_body_envelope = method_body_envelope
         self.calls: list[tuple[str, int, str | None]] = []
         #: 每次调用的关键字参数。用来验「slots 的 direction/depth 真的传下去了」——
         #: 这正是 P2 契约测试里「参数静默降级」那个坑的翻版，值得在 P3 也盯一次。
@@ -81,13 +90,14 @@ class FakeJava:
         return len(self.calls)
 
     async def _record(
-        self, name: str, project_id: int, uid: str | None = None, **kw: object
+        self, name: str, project_id: int, uid: str | None = None,
+        *, env: ToolEnvelope | None = None, **kw: object
     ) -> ToolEnvelope:
         self.calls.append((name, project_id, uid))
         self.kwargs.append(kw)
         if self._raises is not None:
             raise self._raises
-        return self._envelope
+        return env if env is not None else self._envelope
 
     async def overview(self, project_id: int) -> ToolEnvelope:
         return await self._record("overview", project_id)
@@ -102,7 +112,8 @@ class FakeJava:
         return await self._record("call-chain", project_id, uid, **kw)
 
     async def method_body(self, project_id: int, uid: str | None = None, **kw) -> ToolEnvelope:
-        return await self._record("method-body", project_id, uid, **kw)
+        return await self._record("method-body", project_id, uid,
+                                  env=self._method_body_envelope, **kw)
 
 
 # ==================== 信封构造 ====================
@@ -157,6 +168,34 @@ def ok_chain() -> ToolEnvelope:
 
 def failed(note: str = "类不存在") -> ToolEnvelope:
     return ToolEnvelope(ok=False, data=None, evidence=[], truncated=False, note=note, graph_rev=1)
+
+
+#: 锁定方法用的固定 uid —— method_uid 的格式是 `owner#signature`
+LOCKED_METHOD = f"{ORDER_SERVICE}#cleanToken(String)"
+LOCKED_CODE = "public void cleanToken(String token) { tokenCache.remove(token); }"
+
+
+def ok_method_body(code: str = LOCKED_CODE) -> ToolEnvelope:
+    """一段最小的 method-body 信封。
+
+    带一条 METHOD evidence —— 讲解的 citedUids 只能用 evidence 里的 uid，
+    没有它，测试就分不清「代码进了 prompt」和「代码被 guard 丢掉了」。
+    """
+    from app.models.tool import Evidence, EvidenceKind, MethodBody, MethodCode
+
+    return ToolEnvelope(
+        ok=True,
+        data=MethodBody(
+            methods=[MethodCode(
+                uid=LOCKED_METHOD, start_line=42, end_line=44,
+                signature="cleanToken(String)", owner=ORDER_SERVICE, code=code,
+            )],
+            truncated=False,
+        ),
+        evidence=[Evidence(kind=EvidenceKind.METHOD, from_=LOCKED_METHOD)],
+        truncated=False,
+        graph_rev=1,
+    )
 
 
 class FakeContextStore:

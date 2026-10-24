@@ -205,11 +205,18 @@ def test_6_hallucinated_citation_and_uicmd_are_filtered(
     现在看的是「我们硬塞了一个不在 evidence 里的，它被丢掉了」，验证的是**拦截本身**。
     """
     ghost = "com.hallucinated.GhostService"
-    # LLM #1 判意图；LLM #2 故意在 citedUids 里混进一个不存在的类
+    # LLM #1 判意图；LLM #2 故意在第一段 citedUids 里混进一个不存在的类
     fake = FakeLLM(
         [
             json.dumps({"intent": "EXPLORE_FLOW", "confidence": 0.95}),
-            json.dumps({"message": "顺着调用链往下看。", "citedUids": [ghost, chain_start]}),
+            json.dumps({
+                "headline": "顺着调用链往下看。",
+                "sections": [
+                    {"title": "调用路径", "body": "顺着调用链往下看。",
+                     "citedUids": [ghost, chain_start]},
+                    {"title": "边界", "body": "图里到这里为止。", "citedUids": []},
+                ],
+            }),
         ]
     )
 
@@ -238,6 +245,14 @@ def test_6_hallucinated_citation_and_uicmd_are_filtered(
 
     assert ghost not in cited, f"★ 幻觉引用 {ghost} 没被拦住 —— guard 失效了"
     assert chain_start in cited, f"真实节点 {chain_start} 应该在 evidence 里，却被误拦了"
+
+    # ★ 校验是逐段的：脏 uid 只从它所在的那一段里剔掉，别的段不受牵连
+    sections = body["sections"]
+    assert body["headline"] == "顺着调用链往下看。", "headline 要单独透传，前端靠它做标题"
+    assert len(sections) == 2, f"sections 应该原样透传到前端：{sections}"
+    assert sections[0]["citedUids"] == [chain_start], sections[0]
+    assert sections[1]["citedUids"] == [], "空 citedUids 是合法语义，不能被补上"
+    assert body["message"].startswith("## "), "message 应由后端从 sections 拼出来"
 
     # 出图命令必须指向被引用过的真实节点，不能凭空指向一个 uid
     targets = [c["target"]["uid"] for c in body["uiCommands"] if c.get("target")]

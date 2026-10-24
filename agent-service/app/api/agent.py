@@ -148,6 +148,8 @@ async def ask(
             return _session_expired(conversation_id)
     # 把请求里的focus更新到会话上下文ctx里面
     _apply_focus(ctx, req.focus)
+    # 每轮都覆盖：前端清掉锁时（不传）这里必须跟着清，否则会拿上一轮的方法答题
+    ctx.method_uid = req.method_uid
     """
     执行一轮Agent回答，把上下文，用户消息，java客户端，llm客户端传给run_turn函数
     run_turn内部会调用LLM生成回答，如果LLM调用失败，会自动降级到旧版本P2模板，不会直接崩掉整个请求

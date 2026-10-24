@@ -22,6 +22,7 @@ from app.models.response import (
     Meta,
     NodeRef,
     NodeRefType,
+    Section,
     Step,
     StepType,
     Suggestion,
@@ -97,15 +98,26 @@ async def run_turn(
         return _tool_down(ctx, intent_result, spec.name, steps, started)
 
     ctx.budget.tool_calls_this_turn += 1
+    # 审计显示实际用的那个锚点：锁了方法时打印方法 uid，否则只看到类会误判「没生效」
     steps.append(Step(n=len(steps) + 1, type=StepType.TOOL,
-                      detail=f"{spec.name}({inv.uid or '-'})", ms=_ms(tool_started)))
+                      detail=f"{spec.name}({inv.method_uid or inv.uid or '-'})",
+                      ms=_ms(tool_started)))
 
     if not envelope.ok:
         # ok:false 是**业务结果**（类不存在、项目未分析…），不是异常 —— 原样说给用户
         return _tool_said_no(ctx, intent_result, envelope, steps, started)
 
-    # ── 5. 讲解 + 出图命令 ──────────────────────────────────────────────────
+    # ── 4.5 锁定方法的源码：本轮讲解的直接素材 ─────────────────────────────
+    # 用户在大纲里锁了方法，就等于说「现在问的是这段代码」。只把它当成一个 uid 传给代
+    # 词消解是不够的：讲解时手上只有类名，答「谁调用了它」给不出方法里的依据。
+    # **只进本轮 prompt，不写进 Context** —— 设计 §7：Context 存状态与引用，不存代码。
     envelopes = [envelope]
+    if ctx.method_uid and spec.name != "method-body":
+        body = await _locked_method_body(ctx, java, steps)
+        if body is not None:
+            envelopes.append(body)
+
+    # ── 5. 讲解 + 出图命令 ──────────────────────────────────────────────────
     evidenced = evidence_uids(envelopes)
     llm_started = time.perf_counter()
     explanation = await explain(
@@ -125,9 +137,44 @@ async def run_turn(
     graph = build_graph_patch(envelope)
 
     _remember(ctx, message, explanation, intent_result)
-    return _response(ctx, explanation.message, explanation.citations, kept, graph,
-                     _suggestions(intent_result.intent, ctx), steps, intent_result,
+    return _response(ctx, explanation.message, explanation.headline,
+                     explanation.citations, explanation.sections,
+                     kept, graph, _suggestions(intent_result.intent, ctx), steps, intent_result,
                      envelope.graph_rev, started)
+
+
+# ==================== 锁定方法的源码 ====================
+
+
+async def _locked_method_body(
+    ctx: AgentContext, java: JavaClient, steps: list[Step]
+) -> ToolEnvelope | None:
+    """取锁定方法的源码。
+
+    **取不到就不加**：这是「锦上添花」的一步，调用链/关系已经取到了，
+    为了附带的代码让整轮失败，等于用次要信息换掉主要信息。
+    """
+    assert ctx.method_uid is not None
+    started = time.perf_counter()
+    try:
+        env = await java.method_body(
+            ctx.project_id,
+            method_uid=ctx.method_uid,
+            max_lines=registry.DEFAULT_METHOD_MAX_LINES,
+        )
+    except InternalAuthError:
+        raise
+    except ToolTransportError as e:
+        logger.warning("锁定方法源码取不到，本轮按图作答：%s", e)
+        return None
+
+    if not env.ok:
+        logger.info("锁定方法 %s 取不到源码：%s", ctx.method_uid, env.note)
+        return None
+
+    steps.append(Step(n=len(steps) + 1, type=StepType.TOOL,
+                      detail=f"method-body({ctx.method_uid})", ms=_ms(started)))
+    return env
 
 
 # ==================== Intent 判定 + 降级 ====================
@@ -340,8 +387,16 @@ def _remember(
     """把这一轮压成一句摘要存起来。
 
     **存摘要不存原文**（设计 §7 决定⑤）—— 十轮之后塞原文，Context 就爆了。
+
+    优先用 `headline`：`message` 现在是后端拼出来的 Markdown，直接截前 120 字
+    会把 `##`/`**` 和半截语法一起塞进下一轮的 prompt。
     """
-    summary = explanation.message.strip().replace("\n", " ")
+    summary = (
+        explanation.headline
+        or next((s.body for s in explanation.sections if s.body), None)
+        or explanation.message
+    )
+    summary = summary.strip().replace("\n", " ")
     if len(summary) > 120:
         summary = summary[:120] + "…"
     ctx.history.append(
@@ -360,13 +415,16 @@ def _remember(
 
 
 def _response(
-    ctx: AgentContext, message: str, citations: list[Citation], commands: list[UICmd],
-    graph: GraphPatch | None, suggestions: list[Suggestion], steps: list[Step],
-    intent_result: IntentResult, graph_rev: int, started: float,
+    ctx: AgentContext, message: str, headline: str | None, citations: list[Citation],
+    sections: list[Section], commands: list[UICmd], graph: GraphPatch | None,
+    suggestions: list[Suggestion], steps: list[Step], intent_result: IntentResult,
+    graph_rev: int, started: float,
 ) -> AgentResponse:
     return AgentResponse(
         conversation_id=ctx.conversation_id,
         message=message,
+        headline=headline,
+        sections=sections,
         citations=citations,
         ui_commands=commands,
         graph=graph,

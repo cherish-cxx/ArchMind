@@ -129,6 +129,11 @@ class AgentContext(CamelModel):
     focus: NodeRef | None = None
     focus_stack: list[str] = []       # 「退回去」= pop()，纯 NAVIGATE，不花 LLM
 
+    #: 源码大纲里锁定的方法（`owner#signature`）。**不是 focus**：
+    #: focus 指向画布上的类，这个只回答「用户正在看哪个方法」。
+    #: 只被 EXPLORE_CODE 的 method-body 消费；其余工具一律按类走。
+    method_uid: str | None = None
+
     history: list[HistoryItem] = []
     budget: Budget = Budget()
     viewport: Viewport = Viewport()   # 前端屏幕状态的镜像（P4.2）

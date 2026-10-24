@@ -14,6 +14,8 @@ import org.neo4j.driver.Value;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,6 +35,16 @@ public class ClassSourceServiceImpl implements ClassSourceService {
             MATCH (c:Class {projectId: $pid, uid: $uid})
             RETURN c.uid AS uid, c.name AS name, c.packageName AS packageName,
                    c.filePath AS filePath, c.startLine AS startLine, c.endLine AS endLine
+            """;
+
+    /** 方法大纲：按源码顺序，不设条数上限 —— 只是元数据，不读文件 */
+    private static final String FIND_METHODS = """
+            MATCH (m:Method {projectId: $pid, owner: $uid})
+            RETURN m.uid AS uid, m.name AS name, m.signature AS signature,
+                   m.returnType AS returnType, m.visibility AS visibility,
+                   m.startLine AS startLine, m.endLine AS endLine,
+                   m.isConstructor AS isConstructor
+            ORDER BY m.startLine
             """;
 
     private final Driver driver;
@@ -81,7 +93,31 @@ public class ClassSourceServiceImpl implements ClassSourceService {
         resp.setFileLineCount(lines.length);
         resp.setContent(join(lines, start, end));
         resp.setTruncated(truncated);
+        resp.setMethods(findMethods(projectId, uid));
         return resp;
+    }
+
+    private List<ClassSourceResponse.MethodOutline> findMethods(Long projectId, String uid) {
+        List<ClassSourceResponse.MethodOutline> methods = new ArrayList<>();
+        try (Session session = driver.session()) {
+            Result result = session.run(FIND_METHODS, Map.of("pid", projectId, "uid", uid));
+            while (result.hasNext()) {
+                Record rec = result.next();
+                ClassSourceResponse.MethodOutline m = new ClassSourceResponse.MethodOutline();
+                m.setUid(str(rec.get("uid")));
+                m.setName(str(rec.get("name")));
+                m.setSignature(str(rec.get("signature")));
+                m.setReturnType(str(rec.get("returnType")));
+                m.setVisibility(str(rec.get("visibility")));
+                m.setStartLine(intOrNull(rec.get("startLine")));
+                m.setEndLine(intOrNull(rec.get("endLine")));
+                m.setConstructor(rec.get("isConstructor") != null
+                        && !rec.get("isConstructor").isNull()
+                        && rec.get("isConstructor").asBoolean());
+                methods.add(m);
+            }
+        }
+        return methods;
     }
 
     private ClassMeta findClass(Long projectId, String uid) {

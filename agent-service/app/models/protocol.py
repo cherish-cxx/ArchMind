@@ -29,6 +29,9 @@ class AskRequest(CamelModel):
     message: str
     conversation_id: str | None = None   # P4 才有；P2 可不传
     focus: NodeRef | None = None         # 可为 null：用户直接问「这个项目是干嘛的」
+    #: 源码大纲里锁定的方法（`owner#signature`）。和 focus 是两个锚点：
+    #: focus 决定画布看哪里，这个决定「问的是哪个方法」。只有 method-body 消费它。
+    method_uid: str | None = None
 
 
 class NavigateOp(StrEnum):

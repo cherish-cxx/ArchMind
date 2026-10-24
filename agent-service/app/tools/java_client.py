@@ -41,6 +41,9 @@ DEFAULT_CHAIN_DEPTH = 2     # 往下 2 层：正好覆盖「接口 → 实现 �
 DEFAULT_MAX_NODES = 40      # 调用链单次节点预算
 DEFAULT_MAX_METHODS = 3
 DEFAULT_MAX_LINES = 120
+#: 方法级锁定（methodUid）只切 1 个方法，行数放宽到 Java 侧硬上限 300 ——
+#: 120 行很容易把带事务的长方法切成半截。
+DEFAULT_METHOD_MAX_LINES = 300
 
 # 工具级超时（设计 §8）
 TOOL_TIMEOUT_SECONDS = 8.0

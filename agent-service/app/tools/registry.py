@@ -29,6 +29,7 @@ from app.tools.java_client import (
     DEFAULT_LIMIT,
     DEFAULT_CHAIN_DEPTH,
     DEFAULT_MAX_NODES,
+    DEFAULT_METHOD_MAX_LINES,
     JavaClient,
 )
 
@@ -46,6 +47,8 @@ class ToolInvocation:
     project_id: int
     uid: str | None
     slots: Slots
+    #: 源码大纲里锁定的方法 uid（`owner#signature`）。目前只有 method-body 消费。
+    method_uid: str | None = None
 
 """ 
 这里是python类型别名，不是业务执行代码，制作类型标注，运行时不会执行任何逻辑，用来描述一类异步函数长什么样
@@ -105,6 +108,8 @@ async def _call_chain(client: JavaClient, inv: ToolInvocation) -> ToolEnvelope[A
         inv.project_id,
         inv.uid,
         direction=inv.slots.direction or ChainDirection.DOWN,
+        # 锁了方法就只查这一个方法的上下游 —— 否则「谁调用了它」会退化成整个类
+        method_uid=inv.method_uid,
         # 预算由这边显式传，Java 不会替 Agent 拦（见 java_client 顶部的约束 ③）
         max_depth=inv.slots.depth or DEFAULT_CHAIN_DEPTH,
         max_nodes=DEFAULT_MAX_NODES,
@@ -112,6 +117,11 @@ async def _call_chain(client: JavaClient, inv: ToolInvocation) -> ToolEnvelope[A
 
 
 async def _method_body(client: JavaClient, inv: ToolInvocation) -> ToolEnvelope[Any]:
+    # 锁定方法时只切这一个；方法级只切 1 个方法，行数预算可以放宽
+    if inv.method_uid:
+        return await client.method_body(
+            inv.project_id, method_uid=inv.method_uid, max_lines=DEFAULT_METHOD_MAX_LINES
+        )
     assert inv.uid is not None
     return await client.method_body(inv.project_id, uid=inv.uid)
 
@@ -137,16 +147,24 @@ INTENT_TOOL: dict[Intent, str] = {
 }
 
 
+def owner_of(uid: str) -> str:
+    """方法 uid 是 `owner#signature`；任何类级工具要的都是 `#` 左边那半。"""
+    return uid.split("#", 1)[0]
+
+
 def resolve_uid(ctx: AgentContext, slots: Slots) -> str | None:
     """决定这次调用以哪个类为锚点。
 
     `slots.entityRef` 优先 —— LLM 明确指了某个类时听它的；
     没指（比如用户说「它」）就回落到 `ctx.focus`，这正是代词消解规则表里
     「它 → focus.uid」那条的代码落点。
+
+    两种来源都可能是方法 uid：锁了方法时 prompt 会把 `owner#signature` 交给
+    LLM，「它」很容易被填成方法 uid。类级工具拿它去查必然「类不存在」，
+    所以出口统一收敛到 owner。
     """
-    if slots.entity_ref:
-        return slots.entity_ref
-    return ctx.focus.uid if ctx.focus else None
+    raw = slots.entity_ref or (ctx.focus.uid if ctx.focus else None)
+    return owner_of(raw) if raw else None
 
 
 def plan(intent: Intent, ctx: AgentContext) -> ToolSpec | None:
@@ -163,11 +181,34 @@ def plan(intent: Intent, ctx: AgentContext) -> ToolSpec | None:
         return None
     # anchor翻译：锚点
     spec = TOOLS[name]
-    if spec.needs_anchor and ctx.focus is None:
+    # 锚点有两种：画布上选中的类，或源码大纲里锁定的方法（仅 EXPLORE_CODE 用得上）
+    has_anchor = ctx.focus is not None or (intent is Intent.EXPLORE_CODE and ctx.method_uid)
+    if spec.needs_anchor and not has_anchor:
         logger.info("intent=%s 需要锚点但当前无 focus —— 提前拦住，不空跑一次工具", intent)
         return None
     return spec
 
 # 上下文中获取项目id，被定的类的uid，
 def build_invocation(ctx: AgentContext, slots: Slots) -> ToolInvocation:
-    return ToolInvocation(project_id=ctx.project_id, uid=resolve_uid(ctx, slots), slots=slots)
+    return ToolInvocation(
+        project_id=ctx.project_id,
+        uid=resolve_uid(ctx, slots),
+        slots=slots,
+        method_uid=_resolve_method_uid(ctx, slots),
+    )
+
+
+def _resolve_method_uid(ctx: AgentContext, slots: Slots) -> str | None:
+    """方法锁只在「用户没改口径」时生效。
+
+    用户显式点名了另一个类（`entityRef` 存在且不是这个方法的 owner），
+    说明锁已经过期 —— 这时按类走，绝不能用旧方法答题。
+    """
+    if not ctx.method_uid:
+        return None
+    owner = owner_of(ctx.method_uid)
+    # entityRef 可能就是这个方法 uid 本身（「谁调用了它」），按 owner 比较才不会误判成换了口径
+    if slots.entity_ref and owner_of(slots.entity_ref) != owner:
+        logger.info("方法锁 %s 与用户点名的 %s 不一致，本轮按类走", ctx.method_uid, slots.entity_ref)
+        return None
+    return ctx.method_uid

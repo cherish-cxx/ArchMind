@@ -18,14 +18,14 @@ P2 的写法是**先选 citations，再用 citations 拼 message** —— 结构
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.guard import split_citations
 from app.core.llm import Completer, LLMError, LLMNotConfiguredError
 from app.core.prompt import explain_messages
 from app.models.intent import Intent
-from app.models.response import Citation, NodeRefType
+from app.models.response import Citation, NodeRefType, Section
 from app.models.tool import CallChain, GapReason, ProjectOverview, ToolEnvelope
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,8 @@ logger = logging.getLogger(__name__)
 class ExplainResult:
     message: str
     citations: list[Citation]
+    sections: list[Section] = field(default_factory=list)
+    headline: str | None = None
     degraded: bool = False      # True = LLM 没用上，走了模板。要如实体现在 steps 里
 
 
@@ -74,30 +76,110 @@ async def explain(
 
 
 class ExplainParseError(Exception):
-    """讲解输出不是合法的 {message, citedUids}。"""
+    """讲解输出既不是 {headline, sections} 也不是旧的 {message, citedUids}。"""
 
 
 def _parse_and_ground(text: str, evidenced: set[str]) -> ExplainResult:
+    """解析讲解输出，并**逐段**做 evidence 校验。
+
+    兼容两种形状：新的 `{headline, sections[]}` 与旧的 `{message, citedUids}`。
+    兼容不是为了向后兼容而兼容 —— LLM 偶尔退回旧格式，退回一次就让整轮降级到模板，
+    代价比多写这十行大得多。
+    """
     try:
         raw = json.loads(text)
-        message = raw["message"]
-        cited_uids = raw.get("citedUids") or []
-        if not isinstance(message, str) or not isinstance(cited_uids, list):
-            raise TypeError(f"message={type(message).__name__} citedUids={type(cited_uids).__name__}")
-    except (ValueError, KeyError, TypeError) as e:
+    except ValueError as e:
         raise ExplainParseError(f"{type(e).__name__}: {e}；原文前 200 字：{text[:200]!r}") from e
+    if not isinstance(raw, dict):
+        raise ExplainParseError(f"顶层不是对象：{type(raw).__name__}")
 
-    proposed = [
-        Citation(uid=u, kind=NodeRefType.CLASS) for u in cited_uids if isinstance(u, str)
-    ]
-    grounded, ungrounded = split_citations(proposed, evidenced)
-    if ungrounded:
-        # error 级：幻觉引用是这个系统最该被盯住的信号，不能只 warn
-        logger.error(
-            "LLM 引用了 %d 个不存在的 uid，已剔除：%s",
-            len(ungrounded), [c.uid for c in ungrounded][:5],
-        )
-    return ExplainResult(message=message, citations=grounded)
+    headline, raw_sections = _read_sections(raw)
+
+    sections: list[Section] = []
+    citations: list[Citation] = []
+    cited: set[str] = set()
+    for i, item in enumerate(raw_sections, 1):
+        body = item.get("body")
+        if not isinstance(body, str) or not body.strip():
+            # 空段不致命，但它说明 prompt 与模型格式在漂移 —— 必须留痕
+            logger.warning("第 %d 段正文为空，已丢弃", i)
+            continue
+
+        raw_uids = item.get("citedUids")
+        proposed = [
+            Citation(uid=u, kind=NodeRefType.CLASS)
+            for u in (raw_uids if isinstance(raw_uids, list) else [])
+            if isinstance(u, str)
+        ]
+        grounded, ungrounded = split_citations(proposed, evidenced)
+        if ungrounded:
+            # error 级：幻觉引用是这个系统最该被盯住的信号，不能只 warn。
+            # 带上段标题，否则日志只能说「这条回答引用了不存在的东西」，定位不到是哪个论断编的。
+            logger.error(
+                "第 %d 段《%s》引用了 %d 个不存在的 uid，已剔除：%s",
+                i, item.get("title") or "-", len(ungrounded), [c.uid for c in ungrounded][:5],
+            )
+
+        title = item.get("title")
+        sections.append(Section(
+            title=title.strip() if isinstance(title, str) else "",
+            body=body.strip(),
+            cited_uids=[c.uid for c in grounded],
+        ))
+        for c in grounded:
+            if c.uid not in cited:
+                cited.add(c.uid)
+                citations.append(c)
+
+    if not sections:
+        raise ExplainParseError("没有任何可用段落（全部为空或格式不对）")
+
+    return ExplainResult(
+        message=_assemble_message(headline, sections),
+        citations=citations,
+        sections=sections,
+        headline=headline,
+    )
+
+
+def _read_sections(raw: dict[str, Any]) -> tuple[str | None, list[dict[str, Any]]]:
+    """取出 headline 与段落列表，顺带兼容旧的 `{message, citedUids}`。
+
+    旧形状被当成**一个没有标题的段落** —— 之后所有校验、拼装都走同一条路，
+    不需要在别处再分支一次。
+    """
+    headline = raw.get("headline")
+    if not isinstance(headline, str) or not headline.strip():
+        headline = None
+
+    raw_sections = raw.get("sections")
+    if raw_sections is None:
+        message = raw.get("message")
+        if not isinstance(message, str) or not message.strip():
+            raise ExplainParseError("既没有 sections，也没有可用的 message")
+        return headline, [{"body": message, "citedUids": raw.get("citedUids") or []}]
+
+    if not isinstance(raw_sections, list) or not raw_sections:
+        raise ExplainParseError(f"sections 不是非空数组：{type(raw_sections).__name__}")
+    if not all(isinstance(s, dict) for s in raw_sections):
+        raise ExplainParseError("sections 里有不是对象的元素")
+    return headline, raw_sections
+
+
+def _assemble_message(headline: str | None, sections: list[Section]) -> str:
+    """把结构化讲解拼成一段 Markdown。
+
+    **`message` 是派生物，不是第二份真相** —— 让 LLM 自己再写一遍 message，
+    两处必然不一致，而且没法判断以哪个为准。
+    """
+    blocks: list[str] = []
+    if headline:
+        blocks.append(f"## {headline}")
+    for s in sections:
+        if s.title:
+            blocks.append(f"### {s.title}")
+        blocks.append(s.body)
+    return "\n\n".join(blocks)
 
 
 # ==================== 降级模板（P2 搬过来，逻辑未改）====================

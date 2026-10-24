@@ -28,4 +28,13 @@ public class AgentAskRequest {
 
     /** 用户当前在图上的锚点，可为 null（直接问「这个项目是干嘛的」）。 */
     private AgentNodeRef focus;
+
+    /**
+     * 用户在源码大纲里锁定的方法（{@code owner#signature}），可为 null。
+     *
+     * <p>和 {@code focus} 是**两个锚点**：{@code focus} 决定画布看哪里，
+     * 这个决定「问的是哪个方法」。不要把它塞进 {@code focus.type=METHOD} ——
+     * 类级工具和 uiCommands 都只认类 uid。</p>
+     */
+    private String methodUid;
 }
