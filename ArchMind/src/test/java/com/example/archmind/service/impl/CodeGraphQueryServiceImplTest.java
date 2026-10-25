@@ -25,6 +25,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.*;
 
 /**
@@ -114,7 +115,12 @@ class CodeGraphQueryServiceImplTest {
         Value a = classNode("com.x.UserController", "UserController", "com.x", "CLASS");
         Value b = classNode("com.x.IUserApi", "IUserApi", "com.x", "INTERFACE");
         Result rows = resultOf(List.of(record("c", a), record("c", b)));
-        when(session.run(anyString(), anyMap())).thenReturn(rows);
+        // 核心类推导会先跑 rev + TopN 两条查询，这里让它们都返回空
+        Result revRows = resultOf(List.of());
+        Result coreRows = resultOf(List.of());
+        when(session.run(contains("GraphMeta"), anyMap())).thenReturn(revRows);
+        when(session.run(contains("LIMIT $n"), anyMap())).thenReturn(coreRows);
+        when(session.run(contains("ORDER BY c.packageName"), anyMap())).thenReturn(rows);
 
         List<ClassNodeDTO> list = service.listClasses(1L);
 

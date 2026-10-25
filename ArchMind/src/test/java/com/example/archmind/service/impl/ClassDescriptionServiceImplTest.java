@@ -1,5 +1,6 @@
 package com.example.archmind.service.impl;
 
+import com.example.archmind.service.ast.CodeGraphQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,12 +37,14 @@ class ClassDescriptionServiceImplTest {
     private Session session;
     @Mock
     private ChatModel chatModel;
+    @Mock
+    private CodeGraphQueryService codeGraphQueryService;
 
     private ClassDescriptionServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new ClassDescriptionServiceImpl(driver, chatModel);
+        service = new ClassDescriptionServiceImpl(driver, chatModel, codeGraphQueryService);
         when(driver.session()).thenReturn(session);
     }
 
@@ -103,28 +106,29 @@ class ClassDescriptionServiceImplTest {
 
     @Test
     void queryCoreClassesReturnsEmptyWhenNoClasses() {
-        Result empty = resultOf(List.of());
-        when(session.run(anyString(), anyMap())).thenReturn(empty);
+        when(codeGraphQueryService.coreClassUids(1L, 20)).thenReturn(List.of());
 
         assertTrue(service.queryCoreClasses(1L, 20).isEmpty());
     }
 
     @Test
     void queryCoreClassesMapsAndFillsSkeleton() {
-        Result top = resultOf(List.of(
-                record(Map.of("uid", strVal("com.x.UserService"), "name", strVal("UserService"),
-                        "pkg", strVal("com.x"), "kind", strVal("CLASS"))),
-                record(Map.of("uid", strVal("com.x.UserMapper"), "name", strVal("UserMapper"),
-                        "pkg", strVal("com.x"), "kind", strVal("INTERFACE")))));
+        when(codeGraphQueryService.coreClassUids(1L, 20))
+                .thenReturn(List.of("com.x.UserService", "com.x.UserMapper"));
         Result skel = resultOf(List.of(
                 record(Map.of("uid", strVal("com.x.UserService"),
+                        "name", strVal("UserService"),
+                        "pkg", strVal("com.x"),
+                        "kind", strVal("CLASS"),
                         "parents", listVal(List.of("BaseService")),
                         "methods", listVal(List.of("login(String)")))),
                 record(Map.of("uid", strVal("com.x.UserMapper"),
+                        "name", strVal("UserMapper"),
+                        "pkg", strVal("com.x"),
+                        "kind", strVal("INTERFACE"),
                         "parents", listVal(List.of()),
                         "methods", listVal(List.of("findByName(String)"))))));
 
-        when(session.run(contains("ORDER BY score"), anyMap())).thenReturn(top);
         when(session.run(contains("collect"), anyMap())).thenReturn(skel);
 
         List<ClassDescriptionServiceImpl.CoreClass> cores = service.queryCoreClasses(1L, 20);

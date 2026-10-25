@@ -205,4 +205,7 @@ def _node_from_class(clazz: ClassNode) -> GraphNode:
         name=clazz.simple_name,
         kind=clazz.kind,
         package_name=clazz.package_name,
+        description=clazz.description,
+        is_abstract=clazz.is_abstract,
+        core=clazz.core,
     )

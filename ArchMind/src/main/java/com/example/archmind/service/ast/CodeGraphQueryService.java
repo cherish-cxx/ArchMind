@@ -32,6 +32,17 @@ public interface CodeGraphQueryService {
     ClassRelationsResponse classRelations(Long projectId, String uid, RelationDirection direction);
 
     /**
+     * 分析阶段选出的核心类 uid（关联度 Top 20，按分数降序）。
+     *
+     * <p>前端用它区分「核心 / 次核心」着色；分析阶段的描述选类也走这里，
+     * 保证两处口径一致。实现按 (projectId, graphRev) 缓存。</p>
+     */
+    List<String> coreClassUids(Long projectId);
+
+    /** 同上，指定 Top N。 */
+    List<String> coreClassUids(Long projectId, int limit);
+
+    /**
      * 批量查这些 uid 里，**哪些确实是这个项目的类节点**。
      *
      * <p>供 P4.3 网关做 uiCommands 弱校验：Python 返回的出图命令可能指向

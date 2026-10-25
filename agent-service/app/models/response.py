@@ -106,6 +106,9 @@ class GraphNode(CamelModel):
     depth: int | None = None          # 仅 call-chain 有
     via_fanout: bool = False
     edge_count: int | None = None
+    description: str | None = None    # 没有描述时前端按需补齐
+    is_abstract: bool | None = None
+    core: bool | None = None
 
 
 class GraphEdge(CamelModel):

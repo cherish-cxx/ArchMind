@@ -52,17 +52,55 @@ def _focus_line(ctx: AgentContext) -> str:
     return base
 
 
-def _history_line(ctx: AgentContext, limit: int = 3) -> str:
-    """最近几轮的摘要。用于「再往上看看」这类承接上文的话。"""
+def _history_lines(ctx: AgentContext, limit: int | None = 3) -> list[str]:
+    """把历史渲染成「第 N 轮：问…答…」的行。
+
+    `limit=None` 表示**全部轮次** —— 意图判定和讲解都要承接整段对话，
+    只给最近几轮等于每三轮重新认识一次用户。
+    """
     if not ctx.history:
+        return []
+    items = ctx.history if limit is None else ctx.history[-limit:]
+    return [
+        f"  第{h.turn}轮：用户问「{h.q}」，你答「{h.a}」"
+        + (f"，结束时锚点 = {h.focus_after}" if h.focus_after else "")
+        for h in items
+    ]
+
+
+def _history_line(ctx: AgentContext, limit: int | None = None) -> str:
+    """把历史渲染成一段给 LLM 读的文字。
+
+    默认 `limit=None` = **全部轮次**。跨轮承接靠的就是它：
+    只给最近几轮，用户说到第 4 轮时系统就已经忘记第 1 轮了。
+    """
+    lines = _history_lines(ctx, limit)
+    if not lines:
         return ""
-    recent = ctx.history[-limit:]
-    lines = [f"  第{h.turn}轮：用户问「{h.q}」，你答「{h.a}」" for h in recent]
-    return "最近几轮对话：\n" + "\n".join(lines)
+    header = "完整对话历史：" if limit is None else f"最近 {limit} 轮对话："
+    return header + "\n" + "\n".join(lines)
+
+
+def _screen_line(ctx: AgentContext) -> str:
+    """前端最后一次上报的屏幕状态（一行摘要）。
+
+    只给数量和当前选中，**不给全部 uid** —— 讲解不需要把屏幕上每个节点都背下来，
+    给了反而会诱导模型去提图外的东西。`rev = 0` 表示从未上报，不渲染。
+    """
+    if ctx.viewport.rev <= 0:
+        return ""
+    focused = ctx.viewport.focused_node.uid if ctx.viewport.focused_node else "无"
+    truncated = "（已截断）" if ctx.viewport.truncated else ""
+    return (f"前端屏幕快照：rev={ctx.viewport.rev}，可见节点 "
+            f"{len(ctx.viewport.visible_nodes)} 个，当前选中 = {focused}{truncated}")
 
 
 def intent_messages(ctx: AgentContext, message: str) -> list[dict[str, str]]:
-    """Intent 判定（LLM #1）的输入。"""
+    """Intent 判定（LLM #1）的输入。
+
+    历史**不截断**：判断「这句话在接什么」同样需要整段对话，
+    只给最近几轮会让第 4 轮之后的承接失效。
+    """
     intents = "\n".join(f"- {i.value}：{_TRIGGERS[i]}" for i in Intent)
     context_block = "\n".join(
         x for x in (_focus_line(ctx), _history_line(ctx)) if x
@@ -241,8 +279,22 @@ def _render_evidence(envelopes: list[ToolEnvelope]) -> tuple[str, list[str]]:
     return "\n".join(lines) or "  （本轮没有图上的凭据）", uids
 
 
-def explain_messages(intent: Intent, envelopes: list[ToolEnvelope], question: str) -> list[dict[str, str]]:
-    """讲解（LLM #2）的输入。"""
+def explain_messages(
+    intent: Intent,
+    envelopes: list[ToolEnvelope],
+    question: str,
+    ctx: AgentContext,
+    rewritten: str | None = None,
+) -> list[dict[str, str]]:
+    """讲解（LLM #2）的输入。
+
+    **会话记忆在这里进入 prompt**：`ctx.history` 全量注入（不截断），
+    外加当前锚点与方法锁。没有它，第二轮开始 LLM #2 就是一张白纸 ——
+    「它呢」「刚才那个」都无处消解。
+
+    `question` 用**用户原话**，`rewritten` 只作为消歧提示。两者都给，
+    才既不失真、又能处理代词。
+    """
     blocks: list[str] = []
     for env in envelopes:
         if env.ok and env.data is not None:
@@ -277,6 +329,11 @@ def explain_messages(intent: Intent, envelopes: list[ToolEnvelope], question: st
    **类名、方法名、泛型、代码片段一律用反引号包起来** —— `List<String>` 这样裸着写，
    会被前端当成 HTML 标签吞掉。
 9. 正文**不要自己写 # 标题**（标题由 title 字段给），也不要复述这些规则。写 2~4 段。
+10. **「之前的对话」是背景，不是证据**：它只用来理解用户这句话在承接什么。
+    历史里出现过的类名 / uid **不能**当作本轮 `citedUids` 的来源 ——
+    本轮可引用的只有下面那张列表，越界的引用会被后端剔除。
+11. 用户这句话如果是承接上文（「它」「刚才那个」「继续说」），先用历史把指代解开再回答；
+    但如果历史和本题无关，**不要强行扯上关系**，更不要为了显得有记忆而复述历史。
 
 只输出一个 json 对象，不要任何解释、不要 markdown 代码块。字段：
 {{"headline": "一句话结论（不超过 40 字）",
@@ -285,10 +342,29 @@ def explain_messages(intent: Intent, envelopes: list[ToolEnvelope], question: st
 关于 citedUids：只填**给这一段提供依据**的 uid。如果这一段是在讲「图里没解析到」
 这类边界，就留空数组 —— 空数组是合法的，不要为了填满而硬塞 uid。"""
 
-    user = f"""\
-用户的问题：{question}
-判定的意图：{intent.value}
+    history = _history_lines(ctx, None)
+    history_block = "\n".join(history) if history else "（这是本会话的第一轮）"
+    rewritten_line = ""
+    if rewritten and rewritten.strip() and rewritten.strip() != question.strip():
+        rewritten_line = f"系统对这句话的理解：{rewritten.strip()}\n"
 
+    state_lines = [_focus_line(ctx)]
+    screen = _screen_line(ctx)
+    if screen:
+        state_lines.append(screen)
+    state_block = "\n".join(state_lines)
+
+    user = f"""\
+=== 当前会话状态 ===
+{state_block}
+
+=== 之前的对话（背景，不是本轮证据）===
+{history_block}
+
+=== 用户这轮的话 ===
+原话：{question}
+判定的意图：{intent.value}
+{rewritten_line}
 === 查询到的信息 ===
 {chr(10).join(blocks) or '（没有查到数据）'}
 

@@ -112,7 +112,9 @@ class ClassNode(CamelModel):
     simple_name: str
     package_name: str
     kind: NodeKind
-    description: str | None = None   # 只有核心类有
+    description: str | None = None   # 核心类由分析阶段写入，其余类按需补齐
+    is_abstract: bool | None = None  # 按需描述只覆盖实现类
+    core: bool | None = None         # 分析阶段按关联度选出的核心类
     file_path: str | None = None
     start_line: int | None = None
     end_line: int | None = None

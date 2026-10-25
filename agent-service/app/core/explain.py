@@ -24,6 +24,7 @@ from typing import Any
 from app.core.guard import split_citations
 from app.core.llm import Completer, LLMError, LLMNotConfiguredError
 from app.core.prompt import explain_messages
+from app.models.context import AgentContext
 from app.models.intent import Intent
 from app.models.response import Citation, NodeRefType, Section
 from app.models.tool import CallChain, GapReason, ProjectOverview, ToolEnvelope
@@ -49,20 +50,31 @@ def _simple(uid: str) -> str:
 
 
 async def explain(
+    ctx: AgentContext,
     intent: Intent,
     envelopes: list[ToolEnvelope],
     evidenced: set[str],
     question: str,
     llm: Completer,
+    *,
+    rewritten: str | None = None,
 ) -> ExplainResult:
     """讲解这一轮的查询结果。
+
+    `ctx` 只用于组装**会话记忆**（完整 history + 当前锚点），不参与 evidence 判定 ——
+    citedUids 的真相仍然只有本轮工具返回的 evidence。
+
+    `question` 是用户原话；`rewritten` 是 LLM #1 消解代词后的版本，作为提示附带。
 
     ⚠️ `LLMNotConfiguredError` **原样抛**：没配 key 是配置错误（该 500），
     不是「LLM 抖了一下」—— 把它降级成模板，就等于让一个配置问题伪装成正常运行。
     这个区分和 P2 里 java_client 对 401 的处理是同一条原则。
     """
     try:
-        raw = await llm.complete(explain_messages(intent, envelopes, question), json_mode=True)
+        raw = await llm.complete(
+            explain_messages(intent, envelopes, question, ctx, rewritten=rewritten),
+            json_mode=True,
+        )
         return _parse_and_ground(raw.text, evidenced)
     except LLMNotConfiguredError:
         raise

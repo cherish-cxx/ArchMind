@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 用底层 Driver 直查 Neo4j。每条边 6 个方向各一条 Cypher，Java 侧按「目标类」聚合成类级关联。
@@ -80,7 +81,32 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
     private static final String EXISTING_UIDS =
             "MATCH (c:Class {projectId: $pid}) WHERE c.uid IN $uids RETURN c.uid AS uid";
 
+    /** 图版本号。核心类集合按 (projectId, rev) 缓存，重分析后自动失效 */
+    private static final String GRAPH_REV =
+            "MATCH (g:GraphMeta {projectId: $pid}) RETURN g.rev AS rev";
+
+    /**
+     * 核心类 = 关联度 Top N。与 ClassDescriptionServiceImpl 的分析阶段选类同一口径，
+     * 保证「谁有核心标记」和「谁被分析阶段描述过」不会各说各话。
+     */
+    private static final String TOP_CORE_CLASSES = """
+            MATCH (c:Class {projectId: $pid})
+            WITH c,
+              size([(c)-[:EXTENDS|IMPLEMENTS|DEPENDS]->(:Class {projectId: $pid}) | 1]) AS outRel,
+              size([(:Class {projectId: $pid})-[:EXTENDS|IMPLEMENTS|DEPENDS]->(c) | 1]) AS inRel,
+              size([(m:Method {projectId: $pid, owner: c.uid})-[:CALLS]->(:Method {projectId: $pid}) | 1]) AS outCalls,
+              size([(:Method {projectId: $pid})-[:CALLS]->(m:Method {projectId: $pid, owner: c.uid}) | 1]) AS inCalls
+            RETURN c.uid AS uid
+            ORDER BY outRel + inRel + outCalls + inCalls DESC
+            LIMIT $n
+            """;
+
     private final Driver driver;
+
+    private record CoreCache(long rev, List<String> uids) {
+    }
+
+    private final ConcurrentHashMap<Long, CoreCache> coreCache = new ConcurrentHashMap<>();
 
     @Override
     public List<ClassNodeDTO> listClasses(Long projectId) {
@@ -96,11 +122,12 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
      */
     @Override
     public List<ClassNodeDTO> listClasses(Long projectId, int limit) {
+        Set<String> coreUids = Set.copyOf(coreClassUids(projectId));
         try (Session session = driver.session()) {
             Result result = session.run(LIST_CLASSES, Map.of("pid", projectId, "limit", limit));
             List<ClassNodeDTO> list = new ArrayList<>();
             while (result.hasNext()) {
-                list.add(toClassNode(result.next().get("c")));
+                list.add(toClassNode(result.next().get("c"), coreUids));
             }
             return list;
         }
@@ -124,6 +151,7 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
      */
     @Override
     public ClassRelationsResponse classRelations(Long projectId, String uid, RelationDirection direction) {
+        Set<String> coreUids = Set.copyOf(coreClassUids(projectId));
 //        先建立Neo4j的通信
         try (Session session = driver.session()) {
 //           将参数放以键值的方式存储到变量params
@@ -134,7 +162,7 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
             Result centerRes = session.run(FIND_CENTER, params);
 
             if (centerRes.hasNext()) {
-                center = toClassNode(centerRes.next().get("c"));
+                center = toClassNode(centerRes.next().get("c"), coreUids);
             }
             if (center == null) {
                 throw new BusinessException("类不存在: " + uid);
@@ -146,16 +174,16 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
             // 只跑需要的那一侧：原来固定跑 6 条 Cypher，单方向调用会白跑 5 条
             if (direction != RelationDirection.DOWN) {
                 ClassRelationsResponse.Upstream up = new ClassRelationsResponse.Upstream();
-                up.setCallers(aggregateCalls(session.run(CALLERS, params)));
-                up.setDependents(aggregateDepends(session.run(DEPENDENTS, params)));
-                up.setSubclasses(aggregateInherit(session.run(SUBCLASSES, params)));
+                up.setCallers(aggregateCalls(session.run(CALLERS, params), coreUids));
+                up.setDependents(aggregateDepends(session.run(DEPENDENTS, params), coreUids));
+                up.setSubclasses(aggregateInherit(session.run(SUBCLASSES, params), coreUids));
                 resp.setUpstream(up);
             }
             if (direction != RelationDirection.UP) {
                 ClassRelationsResponse.Downstream down = new ClassRelationsResponse.Downstream();
-                down.setCallees(aggregateCalls(session.run(CALLEES, params)));
-                down.setDependencies(aggregateDepends(session.run(DEPENDENCIES, params)));
-                down.setParents(aggregateInherit(session.run(PARENTS, params)));
+                down.setCallees(aggregateCalls(session.run(CALLEES, params), coreUids));
+                down.setDependencies(aggregateDepends(session.run(DEPENDENCIES, params), coreUids));
+                down.setParents(aggregateInherit(session.run(PARENTS, params), coreUids));
                 resp.setDownstream(down);
             }
 
@@ -188,13 +216,13 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
     // ==================== 聚合：把行按「目标类 uid」归并 ====================
 
     /** CALLS 方向：同一对 (来源类→目标类) 可能多条方法级边，聚成一条，evidence 逐条累加 */
-    private List<RelatedClassDTO> aggregateCalls(Result result) {
+    private List<RelatedClassDTO> aggregateCalls(Result result, Set<String> coreUids) {
         Map<String, RelatedClassDTO> map = new LinkedHashMap<>();
         while (result.hasNext()) {
             Record r = result.next();
             RelatedClassDTO rel = map.computeIfAbsent(r.get("cc").get("uid").asString(), k -> {
                 RelatedClassDTO x = new RelatedClassDTO();
-                x.setClazz(toClassNode(r.get("cc")));
+                x.setClazz(toClassNode(r.get("cc"), coreUids));
                 x.setRelationType("CALLS");
                 x.setEvidence(new ArrayList<>());
                 return x;
@@ -205,13 +233,13 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
     }
 
     /** DEPENDS 方向：via 作为证据（field / signature） */
-    private List<RelatedClassDTO> aggregateDepends(Result result) {
+    private List<RelatedClassDTO> aggregateDepends(Result result, Set<String> coreUids) {
         Map<String, RelatedClassDTO> map = new LinkedHashMap<>();
         while (result.hasNext()) {
             Record r = result.next();
             RelatedClassDTO rel = map.computeIfAbsent(r.get("cc").get("uid").asString(), k -> {
                 RelatedClassDTO x = new RelatedClassDTO();
-                x.setClazz(toClassNode(r.get("cc")));
+                x.setClazz(toClassNode(r.get("cc"), coreUids));
                 x.setRelationType("DEPENDS");
                 x.setEvidence(new ArrayList<>());
                 return x;
@@ -222,14 +250,14 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
     }
 
     /** EXTENDS / IMPLEMENTS 方向：关系类型即 rel，无额外证据 */
-    private List<RelatedClassDTO> aggregateInherit(Result result) {
+    private List<RelatedClassDTO> aggregateInherit(Result result, Set<String> coreUids) {
         Map<String, RelatedClassDTO> map = new LinkedHashMap<>();
         while (result.hasNext()) {
             Record r = result.next();
             String type = strOrNull(r.get("rel"));
             map.computeIfAbsent(r.get("cc").get("uid").asString(), k -> {
                 RelatedClassDTO x = new RelatedClassDTO();
-                x.setClazz(toClassNode(r.get("cc")));
+                x.setClazz(toClassNode(r.get("cc"), coreUids));
                 x.setRelationType(type);
                 x.setEvidence(new ArrayList<>());
                 return x;
@@ -238,15 +266,62 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
         return new ArrayList<>(map.values());
     }
 
+    // ==================== 核心类 ====================
+
+    @Override
+    public List<String> coreClassUids(Long projectId) {
+        return coreClassUids(projectId, 20);
+    }
+
+    /**
+     * 核心类 uid 列表，按关联度降序。按 (projectId, rev) 缓存 ——
+     * 每次请求只多一条 rev 查询，避免把同一份排名反复算。
+     */
+    @Override
+    public List<String> coreClassUids(Long projectId, int limit) {
+        long rev = graphRev(projectId);
+        CoreCache cached = coreCache.get(projectId);
+        if (cached != null && cached.rev() == rev) {
+            return cached.uids();
+        }
+        List<String> uids = new ArrayList<>();
+        try (Session session = driver.session()) {
+            Result result = session.run(TOP_CORE_CLASSES, Map.of("pid", projectId, "n", limit));
+            while (result.hasNext()) {
+                Value uid = result.next().get("uid");
+                if (uid != null && !uid.isNull()) {
+                    uids.add(uid.asString());
+                }
+            }
+        }
+        List<String> frozen = List.copyOf(uids);
+        coreCache.put(projectId, new CoreCache(rev, frozen));
+        return frozen;
+    }
+
+    private long graphRev(Long projectId) {
+        try (Session session = driver.session()) {
+            Result result = session.run(GRAPH_REV, Map.of("pid", projectId));
+            if (!result.hasNext()) {
+                return 0L;
+            }
+            Value rev = result.next().get("rev");
+            return rev == null || rev.isNull() ? 0L : rev.asLong(0L);
+        }
+    }
+
     // ==================== 工具 ====================
 
-    private ClassNodeDTO toClassNode(Value v) {
+    private ClassNodeDTO toClassNode(Value v, Set<String> coreUids) {
         ClassNodeDTO d = new ClassNodeDTO();
-        d.setQualifiedName(v.get("uid").asString());
+        String uid = v.get("uid").asString();
+        d.setQualifiedName(uid);
         d.setSimpleName(v.get("name").asString());
         d.setPackageName(v.get("packageName").asString());
         d.setKind(v.get("kind").asString());
         d.setDescription(strOrNull(v.get("description")));
+        d.setIsAbstract(boolOrNull(v.get("isAbstract")));
+        d.setCore(coreUids.contains(uid));
         d.setFilePath(strOrNull(v.get("filePath")));
         d.setStartLine(intOrNull(v.get("startLine")));
         d.setEndLine(intOrNull(v.get("endLine")));
@@ -255,6 +330,10 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
 
     private String strOrNull(Value v) {
         return v == null || v.isNull() ? null : v.asString();
+    }
+
+    private Boolean boolOrNull(Value v) {
+        return v == null || v.isNull() ? null : v.asBoolean();
     }
 
     private Integer intOrNull(Value v) {

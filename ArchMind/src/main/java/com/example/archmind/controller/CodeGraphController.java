@@ -2,9 +2,12 @@ package com.example.archmind.controller;
 
 import com.example.archmind.common.result.Result;
 import com.example.archmind.common.util.CheckProjectUtil;
+import com.example.archmind.dto.request.ClassDescriptionRequest;
+import com.example.archmind.dto.response.ClassDescriptionsResponse;
 import com.example.archmind.dto.response.ClassNodeDTO;
 import com.example.archmind.dto.response.ClassRelationsResponse;
 import com.example.archmind.dto.response.ClassSourceResponse;
+import com.example.archmind.service.ClassDescriptionService;
 import com.example.archmind.service.ClassSourceService;
 import com.example.archmind.service.ast.CodeGraphQueryService;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +25,7 @@ public class CodeGraphController {
 
     private final CodeGraphQueryService codeGraphQueryService;
     private final ClassSourceService classSourceService;
+    private final ClassDescriptionService classDescriptionService;
     private final CheckProjectUtil checkProjectUtil;
 
     /** 项目全部类清单，前端「代码探索」的入口 */
@@ -37,6 +41,20 @@ public class CodeGraphController {
                                                         @RequestParam String uid) {
         checkProjectUtil.checkProject(projectId);
         return Result.success(codeGraphQueryService.classRelations(projectId, uid));
+    }
+
+    /**
+     * 按需生成类描述：前端把「画布上有、但没有描述」的类批量送来。
+     * 已有描述的会被跳过；force=true 放宽类型限制（中心节点用）。
+     */
+    @PostMapping("/{projectId}/class/descriptions")
+    public Result<ClassDescriptionsResponse> describeClasses(
+            @PathVariable Long projectId,
+            @RequestBody(required = false) ClassDescriptionRequest body) {
+        checkProjectUtil.checkProject(projectId);
+        List<String> uids = body == null ? List.of() : body.getUids();
+        boolean force = body != null && body.isForce();
+        return Result.success(classDescriptionService.describeClasses(projectId, uids, force));
     }
 
     /** 点某个类 → 打开代码抽屉：按类节点记录的文件与行区间切出源码 */

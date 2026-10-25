@@ -9,12 +9,21 @@ import pytest
 
 from app.core.explain import ExplainParseError, _parse_and_ground, explain
 from app.core.prompt import explain_messages
+from app.models.context import AgentContext, HistoryItem
 from app.models.intent import Intent
+from app.models.response import NodeRef, NodeRefType
 from fakes import FakeLLM, ok_chain
 
 A = "com.demo.A"
 B = "com.demo.B"
 GHOST = "com.demo.Ghost"
+
+
+def _ctx(history: list[HistoryItem] | None = None, focus_uid: str | None = None) -> AgentContext:
+    focus = NodeRef(type=NodeRefType.CLASS, uid=focus_uid) if focus_uid else None
+    return AgentContext(
+        conversation_id="c_test", project_id=1, focus=focus, history=history or []
+    )
 
 
 def _payload(**overrides) -> str:
@@ -100,7 +109,7 @@ def test_unusable_output_raises(text):
 
 async def test_garbage_falls_back_to_template():
     """LLM 吐垃圾 → 模板降级，sections 为空（前端据此回落到 message）。"""
-    r = await explain(Intent.EXPLORE_FLOW, [ok_chain()], {A, B}, "问", FakeLLM(["oops"]))
+    r = await explain(_ctx(), Intent.EXPLORE_FLOW, [ok_chain()], {A, B}, "问", FakeLLM(["oops"]))
 
     assert r.degraded is True
     assert r.sections == []
@@ -108,7 +117,7 @@ async def test_garbage_falls_back_to_template():
 
 
 def test_prompt_carries_the_new_contract():
-    system = explain_messages(Intent.EXPLORE_FLOW, [], "问")[0]["content"]
+    system = explain_messages(Intent.EXPLORE_FLOW, [], "问", _ctx())[0]["content"]
 
     for token in ("headline", "sections", "citedUids", "json"):
         assert token in system
@@ -119,3 +128,46 @@ def test_prompt_carries_the_new_contract():
     assert "刚接手这个项目" in system
     assert "先结论，再路径" in system
     assert "禁止只罗列类名" in system
+
+
+# ==================== 会话记忆进入 LLM #2 ====================
+
+
+def test_explain_prompt_carries_all_history_and_current_focus():
+    """全部历史都要进 prompt —— 只给最近三轮等于每三轮重新认识一次用户。"""
+    history = [
+        HistoryItem(turn=i, intent=Intent.EXPLORE_FLOW,
+                    q=f"第{i}问", a=f"第{i}答", focus_after=A if i % 2 else B)
+        for i in range(1, 6)
+    ]
+    ctx = _ctx(history=history, focus_uid=A)
+
+    user = explain_messages(Intent.EXPLORE_FLOW, [], "它呢", ctx)[1]["content"]
+
+    for i in range(1, 6):
+        assert f"第{i}问" in user, f"第 {i} 轮被截断了"
+        assert f"第{i}答" in user
+    assert f"当前锚点 focus = {A}" in user
+    assert "原话：它呢" in user
+
+
+def test_explain_prompt_says_first_turn_when_history_empty():
+    user = explain_messages(Intent.EXPLORE_FLOW, [], "问", _ctx())[1]["content"]
+    assert "这是本会话的第一轮" in user
+
+
+def test_explain_prompt_marks_rewritten_as_interpretation():
+    """原话与改写同时出现，改写过的话必须标明是「系统理解」，不能冒充用户原话。"""
+    ctx = _ctx(focus_uid=A)
+    user = explain_messages(
+        Intent.EXPLORE_FLOW, [], "它呢", ctx, rewritten=f"{A} 的调用方是谁",
+    )[1]["content"]
+
+    assert "原话：它呢" in user
+    assert f"系统对这句话的理解：{A} 的调用方是谁" in user
+
+
+def test_history_is_background_not_evidence():
+    system = explain_messages(Intent.EXPLORE_FLOW, [], "问", _ctx())[0]["content"]
+    assert "背景，不是证据" in system
+    assert "citedUids" in system

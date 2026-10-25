@@ -121,7 +121,15 @@ async def run_turn(
     evidenced = evidence_uids(envelopes)
     llm_started = time.perf_counter()
     explanation = await explain(
-        intent_result.intent, envelopes, evidenced, intent_result.rewritten_query or message, llm
+        ctx,
+        intent_result.intent,
+        envelopes,
+        evidenced,
+        # 原话是**问题本身**，改写句只作为消歧提示 —— 两者都给 LLM #2，
+        # 才既不失真、又能消解「它」。
+        message,
+        llm,
+        rewritten=intent_result.rewritten_query,
     )
     steps.append(Step(n=len(steps) + 1, type=StepType.LLM,
                       detail="讲解(降级)" if explanation.degraded else "讲解",

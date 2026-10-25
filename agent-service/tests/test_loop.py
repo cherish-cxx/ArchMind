@@ -301,6 +301,22 @@ async def test_history_and_turn_count_accumulate_across_turns():
     assert ctx.history[0].intent is Intent.EXPLORE_FLOW
 
 
+async def test_second_turn_llm2_sees_first_turn_history():
+    """记忆必须真的进到 LLM #2 的 prompt，而不是只存在 Redis 里。"""
+    java = FakeJava(ok_chain())
+    llm = FakeLLM([_intent(Intent.EXPLORE_FLOW), _explain("第一轮回答。")] * 2)
+    ctx = _ctx()
+
+    await run_turn(ctx, "第一次", java, llm)
+    await run_turn(ctx, "第二次", java, llm)
+
+    # 第 2 次讲解是第 4 个 LLM 调用（1:intent, 2:explain, 3:intent, 4:explain）
+    user = llm.calls[3]["messages"][1]["content"]
+    assert "第一次" in user, "第一轮的原话必须出现在第二轮讲解的 prompt 里"
+    assert "第一轮回答。" in user, "第一轮的摘要必须出现在第二轮讲解的 prompt 里"
+    assert "原话：第二次" in user, "本轮问题要用用户原话，而不是改写后的句子"
+
+
 async def test_per_turn_counters_reset():
     """`toolCallsThisTurn` 每轮必须归零 —— 不归零的话预算会跨轮累积，几轮之后就不让查了。"""
     java = FakeJava(ok_chain())

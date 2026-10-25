@@ -13,7 +13,7 @@ import pytest
 from app.core.intent import IntentParseError, classify_intent, parse_intent
 from app.core.llm import LLMNotConfiguredError, LLMTransportError
 from app.core.prompt import intent_messages
-from app.models.context import AgentContext
+from app.models.context import AgentContext, HistoryItem
 from app.models.intent import CONFIDENCE_THRESHOLD, Intent
 from app.models.response import NodeRef, NodeRefType
 from fakes import FakeLLM
@@ -151,3 +151,22 @@ def test_intent_prompt_says_so_when_no_focus():
     bare = AgentContext(conversation_id="c", project_id=1)
     messages = intent_messages(bare, "这个项目干嘛的")
     assert "没有锚点" in messages[1]["content"]
+
+
+def test_intent_prompt_carries_all_history():
+    """LLM #1 也放开到全部历史 —— 第 4 轮之后的承接不能凭空断掉。"""
+    ctx = AgentContext(
+        conversation_id="c",
+        project_id=1,
+        history=[
+            HistoryItem(turn=i, intent=Intent.EXPLORE_FLOW, q=f"第{i}问", a=f"第{i}答")
+            for i in range(1, 6)
+        ],
+    )
+
+    user = intent_messages(ctx, "继续说")[1]["content"]
+
+    for i in range(1, 6):
+        assert f"第{i}问" in user, f"第 {i} 轮被截断了"
+        assert f"第{i}答" in user
+    assert "完整对话历史" in user
