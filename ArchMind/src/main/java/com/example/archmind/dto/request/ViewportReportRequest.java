@@ -42,4 +42,16 @@ public class ViewportReportRequest {
     private List<RelationRefDTO> visibleRelations = new ArrayList<>();
 
     private AgentNodeRef focusedNode;
+
+    /** 当前页面：cumulative | focus。老前端不传时 Python 侧按 cumulative 处理。 */
+    private String mode;
+
+    /** 焦点页的中心类；累积页为 null。 */
+    private String centerUid;
+
+    /** 焦点页固定 1；累积页 0。 */
+    private Integer hops;
+
+    /** 被折进框、不在 visibleNodes 里的类数。 */
+    private Integer foldedCount;
 }

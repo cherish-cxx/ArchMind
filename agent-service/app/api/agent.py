@@ -262,6 +262,10 @@ async def viewport(req: ViewportReport, store: ContextStore = Depends(get_contex
         visible_nodes=req.visible_nodes,
         visible_relations=req.visible_relations,
         focused_node=req.focused_node,
+        mode=req.mode,
+        center_uid=req.center_uid,
+        hops=req.hops,
+        folded_count=req.folded_count,
     )
     await store.save(ctx)
     return {"accepted": True, "reason": None, "rev": ctx.viewport.rev}

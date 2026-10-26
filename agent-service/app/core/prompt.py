@@ -84,15 +84,21 @@ def _history_line(ctx: AgentContext, limit: int | None = None) -> str:
 def _screen_line(ctx: AgentContext) -> str:
     """前端最后一次上报的屏幕状态（一行摘要）。
 
-    只给数量和当前选中，**不给全部 uid** —— 讲解不需要把屏幕上每个节点都背下来，
-    给了反而会诱导模型去提图外的东西。`rev = 0` 表示从未上报，不渲染。
+    只给数量、页面类型和当前选中，**不给全部 uid** —— 讲解不需要把屏幕上每个节点
+    都背下来，给了反而会诱导模型去提图外的东西。`rev = 0` 表示从未上报，不渲染。
     """
     if ctx.viewport.rev <= 0:
         return ""
-    focused = ctx.viewport.focused_node.uid if ctx.viewport.focused_node else "无"
-    truncated = "（已截断）" if ctx.viewport.truncated else ""
-    return (f"前端屏幕快照：rev={ctx.viewport.rev}，可见节点 "
-            f"{len(ctx.viewport.visible_nodes)} 个，当前选中 = {focused}{truncated}")
+    vp = ctx.viewport
+    focused = vp.focused_node.uid if vp.focused_node else "无"
+    truncated = "（已截断）" if vp.truncated else ""
+    if vp.mode == "focus":
+        scope = f"焦点视图（中心 = {vp.center_uid or focused}，{vp.hops or 1} 跳）"
+    else:
+        scope = "累积视图"
+    folded = f"，有 {vp.folded_count} 个类被折叠进框" if vp.folded_count else ""
+    return (f"前端屏幕快照：{scope}，可见节点 {len(vp.visible_nodes)} 个"
+            f"{folded}，当前选中 = {focused}{truncated}")
 
 
 def intent_messages(ctx: AgentContext, message: str) -> list[dict[str, str]]:

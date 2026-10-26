@@ -86,6 +86,10 @@ class Viewport(CamelModel):
     visible_relations: list[RelationRef] = []
     focused_node: NodeRef | None = None       # FOCUS_NODE 的「选中」语义
     truncated: bool = False                   # 超上限被截断时置 true
+    mode: str = "cumulative"                  # cumulative | focus
+    center_uid: str | None = None             # 焦点视图的中心
+    hops: int = 0                             # 焦点视图固定 1；累积视图 0
+    folded_count: int = 0                     # 被折进框、不在 visible_nodes 里的类数
 
     @classmethod
     def from_report(
@@ -95,6 +99,10 @@ class Viewport(CamelModel):
         visible_nodes: list[str],
         visible_relations: list[RelationRef],
         focused_node: NodeRef | None,
+        mode: str = "cumulative",
+        center_uid: str | None = None,
+        hops: int = 0,
+        folded_count: int = 0,
     ) -> "Viewport":
         """把前端上报的原始列表收进快照，**超上限就截断并置 `truncated`**。
 
@@ -108,6 +116,10 @@ class Viewport(CamelModel):
             visible_nodes=nodes,
             visible_relations=rels,
             focused_node=focused_node,
+            mode=mode,
+            center_uid=center_uid,
+            hops=hops,
+            folded_count=folded_count,
             truncated=(
                 len(visible_nodes) > VIEWPORT_MAX_ITEMS
                 or len(visible_relations) > VIEWPORT_MAX_ITEMS

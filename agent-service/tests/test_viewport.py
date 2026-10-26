@@ -67,6 +67,23 @@ def test_viewport_under_limit_not_truncated():
     assert v.truncated is False
 
 
+def test_viewport_carries_focus_page_fields():
+    v = Viewport.from_report(
+        rev=2,
+        visible_nodes=["a.B", "a.C"],
+        visible_relations=[],
+        focused_node=_cls("a.B"),
+        mode="focus",
+        center_uid="a.B",
+        hops=1,
+        folded_count=3,
+    )
+    assert v.mode == "focus"
+    assert v.center_uid == "a.B"
+    assert v.hops == 1
+    assert v.folded_count == 3
+
+
 # ==================== rev 乐观锁（验收项 1）====================
 
 
@@ -104,6 +121,25 @@ def test_report_truncates_through_the_route(client, store):
     v = store.peek(_PROJECT_ID, cid).viewport
     assert len(v.visible_nodes) == VIEWPORT_MAX_ITEMS
     assert v.truncated is True
+
+
+def test_focus_page_report_round_trips(client, store):
+    cid = store.seed(_PROJECT_ID, "c6").conversation_id
+
+    body = client.post(
+        "/internal/agent/viewport", headers=_H,
+        json=_report(
+            cid, 1, mode="focus", centerUid="a.B", hops=1,
+            foldedCount=4, visibleNodes=["a.B"],
+        ),
+    ).json()
+
+    assert body["accepted"] is True
+    v = store.peek(_PROJECT_ID, cid).viewport
+    assert v.mode == "focus"
+    assert v.center_uid == "a.B"
+    assert v.hops == 1
+    assert v.folded_count == 4
 
 
 # ==================== 上报不许创建会话（决策 A）====================
@@ -144,6 +180,9 @@ def test_get_conversation_returns_snapshot(client, store):
     assert body["viewport"]["rev"] == 7
     assert body["viewport"]["visibleNodes"] == ["a.B"]
     assert body["viewport"]["focusedNode"] == {"type": "CLASS", "uid": "a.B"}
+    assert body["viewport"]["mode"] == "cumulative"
+    assert body["viewport"]["centerUid"] is None
+    assert body["viewport"]["foldedCount"] == 0
     assert body["focus"] == {"type": "CLASS", "uid": "a.B"}
     assert "history" not in body        # ★ 不给 Agent 的内部记忆
 

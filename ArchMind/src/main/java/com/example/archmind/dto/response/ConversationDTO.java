@@ -33,5 +33,10 @@ public class ConversationDTO {
         private AgentNodeRef focusedNode;
         /** 超上限被截断时置 true —— 截断可以，假装没截断不行。 */
         private Boolean truncated;
+        /** cumulative | focus */
+        private String mode;
+        private String centerUid;
+        private Integer hops;
+        private Integer foldedCount;
     }
 }

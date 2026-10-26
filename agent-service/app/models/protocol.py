@@ -86,6 +86,10 @@ class ViewportReport(CamelModel):
     visible_nodes: list[str] = []
     visible_relations: list[RelationRef] = []
     focused_node: NodeRef | None = None
+    mode: str = "cumulative"                  # cumulative | focus
+    center_uid: str | None = None             # 焦点视图的中心
+    hops: int = 0                             # 焦点视图固定 1；累积视图 0
+    folded_count: int = 0                     # 被折进框、不在 visible_nodes 里的类数
 
 
 class EvictRequest(CamelModel):
