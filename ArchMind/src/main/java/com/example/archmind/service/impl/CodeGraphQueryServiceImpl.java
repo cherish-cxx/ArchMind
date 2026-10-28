@@ -1,5 +1,6 @@
 package com.example.archmind.service.impl;
 
+import com.example.archmind.common.constant.GraphPredicates;
 import com.example.archmind.common.exception.BusinessException;
 import com.example.archmind.dto.response.ClassNodeDTO;
 import com.example.archmind.dto.response.ClassPageResponse;
@@ -38,12 +39,16 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
     private static final String LIST_CLASSES =
             "MATCH (c:Class {projectId: $pid}) RETURN c ORDER BY c.packageName, c.name LIMIT $limit";
 
-    /** keyset 分页：按 uid 升序，游标是上一页最后一个 uid。 */
+    /**
+     * keyset 分页：按 uid 升序，游标是上一页最后一个 uid。
+     * 只返回顶层类 —— 与描述补齐的 describable 口径一致，否则索引数量校验会多出内部类。
+     */
     private static final String LIST_CLASSES_PAGE = """
             MATCH (c:Class {projectId: $pid})
-            WHERE $afterUid IS NULL OR c.uid > $afterUid
+            WHERE ($afterUid IS NULL OR c.uid > $afterUid)
+              AND %s
             RETURN c ORDER BY c.uid LIMIT $limit
-            """;
+            """.formatted(GraphPredicates.TOP_LEVEL);
 
     private static final String FIND_CENTER =
             "MATCH (c:Class {projectId: $pid, uid: $uid}) RETURN c";

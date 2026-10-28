@@ -1,5 +1,6 @@
 package com.example.archmind.service.impl;
 
+import com.example.archmind.common.constant.GraphPredicates;
 import com.example.archmind.common.constant.ProjectAnalysisStatus;
 import com.example.archmind.common.constant.RedisKeys;
 import com.example.archmind.common.exception.BusinessException;
@@ -85,9 +86,8 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
      * 顶层类判定：AST 里内部类的 uid 是「外层类名 + '.' + 简单类名」，
      * 只有顶层类满足 uid == 包名 + 简单类名。不能靠 '$' 判断 —— 这里的命名用点号。
      */
-    private static final String TOP_LEVEL =
-            "c.uid = (CASE WHEN coalesce(c.packageName, '') = '' THEN c.name "
-                    + "ELSE c.packageName + '.' + c.name END)";
+    /** 与索引分页共用同一口径，见 {@link GraphPredicates#TOP_LEVEL}。 */
+    private static final String TOP_LEVEL = GraphPredicates.TOP_LEVEL;
 
     /**
      * 选批查询。{@code WITH c ORDER BY c.uid LIMIT $limit} 必须在展开关系之前，
