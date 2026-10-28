@@ -135,15 +135,24 @@ def intent_messages(
     # 没有候选时这一段是空串 —— prompt 与 R4 之前逐字相同，老行为不受影响
     candidate_block = _candidates_block(candidates)
     candidate_section = ""
+    entity_rule = "- slots.entityRef 填用户指代的类（有锚点时通常就是它）；拿不准就留 null。"
     if candidate_block:
+        # 有候选时，entityRef 的语义变了：不是"这句话在指代谁"，而是"这轮从哪儿开始查"。
+        # 不写清楚这一条，模型会把流程类问题判成"不指向具体类"而留 null，
+        # 「不点类也能问」就永远走不通。
         candidate_section = f"""
 {candidate_block}
 
-候选使用规则：
-- slots.entityRef 只能填上面候选里的全限定名，照抄，不要改大小写、不要自己拼包名。
-- 问题不指向具体某个类（问项目整体、问模块职责）时，entityRef 必须留 null，不要硬选一个。
-- 候选里没有合适的就留 null —— 系统会改问用户一句，那比拉出一张错的图好。
+候选使用规则（这一轮的锚点就靠它）：
+- 只要候选里有与问题相关的类，**必须选一个**填进 slots.entityRef —— 它是这轮查图的**起点**。
+  问流程、问实现、问某个模块怎么走的，同样要选：系统需要一个起点去查调用链，
+  这不代表这个问题"只关于那一个类"。
+- 优先选业务入口（Controller、Service 实现类），别选 DTO、参数类、工具类、配置类、测试类。
+- 只有候选与问题**完全不相关**时才留 null。
+- 照抄候选里的全限定名，不要改大小写、不要自己拼包名。
 """
+        entity_rule = ("- slots.entityRef 必须从上面候选里选一个（见候选使用规则），"
+                       "它是这轮查图的起点；只有候选完全不相关时才留 null。")
 
     system = f"""\
 你是代码图谱问答系统的意图分类器。用户会问关于一个 Java 项目的问题，你要判断他到底想干什么。
@@ -155,7 +164,7 @@ def intent_messages(
 判定要求：
 - confidence 是你对自己判断的把握，0~1。**拿不准就给低分**，不要硬凑高分 ——
   系统会在低分时改问用户一句，那比拉出一张错误的图好得多。
-- slots.entityRef 填用户指代的类（有锚点时通常就是它）；拿不准就留 null。
+{entity_rule}
 - slots.direction 只在明确问上下游时填 "DOWN" 或 "UP"。
 - rewrittenQuery 是把代词消解掉之后的完整问句。
 

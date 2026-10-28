@@ -224,7 +224,9 @@ def test_intent_prompt_has_candidates_when_present():
     msgs = intent_messages(_ctx(), "下单扣库存怎么实现的", _cands())
     system = msgs[0]["content"]
     assert "com.moviesys.order.OrderServiceImpl" in system
-    assert "entityRef 只能从" in system
+    assert "候选使用规则" in system
+    # 有候选时 entityRef 的语义是"本轮起点"，不能再说成"用户指代的类"
+    assert "这轮查图的起点" in system
 
 
 def test_intent_prompt_unchanged_without_candidates():
