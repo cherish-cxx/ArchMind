@@ -12,6 +12,7 @@
 
 from app.core.llm import LLMResult
 from app.models.context import AgentContext
+from app.models.retrieval import Candidate, Retrieval
 from app.models.tool import CallChain, ClassNode, NodeKind, ToolEnvelope
 
 
@@ -247,3 +248,50 @@ class FakeContextStore:
     def peek(self, project_id: int, conversation_id: str) -> AgentContext | None:
         """同步读，用来断言「写进去了没」/「有没有被偷偷创建」。"""
         return self._data.get((project_id, conversation_id))
+
+
+class FakeRetriever:
+    """检索替身。
+
+    默认**返回空候选、原因是 absent** —— 等价于"这个项目没索引过"，
+    于是主链路的行为和 R4 之前一模一样。这正是绝大多数测试想要的前提：
+    它们验的是意图/工具/讲解，不是检索。
+
+    要用到候选的测试传 `candidates=[...]`，并让 `skipped=None` 表示"真的查了"。
+    """
+
+    def __init__(
+        self,
+        candidates: list[Candidate] | None = None,
+        *,
+        skipped: str | None = "absent",
+        partial: str | None = None,
+    ) -> None:
+        self._result = Retrieval(
+            candidates=list(candidates or []),
+            attempted=skipped is None,
+            reason=skipped,
+            partial=partial,
+        )
+        self.calls: list[tuple[int, str]] = []
+
+    async def search(self, project_id: int, query: str, k: int | None = None) -> Retrieval:
+        self.calls.append((project_id, query))
+        return self._result
+
+
+def candidate(
+    uid: str, simple: str | None = None, *, kind: str = "CLASS",
+    desc: str | None = None, score: float = 0.03,
+) -> Candidate:
+    """构造候选的小工具。默认从 uid 切出简单名与包名。"""
+    head = uid.partition("#")[0]
+    return Candidate(
+        uid=uid,
+        simple_name=simple or head.rsplit(".", 1)[-1],
+        package_name=head.rsplit(".", 1)[0],
+        kind=kind,
+        description=desc,
+        rev=1,
+        score=score,
+    )

@@ -19,6 +19,7 @@ from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.core.llm import LLMClient
 from app.core.loop import navigate as apply_navigation
 from app.core.loop import run_turn
+from app.core.retriever import Retriever
 from app.models.context import AgentContext, Viewport
 from app.models.protocol import (
     AskRequest,
@@ -61,6 +62,11 @@ def get_llm_client(request: Request) -> LLMClient:
 
 def get_context_store(request:Request) ->ContextStore:
     return request.app.state.context_store
+
+
+def get_retriever(request: Request) -> Retriever:
+    """语义检索。是依赖不是模块级单例，测试里才能塞一个"永远返回空候选"的替身。"""
+    return request.app.state.retriever
 
 
 # ==================== 会话 Context（P4.1：已搬进 Redis db1）====================
@@ -129,6 +135,7 @@ async def ask(
     java: JavaClient = Depends(get_java_client),#自动执行之前那个依赖函数，拿到全局的java客户端，变量名java
     llm: LLMClient = Depends(get_llm_client),#自动执行一阿里，拿到全局LLM客户端，变量名llm
     store: ContextStore = Depends(get_context_store),
+    retriever: Retriever = Depends(get_retriever),
 ) -> AgentResponse:#返回值类型注解，返回agentResponse对象
     """执行一轮问答。
 
@@ -157,7 +164,7 @@ async def ask(
     执行一轮Agent回答，把上下文，用户消息，java客户端，llm客户端传给run_turn函数
     run_turn内部会调用LLM生成回答，如果LLM调用失败，会自动降级到旧版本P2模板，不会直接崩掉整个请求
     """
-    response = await run_turn(ctx, req.message, java, llm)
+    response = await run_turn(ctx, req.message, java, llm, retriever)
     await store.save(ctx)
     # loop 不知道 conversation_id 是新生成的还是回传的（那是路由层的事），所以在这里补上
     response.conversation_id = conversation_id

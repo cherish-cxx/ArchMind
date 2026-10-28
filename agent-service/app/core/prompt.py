@@ -14,6 +14,7 @@ import json
 
 from app.models.context import AgentContext
 from app.models.intent import Intent
+from app.models.retrieval import Candidate
 from app.models.tool import (
     CallChain,
     ClassRelations,
@@ -101,7 +102,26 @@ def _screen_line(ctx: AgentContext) -> str:
             f"{folded}，当前选中 = {focused}{truncated}")
 
 
-def intent_messages(ctx: AgentContext, message: str) -> list[dict[str, str]]:
+def _candidates_block(candidates: list[Candidate] | None) -> str:
+    """把检索候选渲染成 LLM1 能读的一段。
+
+    **候选为空时返回空串** —— 那样 intent prompt 与 R4 之前逐字相同。
+    这条"没检索就完全不变"的性质很重要：它是回归测试的基准。
+    """
+    if not candidates:
+        return ""
+    lines = ["本项目检索到的候选类（slots.entityRef 只能从下面选，一个字符都不要改）："]
+    for i, c in enumerate(candidates, 1):
+        desc = (c.description or "（无描述）").strip().replace("\n", " ")
+        if len(desc) > 60:
+            desc = desc[:60] + "…"
+        lines.append(f"{i}. {c.uid} | {c.kind_label} | {desc}")
+    return "\n".join(lines)
+
+
+def intent_messages(
+    ctx: AgentContext, message: str, candidates: list[Candidate] | None = None
+) -> list[dict[str, str]]:
     """Intent 判定（LLM #1）的输入。
 
     历史**不截断**：判断「这句话在接什么」同样需要整段对话，
@@ -112,12 +132,25 @@ def intent_messages(ctx: AgentContext, message: str) -> list[dict[str, str]]:
         x for x in (_focus_line(ctx), _history_line(ctx)) if x
     )
 
+    # 没有候选时这一段是空串 —— prompt 与 R4 之前逐字相同，老行为不受影响
+    candidate_block = _candidates_block(candidates)
+    candidate_section = ""
+    if candidate_block:
+        candidate_section = f"""
+{candidate_block}
+
+候选使用规则：
+- slots.entityRef 只能填上面候选里的全限定名，照抄，不要改大小写、不要自己拼包名。
+- 问题不指向具体某个类（问项目整体、问模块职责）时，entityRef 必须留 null，不要硬选一个。
+- 候选里没有合适的就留 null —— 系统会改问用户一句，那比拉出一张错的图好。
+"""
+
     system = f"""\
 你是代码图谱问答系统的意图分类器。用户会问关于一个 Java 项目的问题，你要判断他到底想干什么。
 
 可选的 intent（只能是这六个之一，不要发明新的）：
 {intents}
-
+{candidate_section}
 {_PRONOUN_RULES}
 判定要求：
 - confidence 是你对自己判断的把握，0~1。**拿不准就给低分**，不要硬凑高分 ——
@@ -285,12 +318,29 @@ def _render_evidence(envelopes: list[ToolEnvelope]) -> tuple[str, list[str]]:
     return "\n".join(lines) or "  （本轮没有图上的凭据）", uids
 
 
+def _reference_block(candidates: list[Candidate] | None) -> str:
+    """检索候选渲染成讲解侧的参考块。没有候选就返回空串。"""
+    if not candidates:
+        return ""
+    head = candidates[0]
+    desc = (head.description or "").strip().replace("\n", " ")
+    others = "、".join(c.simple_name for c in candidates[1:])
+    lines = [
+        "=== 检索参考（未查证，不是证据）===",
+        f"用户这句话最可能指向：{head.simple_name}（{head.uid}）"
+        + (f" —— {desc[:60]}" if desc else ""),
+        f"同批候选还有：{others or '无'}",
+    ]
+    return "\n".join(lines)
+
+
 def explain_messages(
     intent: Intent,
     envelopes: list[ToolEnvelope],
     question: str,
     ctx: AgentContext,
     rewritten: str | None = None,
+    candidates: list[Candidate] | None = None,
 ) -> list[dict[str, str]]:
     """讲解（LLM #2）的输入。
 
@@ -310,6 +360,17 @@ def explain_messages(
 
     truncated = [e for e in envelopes if getattr(e.data, "truncated", False)]
     evidence_block, uids = _render_evidence(envelopes)
+
+    # 检索参考只在本轮真的检索过时注入。带进来的目的是让讲解能说
+    # 「你说的可能是 X，我查的是 Y」—— 但它**不是证据**，不能进 citedUids。
+    reference_block = _reference_block(candidates)
+    reference_rule = ""
+    if reference_block:
+        reference_rule = """
+12. 「检索参考」**不是证据**：它只说明检索觉得像哪个类，这些类**没有**被查过图。
+    你可以在正文里提「同批候选里还有 X」这类信息，但**绝不能**把它们写进 citedUids，
+    也不能声称它们有什么调用关系或实现细节 —— 那部分只能来自下面的证据。
+"""
 
     system = f"""\
 你在讲解一个 Java 项目的代码图谱。用户刚问了一个问题，系统查了图，下面是**全部可用信息**。
@@ -340,7 +401,7 @@ def explain_messages(
     本轮可引用的只有下面那张列表，越界的引用会被后端剔除。
 11. 用户这句话如果是承接上文（「它」「刚才那个」「继续说」），先用历史把指代解开再回答；
     但如果历史和本题无关，**不要强行扯上关系**，更不要为了显得有记忆而复述历史。
-
+{reference_rule}
 只输出一个 json 对象，不要任何解释、不要 markdown 代码块。字段：
 {{"headline": "一句话结论（不超过 40 字）",
  "sections": [{{"title": "这一段的标题", "body": "Markdown 正文", "citedUids": ["全限定名"]}}]}}
@@ -359,6 +420,8 @@ def explain_messages(
     if screen:
         state_lines.append(screen)
     state_block = "\n".join(state_lines)
+    # 为空时连空行都不留，保证「没检索」的 prompt 与老版本一致
+    reference_section = f"{reference_block}\n\n" if reference_block else ""
 
     user = f"""\
 === 当前会话状态 ===
@@ -374,7 +437,7 @@ def explain_messages(
 === 查询到的信息 ===
 {chr(10).join(blocks) or '（没有查到数据）'}
 
-=== 图上的凭据 ===
+{reference_section}=== 图上的凭据 ===
 {evidence_block}
 
 === 可引用 uid（citedUids 只能从这里挑）===

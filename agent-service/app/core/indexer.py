@@ -37,6 +37,15 @@ class StaleGraphError(IndexError):
     """拉取期间图被重建，本轮的 rev 已经失效。"""
 
 
+class InsufficientCoverage(IndexError):
+    """实际写入的类数少于预期太多 —— 这一版不能对外服务。"""
+
+
+def coverage_of(processed: int, expected: int) -> float:
+    """覆盖率。预期为 0（空项目）时算满分：没有类可索引，不存在"缺类"。"""
+    return processed / expected if expected else 1.0
+
+
 def build_card(node: ClassNode) -> tuple[str, str]:
     """返回 (卡片文本, descriptionSource)。
 
@@ -133,8 +142,13 @@ class Indexer:
                 await self._index(project_id)
             except Exception as e:
                 logger.exception("索引失败 projectId=%s", project_id)
+                # **保留 activeRev**：失败的是这一版，不是整个项目。
+                # 覆盖掉它会让一个还能用旧索引的项目彻底失去检索能力。
+                previous = await self._store.get_state(project_id) or {}
                 await self._store.set_state(project_id, {
+                    **previous,
                     "status": "failed",
+                    "pendingRev": None,
                     "error": str(e)[:500],
                 })
             finally:
@@ -142,13 +156,17 @@ class Indexer:
 
     async def _index(self, project_id: int) -> None:
         status = await self._java.describe_status(project_id)
+        previous = await self._store.get_state(project_id) or {}
+        active_rev = previous.get("activeRev")
+
         if status.analysis_status != "COMPLETED" or status.pending > 0:
             # 没补齐就不建索引：裸类名卡片会把语义检索的排序带偏
             await self._store.set_state(project_id, {
                 "status": "not_ready",
+                "activeRev": active_rev,
+                "rev": active_rev,
                 "analysisStatus": status.analysis_status,
                 "pending": status.pending,
-                "rev": status.rev,
             })
             logger.info("项目未就绪，跳过索引 projectId=%s pending=%s",
                         project_id, status.pending)
@@ -158,15 +176,54 @@ class Indexer:
         started = int(time.time())
         await self._store.set_state(project_id, {
             "status": "indexing",
-            "rev": rev,
+            "pendingRev": rev,
+            "activeRev": active_rev,
+            # rev 字段始终表示「对外生效的版本」，检索按它过滤
+            "rev": active_rev,
             "describable": status.describable,
             "startedAt": started,
         })
 
         await self._qdrant.ensure_collection()
-        # 先清旧点：v1 的检索闸门是状态位，索引期间不会读到半成品
-        await self._qdrant.delete_project(project_id)
 
+        try:
+            processed = await self._stream(project_id, rev, status.describable)
+        except Exception:
+            await self._discard_rev(project_id, rev, active_rev)
+            raise
+
+        partial = processed < status.describable
+        await self._store.set_state(project_id, {
+            "status": "ready",
+            "rev": rev,
+            "activeRev": rev,
+            "pendingRev": None,
+            "count": processed,
+            "actual": processed,
+            "expected": status.describable,
+            # 部分覆盖也要能检索，但必须让上层看得见 —— 否则就是静默偏差
+            "partial": partial,
+            "describable": status.describable,
+            "startedAt": started,
+            "finishedAt": int(time.time()),
+        })
+
+        # ★ 先切换、后清理。顺序反了就会在切换前把还在服务的旧版本删掉。
+        try:
+            await self._qdrant.delete_other_revs(project_id, rev)
+        except Exception:
+            logger.warning("清理旧版本索引点失败 projectId=%s rev=%s",
+                           project_id, rev, exc_info=True)
+
+        logger.info("索引完成 projectId=%s rev=%s count=%s/%s partial=%s",
+                    project_id, rev, processed, status.describable, partial)
+
+    async def _stream(self, project_id: int, rev: int, expected: int) -> int:
+        """流式拉取并写入，返回实际写入数。
+
+        与旧版的差别：**不再先删旧点**。新点带新 rev 写进去，
+        旧版本在 activeRev 切换之前一直可用。
+        """
         cursor: str | None = None
         processed = 0
         pages = 0
@@ -186,31 +243,44 @@ class Indexer:
             processed += len(data.items)
             pages += 1
             logger.info("索引进度 projectId=%s page=%s processed=%s/%s",
-                        project_id, pages, processed, status.describable)
+                        project_id, pages, processed, expected)
 
             cursor = data.next_cursor
             if cursor is None:
                 break
 
-        if processed != status.describable:
-            raise IndexError(
-                f"索引数量不一致: 写入 {processed}, 预期 {status.describable}"
+        coverage = coverage_of(processed, expected)
+        if coverage < settings.index_min_coverage:
+            raise InsufficientCoverage(
+                f"索引覆盖率不足: 写入 {processed}, 预期 {expected} "
+                f"({coverage:.1%} < {settings.index_min_coverage:.0%})"
             )
-        qdrant_count = await self._qdrant.count_project(project_id)
+        qdrant_count = await self._qdrant.count_project(project_id, rev)
         if qdrant_count != processed:
             raise IndexError(
                 f"Qdrant 点数不一致: {qdrant_count} != {processed}"
             )
+        return processed
 
-        await self._store.set_state(project_id, {
-            "status": "ready",
-            "rev": rev,
-            "count": processed,
-            "describable": status.describable,
-            "startedAt": started,
-            "finishedAt": int(time.time()),
-        })
-        logger.info("索引完成 projectId=%s rev=%s count=%s", project_id, rev, processed)
+    async def _discard_rev(
+        self, project_id: int, rev: int, active_rev: int | None
+    ) -> None:
+        """删掉失败版本留下的点（尽力而为：删不掉也会被 activeRev 的过滤挡住）。
+
+        ⚠️ **绝不删正在服务的那一版**。rev 与 activeRev 相同时（同一版本重跑），
+        清掉它等于把对外可用的数据亲手删了 —— 宁可留一堆会被过滤挡住的半成品。
+        """
+        if rev == active_rev:
+            logger.warning(
+                "失败版本的 rev=%s 正是当前生效版本，跳过清理 projectId=%s",
+                rev, project_id,
+            )
+            return
+        try:
+            await self._qdrant.delete_rev(project_id, rev)
+        except Exception:
+            logger.warning("清理失败版本的索引点失败 projectId=%s rev=%s",
+                           project_id, rev, exc_info=True)
 
     async def _index_page(self, project_id: int, rev: int, items: list[ClassNode]) -> None:
         entries = [(item, *build_card(item)) for item in items]
@@ -247,6 +317,10 @@ class Indexer:
                 "projectId": project_id,
                 "uid": item.qualified_name,
                 "simpleName": item.simple_name,
+                "packageName": item.package_name,
+                # kind 不进向量（卡片文本里没有「类/接口」字样），只给消歧时判断用：
+                # 用户问「怎么实现的」时，OrderService 和 OrderServiceImpl 靠名字分不出来。
+                "kind": item.kind.value,
                 "description": item.description,
                 "descriptionSource": source,
                 "filePath": item.file_path,

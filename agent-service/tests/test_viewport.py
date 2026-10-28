@@ -12,12 +12,12 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.agent import get_context_store, get_llm_client
+from app.api.agent import get_context_store, get_llm_client, get_retriever
 from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.main import app
 from app.models.context import VIEWPORT_MAX_ITEMS, Viewport
 from app.models.response import NodeRef, NodeRefType
-from fakes import FakeContextStore, FakeLLM
+from fakes import FakeContextStore, FakeLLM, FakeRetriever
 
 _PROJECT_ID = 1001
 _H = {INTERNAL_TOKEN_HEADER: settings.internal_token}
@@ -31,6 +31,9 @@ def _cls(uid: str) -> NodeRef:
 def store() -> FakeContextStore:
     s = FakeContextStore()
     app.dependency_overrides[get_context_store] = lambda: s
+    # 检索也换成替身：真 Retriever 会读 Redis 的索引状态，
+    # 本机没起 Redis 时这条测试就变成环境问题了
+    app.dependency_overrides[get_retriever] = lambda: FakeRetriever()
     try:
         yield s
     finally:

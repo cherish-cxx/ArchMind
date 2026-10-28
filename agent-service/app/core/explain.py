@@ -27,6 +27,7 @@ from app.core.prompt import explain_messages
 from app.models.context import AgentContext
 from app.models.intent import Intent
 from app.models.response import Citation, NodeRefType, Section
+from app.models.retrieval import Candidate
 from app.models.tool import CallChain, GapReason, ProjectOverview, ToolEnvelope
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ async def explain(
     llm: Completer,
     *,
     rewritten: str | None = None,
+    candidates: list[Candidate] | None = None,
 ) -> ExplainResult:
     """讲解这一轮的查询结果。
 
@@ -72,7 +74,8 @@ async def explain(
     """
     try:
         raw = await llm.complete(
-            explain_messages(intent, envelopes, question, ctx, rewritten=rewritten),
+            explain_messages(intent, envelopes, question, ctx,
+                             rewritten=rewritten, candidates=candidates),
             json_mode=True,
         )
         return _parse_and_ground(raw.text, evidenced)

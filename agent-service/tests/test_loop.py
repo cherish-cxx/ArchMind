@@ -17,7 +17,7 @@ from app.models.response import NodeRef, NodeRefType
 from app.tools.java_client import InternalAuthError, ToolTransportError
 from fakes import (
     LOCKED_CODE, LOCKED_METHOD, ORDER_CONTROLLER, ORDER_SERVICE,
-    FakeJava, FakeLLM, failed, ok_chain, ok_method_body, ok_overview,
+    FakeJava, FakeLLM, FakeRetriever, candidate, failed, ok_chain, ok_method_body, ok_overview,
 )
 
 PROJECT_ID = 7
@@ -329,3 +329,49 @@ async def test_per_turn_counters_reset():
     await run_turn(ctx, "第二轮", java, llm)
     assert ctx.budget.tool_calls_this_turn == 1, "第二轮开始时应已清零，而不是变成 2"
     assert java.call_count == 2
+
+
+# ==================== R4：检索 → 候选 → 锚点 ====================
+
+
+async def test_candidate_becomes_anchor_without_focus():
+    """无锚点 + 检索到候选 → LLM1 选一个 → 工具按那个 uid 查。"""
+    uid = "com.hmall.trade.service.impl.OrderServiceImpl"
+    java = FakeJava(ok_chain())
+    llm = FakeLLM([
+        _intent(Intent.EXPLORE_FLOW, entityRef=uid),
+        _explain(),
+    ])
+    retriever = FakeRetriever([candidate(uid, desc="负责下单")], skipped=None)
+
+    r = await run_turn(_ctx(focus_uid=None), "下单扣库存怎么实现的", java, llm, retriever)
+
+    assert java.calls == [("call-chain", PROJECT_ID, uid)]
+    assert retriever.calls == [(PROJECT_ID, "下单扣库存怎么实现的")]
+    assert any("retrieve(1)" in s.detail for s in r.steps)
+
+
+async def test_entity_ref_outside_candidates_is_dropped():
+    """模型编的 uid 被丢掉 → 走"请先点个类"，而且候选类名会出现在提示里。"""
+    uid = "com.hmall.trade.service.impl.OrderServiceImpl"
+    java = FakeJava(ok_chain())
+    llm = FakeLLM([_intent(Intent.EXPLORE_FLOW, entityRef="com.ghost.FakeService")])
+    retriever = FakeRetriever([candidate(uid)], skipped=None)
+
+    r = await run_turn(_ctx(focus_uid=None), "下单扣库存", java, llm, retriever)
+
+    assert java.calls == []
+    assert "OrderServiceImpl" in r.message
+
+
+async def test_focus_skips_retrieval():
+    """有锚点时完全不检索 —— 浪费一次 embed，还会把明确的问句引偏。"""
+    java = FakeJava(ok_chain())
+    llm = FakeLLM([_intent(Intent.EXPLORE_FLOW), _explain()])
+    retriever = FakeRetriever()
+
+    r = await run_turn(_ctx(), "订单流程", java, llm, retriever)
+
+    assert retriever.calls == []
+    assert all("retrieve" not in s.detail for s in r.steps)
+

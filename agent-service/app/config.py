@@ -51,6 +51,17 @@ class Settings(BaseSettings):
     index_timeout: float = 120.0
     # 索引锁 TTL：防止进程崩溃后项目被永久锁死
     index_lock_ttl: int = 3600
+    # 覆盖率低于这个比例就不认为索引可用。用比例不用绝对差 ——
+    # 10 个类的项目差 1 个是 10%，1000 个类差 1 个是 0.1%，两者不该同一标准。
+    index_min_coverage: float = 0.98
+
+    # ── 检索（R4）──────────────────────────────────────────────────────────
+    # 两路各取多少个进入融合。取少了融合没得挑，取多了白算。
+    retrieve_prefetch_limit: int = 20
+    # 融合后给 LLM 看几个候选。再多模型选不准，prompt 也会撑长。
+    retrieve_top_k: int = 5
+    # 检索是附加路径，**绝不能拖住主链路**：embed 挂住时不能用 index_timeout=120
+    retrieve_timeout: float = 8.0
 
 
 settings = Settings()

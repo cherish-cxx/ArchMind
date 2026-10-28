@@ -22,6 +22,7 @@ from app.core.llm import Completer
 from app.core.prompt import intent_messages
 from app.models.context import AgentContext
 from app.models.intent import Intent, IntentResult
+from app.models.retrieval import Candidate
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +69,16 @@ def parse_intent(text: str) -> IntentResult:
 
 # ----------------真正调用大模型，让模型输出意图的底层函数-------------
 
-async def classify_intent(ctx: AgentContext, message: str, llm: Completer) -> IntentResult:
+async def classify_intent(
+    ctx: AgentContext,
+    message: str,
+    llm: Completer,
+    candidates: list[Candidate] | None = None,
+) -> IntentResult:
     """判定一轮问答的意图。
+
+    `candidates` 是检索出来的候选类（无锚点时才可能有）。有了它，LLM 才**知道
+    这个项目里有哪些类**，entityRef 才不至于凭空编一个。
 
     ⚠️ `LLMError` **故意不在这里接住**：`LLMNotConfiguredError`（配置错，该 500）与
     `LLMTransportError`（外部抖动，该降级成模板讲解）的处置方式完全不同，
@@ -78,7 +87,7 @@ async def classify_intent(ctx: AgentContext, message: str, llm: Completer) -> In
     """
     # intent_message拼好给LLM的提示词（系统prompt+用户消息+上下文信息）
     # json_mode = true 强制大模型返回标记JSON字符串，方便后面解析意图
-    raw = await llm.complete(intent_messages(ctx, message), json_mode=True)
+    raw = await llm.complete(intent_messages(ctx, message, candidates), json_mode=True)
 
     try:
         return parse_intent(raw.text)

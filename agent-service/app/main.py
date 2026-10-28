@@ -9,6 +9,7 @@ from app.api.index import router as index_router
 from app.config import settings
 from app.core.indexer import Indexer
 from app.core.llm import LLMClient
+from app.core.retriever import Retriever
 from app.store.context_store import ContextStore
 from app.store.index_store import IndexStore
 from app.tools.embed_client import EmbedClient
@@ -41,6 +42,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.indexer = Indexer(
         app.state.java_client, app.state.embed_client,
         app.state.qdrant, app.state.index_store,
+    )
+    # R4：检索客户端。和 indexer 共用 embed/qdrant 实例 ——
+    # 连接池是实例级的，各建一个等于把复用丢了。
+    app.state.retriever = Retriever(
+        app.state.embed_client, app.state.qdrant, app.state.index_store,
     )
     # 把控制权交给FastAPI，服务正式上线，开始监听端口，接收HTTP请求
     yield

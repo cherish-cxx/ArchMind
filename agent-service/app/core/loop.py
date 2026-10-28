@@ -13,8 +13,10 @@ from app.core.guard import evidence_uids, filter_ui_commands
 from app.core.graph import build_graph_patch
 from app.core.intent import classify_intent
 from app.core.llm import Completer, LLMError, LLMNotConfiguredError
+from app.core.retriever import Retriever, resolve_entity_ref
 from app.models.context import AgentContext, HistoryItem
 from app.models.intent import Intent, IntentResult
+from app.models.retrieval import Candidate, Retrieval
 from app.models.response import (
     AgentResponse,
     Citation,
@@ -47,16 +49,22 @@ async def run_turn(
     message: str, #用户本轮发来的提问文本
     java: JavaClient, #依赖注入拿到的java服务客户端
     llm: Completer, #大模型客户端用来调用LLM生成内容
+    retriever: Retriever | None = None, #语义检索；None = 不做检索（老行为）
 ) -> AgentResponse:
     ctx.reset_turn_budget() #重置本轮对话的配额
     started = time.perf_counter() #记录当前时间戳，用来统计本轮回答一共花了多少耗时
     steps: list[Step] = [] #新建一个空列表，用来存放这一轮Agent执行的每一步记录
 
+    # ── 0. 检索（只在没有锚点时）─────────────────────────────────────────────
+    # 放在 LLM1 **之前**：先拿到候选，LLM1 才不用凭空编类名。
+    # 放在 LLM1 之后要多一次 LLM 往返（1~3s），而检索本身只要 100~300ms。
+    retrieval = await _retrieve(ctx, message, retriever, steps)
+
     # ── 1. Intent 判定 ──────────────────────────────────────────────────────
     # 调用异步函数_classify 交给大模型判断用户这句话的意图
     # intent_result（意图结果对象，包含识别出的意图类型+置信度conf）
     # degraded_intent（布尔标记，True = LLM不可用，退化成老的规则模板来判断意图
-    intent_result, degraded_intent = await _classify(ctx, message, llm)
+    intent_result, degraded_intent = await _classify(ctx, message, llm, retrieval.candidates)
     steps.append(
         Step(n=len(steps) + 1, type=StepType.INTENT,
              detail=f"{intent_result.intent.value} (conf={intent_result.confidence:.2f})"
@@ -78,7 +86,7 @@ async def run_turn(
     spec = registry.plan(intent_result.intent, ctx)
     if spec is None:
         # 走到这里只剩一种情况：这个意图要查图，但用户还没点任何类（9月20 的入口约束）
-        return _need_anchor(ctx, intent_result, steps, started)
+        return _need_anchor(ctx, intent_result, steps, started, retrieval.candidates)
 
     # ── 4. 取数 ────────────────────────────────────────────────────────────
     # **组装一次工具调用的完整入参对象 `ToolInvocation`**，把会话上下文、LLM 提取的槽位，加工成工具 handler 统一接收的入参结构体。
@@ -130,6 +138,7 @@ async def run_turn(
         message,
         llm,
         rewritten=intent_result.rewritten_query,
+        candidates=retrieval.candidates,
     )
     steps.append(Step(n=len(steps) + 1, type=StepType.LLM,
                       detail="讲解(降级)" if explanation.degraded else "讲解",
@@ -185,11 +194,88 @@ async def _locked_method_body(
     return env
 
 
+# ==================== 检索（R4）====================
+
+#: 需要锚点才查图的 intent —— 只有这几种会把检索选中的类写成 focus。
+#: OVERVIEW 不需要锚点，NAVIGATE / OUT_OF_SCOPE 根本不查图。
+_ANCHORED_INTENTS = frozenset({
+    Intent.EXPLORE_FLOW, Intent.EXPLORE_RELATION, Intent.EXPLORE_CODE,
+})
+
+
+async def _retrieve(
+    ctx: AgentContext, message: str, retriever: Retriever | None, steps: list[Step]
+) -> Retrieval:
+    """无锚点时检索，并把"查没查、查了几个"记进 steps。
+
+    **有锚点就不查**：用户已经点了类，这句问的十有八九就是它 —— 检索纯属浪费，
+    而且会把一个本来明确的问句引到别的类上去。
+
+    `StepType` 复用 `TOOL` 而不是新增枚举值：新增值会让前端的 switch 收到
+    不认识的类型。detail 里写 `retrieve(...)` 已经足够区分它和真正的工具。
+    """
+    if retriever is None or ctx.focus is not None or ctx.method_uid:
+        return Retrieval()
+
+    started = time.perf_counter()
+    result = await retriever.search(ctx.project_id, message)
+    steps.append(
+        Step(n=len(steps) + 1, type=StepType.TOOL,
+             detail=_retrieve_detail(result), ms=_ms(started))
+    )
+    return result
+
+
+def _retrieve_detail(result: Retrieval) -> str:
+    if not result.attempted:
+        return f"retrieve(skipped:{result.reason})"
+    if result.reason:
+        return f"retrieve(failed:{result.reason})"
+    extra = f", partial {result.partial}" if result.partial else ""
+    return f"retrieve({len(result.candidates)}{extra})"
+
+
+def _ground_entity_ref(
+    ctx: AgentContext,
+    result: IntentResult,
+    candidates: list[Candidate] | None,
+    message: str,
+) -> IntentResult:
+    """把 LLM 填的 entityRef 落到候选上，并让它真的成为本轮锚点。
+
+    prompt 里写了"只能从候选里选"，但那是约束不是保证 —— 和 UICommand 一样，
+    模型有权说，代码负责核对。候选为空时**不做约束**，行为与 R4 之前完全一致。
+
+    **选中之后要写进 ctx.focus**：`registry.plan()` 判断"有没有锚点"看的是
+    `ctx.focus`，不是 `slots.entityRef`。不写进去，检索出来的候选只能填在
+    slots 里、工具照样不跑 —— 这条路等于白做。副作用是出图会聚焦到这个类，
+    这正是「不点类也能问」想要的效果。
+    """
+    if not candidates:
+        return result
+
+    raw = result.slots.entity_ref
+    fixed = resolve_entity_ref(raw, candidates, message)
+    if raw and fixed != raw:
+        logger.warning(
+            "entityRef %r 不在候选里，%s", raw,
+            f"已归一化为 {fixed}" if fixed else "已丢弃（本轮按无锚点处理）",
+        )
+    result.slots.entity_ref = fixed
+
+    if fixed and ctx.focus is None and result.intent in _ANCHORED_INTENTS:
+        ctx.focus = NodeRef(type=NodeRefType.CLASS, uid=registry.owner_of(fixed))
+    return result
+
+
 # ==================== Intent 判定 + 降级 ====================
 
 
 async def _classify(
-    ctx: AgentContext, message: str, llm: Completer
+    ctx: AgentContext,
+    message: str,
+    llm: Completer,
+    candidates: list[Candidate] | None = None,
 ) -> tuple[IntentResult, bool]:
     """判 Intent。LLM 挂了就**回落到 P2 的规则**（有 focus 就当问流程）。
 
@@ -198,7 +284,8 @@ async def _classify(
     不是新写的一条没人验证过的路径。
     """
     try:
-        return await classify_intent(ctx, message, llm), False
+        result = await classify_intent(ctx, message, llm, candidates)
+        return _ground_entity_ref(ctx, result, candidates, message), False
     except LLMNotConfiguredError: #配置缺失，不走降级直接异常
         raise
     except LLMError as e: #凡LLM运行时临时报错，超时，服务挂了，进入降级逻辑
@@ -289,12 +376,22 @@ def _refuse(
 
 
 def _need_anchor(
-    ctx: AgentContext, intent_result: IntentResult, steps: list[Step], started: float
+    ctx: AgentContext, intent_result: IntentResult, steps: list[Step], started: float,
+    candidates: list[Candidate] | None = None,
 ) -> AgentResponse:
-    """要查图但没锚点。**提前拦住**，不空跑一次注定 ok:false 的工具调用。"""
+    """要查图但没锚点。**提前拦住**，不空跑一次注定 ok:false 的工具调用。
+
+    检索到候选时把类名说出来 —— 用户看到「我找到了 A、B」比「请先点一个类」
+    更容易接着往下走。注意**只能写在文字里**：`Suggestion` 只有 label + intent，
+    点一下是把 label 当新消息发回来，带不了 uid，所以这里做不出可点的锚点。
+    """
+    message = "这个问题得先有个起点 —— 请先在图上点一个类，或者直接说类名。"
+    if candidates:
+        names = "、".join(f"`{c.simple_name}`" for c in candidates[:3])
+        message = f"我找到了几个可能是你问的类：{names}。请先在图上点一个，或者说一下是哪个。"
     return AgentResponse(
         conversation_id=ctx.conversation_id,
-        message="这个问题得先有个起点 —— 请先在图上点一个类，或者直接说类名。",
+        message=message,
         suggestions=_suggestions(None, ctx),
         steps=steps,
         meta=Meta(intent=intent_result.intent.value, confidence=intent_result.confidence,

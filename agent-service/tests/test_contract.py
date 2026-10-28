@@ -12,11 +12,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.agent import get_context_store, get_llm_client
+from app.api.agent import get_context_store, get_llm_client, get_retriever
 from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.main import app
 from app.tools.java_client import JavaClient
-from fakes import FakeContextStore, FakeLLM
+from fakes import FakeContextStore, FakeLLM, FakeRetriever
 
 # 测试 1 只关心「发出去的请求长什么样」，不关心响应。
 # 用 ok:false 的信封最省事：它对**所有**工具的返回模型都合法（data 可以是 None）
@@ -224,6 +224,8 @@ def test_6_hallucinated_citation_and_uicmd_are_filtered(
     # Context 也换成内存版：否则 TestClient 跑 lifespan 会建真 ContextStore 去连 Redis，
     # 本机没起 Redis 就红 —— 那就把「契约漂移」和「环境问题」混在一起了
     app.dependency_overrides[get_context_store] = lambda: FakeContextStore()
+    # 检索替换身：真 Retriever 要读 Redis 的索引状态，本机没起 Redis 会变成环境问题
+    app.dependency_overrides[get_retriever] = lambda: FakeRetriever()
     try:
         with TestClient(app) as c:
             resp = c.post(

@@ -23,9 +23,10 @@ class EmbedError(Exception):
 
 class EmbedClient:
     def __init__(self, base_url: str | None = None, timeout: float | None = None) -> None:
+        self._timeout = timeout or settings.index_timeout
         self._client = httpx.AsyncClient(
             base_url=base_url or settings.embed_url,
-            timeout=timeout or settings.index_timeout,
+            timeout=self._timeout,
             # 服务间固定地址，不走桌面代理（和 java_client 同一个理由）
             trust_env=False,
         )
@@ -33,11 +34,20 @@ class EmbedClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def embed(self, texts: list[str]) -> list[tuple[list[float], dict[int, float]]]:
+    async def embed(
+        self, texts: list[str], *, timeout: float | None = None
+    ) -> list[tuple[list[float], dict[int, float]]]:
+        """文本 → (dense, sparse)。
+
+        `timeout` 单独可传：索引时允许长（一页 32 条，CPU 上十几秒），
+        检索时必须短（单条问句，挂住就是整轮卡死）。
+        """
         if not texts:
             return []
         try:
-            resp = await self._client.post("/embed", json={"texts": texts})
+            resp = await self._client.post(
+                "/embed", json={"texts": texts}, timeout=timeout or self._timeout
+            )
         except httpx.TransportError as e:
             raise EmbedError(f"embed 服务不可达: {e}") from e
         if resp.status_code != 200:
