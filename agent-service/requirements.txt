@@ -6,3 +6,4 @@ httpx
 pytest
 pytest-asyncio
 redis
+qdrant-client>=1.12,<2

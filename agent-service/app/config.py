@@ -38,6 +38,20 @@ class Settings(BaseSettings):
     redis_password:str = ""
     context_ttl_seconds: int = 7200
 
+    # ── 向量索引（R4）──────────────────────────────────────────────────────
+    # 服务端容器默认地址；compose 里用 EMBED_URL / QDRANT_URL 覆盖成宿主机地址
+    embed_url: str = "http://localhost:8010"
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_collection: str = "archmind_classes"
+    # 一页 200 个类、一次 embed 32 条、一次 upsert 64 个点 —— 都是保守值
+    index_page_size: int = 200
+    index_embed_batch: int = 32
+    index_upsert_batch: int = 64
+    # CPU 上 32 条文本可能跑十几秒，留足余量
+    index_timeout: float = 120.0
+    # 索引锁 TTL：防止进程崩溃后项目被永久锁死
+    index_lock_ttl: int = 3600
+
 
 settings = Settings()
 

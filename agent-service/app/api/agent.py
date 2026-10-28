@@ -8,6 +8,7 @@ Python **不是**给前端直接调的 —— 它是 Java 后面的内部服务�
 路由里如果出现 `if`，多半是编排漏到了这一层。
 """
 
+import logging
 import secrets
 import time
 import uuid
@@ -35,6 +36,8 @@ from app.tools.java_client import JavaClient
 # prefix="/internal/agent" 使得所有接口能够自动拼装上该路径
 # tags=["agent"]只作用于swagger文档，把这一组接口归到名字叫agent的折叠分组里
 router = APIRouter(prefix="/internal/agent", tags=["agent"])
+
+logger = logging.getLogger(__name__)
 
 
 # ==================== 依赖注入 ====================
@@ -305,11 +308,16 @@ async def get_conversation(
 
 
 @router.post("/admin/evict", dependencies=[Depends(require_internal_token)])
-async def evict(req: EvictRequest, store: ContextStore = Depends(get_context_store)) -> dict:
-    """项目删除时清掉它的全部会话 Context。
+async def evict(req: EvictRequest, request: Request,
+                store: ContextStore = Depends(get_context_store)) -> dict:
+    """项目删除时清掉它的全部会话 Context 与向量索引。
 
-    P4.1 起走 Redis 前缀删（`store.evict_project`）。
-    **响应形状与 P3 完全一致** —— 这样 P4.3 的 Java 网关不用跟着改。
+    索引清理是**尽力而为**：Qdrant 暂时不可用时只告警，不能因此让项目删不掉。
+    响应形状保持不变，Java 网关无需跟着改。
     """
     n = await store.evict_project(req.project_id)
+    try:
+        await request.app.state.indexer.delete_project(req.project_id)
+    except Exception:
+        logger.warning("清理向量索引失败 projectId=%s", req.project_id, exc_info=True)
     return {"ok": True, "note": f"已清理 {n} 个会话 Context"}

@@ -27,11 +27,11 @@ public interface TaskService {
 
     void markRunning(Long taskId);
 
-    /** 阶段切换：写 DB */
-    void enterStage(Long taskId, AnalysisStage stage);
+    /** 阶段切换：写 DB，并续期项目分析锁 */
+    void enterStage(Long taskId, Long projectId, AnalysisStage stage);
 
-    /** 阶段内高频进度：只写 Redis */
-    void reportProgress(Long taskId, AnalysisStage stage, int pctWithin);
+    /** 阶段内高频进度：只写 Redis，并续期项目分析锁 */
+    void reportProgress(Long taskId, Long projectId, AnalysisStage stage, int pctWithin);
 
     void markSuccess(Long taskId, ProjectOverviewResponse overview);
 

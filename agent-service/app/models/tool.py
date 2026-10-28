@@ -120,6 +120,26 @@ class ClassNode(CamelModel):
     end_line: int | None = None
 
 
+class ClassPage(CamelModel):
+    """按 uid 游标分页的类清单（`/internal/tools/classes/page`）。"""
+
+    rev: int
+    items: list[ClassNode] = []
+    next_cursor: str | None = None   # null = 最后一页
+
+
+class DescribeStatus(CamelModel):
+    """描述覆盖情况（`/internal/describe/status`）。pending == 0 才允许建索引。"""
+
+    project_id: int
+    analysis_status: str
+    total: int
+    describable: int
+    described: int
+    pending: int
+    rev: int
+
+
 # ==================== 工具 ① overview ====================
 # 数据源是 project_overview 表的 JSON 列（LLM 生成），字段大面积缺失是常态。
 # 而且 overview 是**降级路径**（图挂了它还得能答），所以这一组故意全宽松 ——

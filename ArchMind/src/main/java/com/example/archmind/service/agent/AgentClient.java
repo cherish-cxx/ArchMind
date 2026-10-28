@@ -42,6 +42,7 @@ public class AgentClient {
     private static final String PATH_VIEWPORT = "/internal/agent/viewport";
     private static final String PATH_CONVERSATION = "/internal/agent/conversations/{id}";
     private static final String PATH_EVICT = "/internal/agent/admin/evict";
+    private static final String PATH_INDEX = "/internal/index";
 
     /** 建立 TCP 连接的上限。和读超时分开：连不上要快速失败，不能陪着等满 70s */
     private static final int CONNECT_TIMEOUT_MS = 5_000;
@@ -118,6 +119,16 @@ public class AgentClient {
     public void evictProject(Long projectId) {
         execute(() -> shortClient.post().uri(PATH_EVICT).body(Map.of("projectId", projectId))
                 .retrieve().toBodilessEntity(), "evict");
+    }
+
+    /**
+     * 通知 Agent 侧为该项目建/重建向量索引。**走短超时**：Python 收到后异步执行，
+     * 这里只负责把请求送到；送不到也不影响补齐结果，索引侧可以重跑。
+     */
+    public void triggerIndex(Long projectId, long rev) {
+        execute(() -> shortClient.post().uri(PATH_INDEX)
+                .body(Map.of("projectId", projectId, "rev", rev))
+                .retrieve().toBodilessEntity(), "index");
     }
 
     // ==================== 唯一的错误分类点 ====================

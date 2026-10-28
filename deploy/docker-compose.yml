@@ -34,6 +34,10 @@ services:
       - REDIS_URL=redis://172.21.160.203:6379
       - REDIS_DB=1
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      # R4：embed / Qdrant 目前是宿主机上单独 docker run 的容器
+      - EMBED_URL=${EMBED_URL:-http://172.21.160.203:8010}
+      - QDRANT_URL=${QDRANT_URL:-http://172.21.160.203:6333}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-archmind_classes}
     expose:
       - "8000"                          # 只对内，不发布到宿主机
     healthcheck:

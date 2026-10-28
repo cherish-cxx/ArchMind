@@ -1,11 +1,14 @@
 package com.example.archmind.service;
 
 import com.example.archmind.dto.response.ClassDescriptionsResponse;
+import com.example.archmind.dto.response.DescribeBatchResult;
+import com.example.archmind.dto.response.DescriptionStatusResponse;
 
 import java.util.List;
 
 /**
- * 类简要描述：分析阶段批量生成核心类；运行期按画布内容按需补齐其余实现类。
+ * 类简要描述：分析阶段批量生成核心类；运行期按画布内容按需补齐其余实现类；
+ * R4 阶段按批扫描「描述为空」的类，直到覆盖全量。
  */
 public interface ClassDescriptionService {
 
@@ -29,4 +32,18 @@ public interface ClassDescriptionService {
      * @param force     是否放宽类型限制（中心节点用）
      */
     ClassDescriptionsResponse describeClasses(Long projectId, List<String> uids, boolean force);
+
+    /**
+     * 全量补齐的一批：服务端自己挑「描述为空」的类，调用一次 LLM 并写回。
+     *
+     * <p>幂等键是「类有没有描述」，不是批次记录：重复调用同一批，已写过的类
+     * 不会再被选中。项目串行由 Redis 短锁保证。</p>
+     *
+     * @param projectId 项目 id
+     * @param limit     本批最多处理多少个类；会被钳到 [5, 40]
+     */
+    DescribeBatchResult describePending(Long projectId, int limit);
+
+    /** 描述覆盖情况：总数 / 可描述数 / 已描述 / 待描述 / 图版本 */
+    DescriptionStatusResponse descriptionStatus(Long projectId);
 }

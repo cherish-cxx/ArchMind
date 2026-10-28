@@ -23,6 +23,15 @@ public class ClassDescriptionsResponse {
     /** 降级说明（例如 LLM 暂时不可用）。前端只展示，不当作错误 */
     private String note;
 
+    /**
+     * true 表示服务端暂时无法处理（分析中 / 批次占用 / 冷却）。
+     * 调用方应在 {@code retryAfterMs} 后重试，不能当作「已处理」永久跳过。
+     */
+    private boolean busy;
+
+    /** busy 时的建议重试间隔 */
+    private long retryAfterMs;
+
     @Data
     public static class Item {
         private String uid;

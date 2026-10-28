@@ -16,4 +16,10 @@ public interface CodeGraphService {
      * @param reporter  进度回调（由调用方决定写到哪里）
      */
     void rebuild(Long projectId, ProgressReporter reporter);
+
+    /**
+     * 删除某项目的整个代码图（节点、关系、图版本）。
+     * 项目删除流程在删 MySQL 之前调用；失败应向上抛出，避免留下孤儿图。
+     */
+    void deleteProjectGraph(Long projectId);
 }

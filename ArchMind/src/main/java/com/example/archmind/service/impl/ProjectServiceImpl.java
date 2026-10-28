@@ -18,6 +18,7 @@ import com.example.archmind.entity.ProjectOverview;
 import com.example.archmind.entity.ProjectSource;
 import com.example.archmind.service.ProjectService;
 import com.example.archmind.service.agent.AgentClient;
+import com.example.archmind.service.ast.CodeGraphService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final CheckProjectUtil checkProjectUtil;
     private final RedisUtil redisUtil;
     private final AgentClient agentClient;
+    private final CodeGraphService codeGraphService;
 
     @Override
     public ProjectResponse createProject(Long userId, ProjectCreateRequest request) {
@@ -89,6 +91,16 @@ public class ProjectServiceImpl implements ProjectService {
         if (projectId == null) {
             throw new BusinessException("项目ID为空");
         }
+
+        // Neo4j 不在 MySQL 事务里，必须放在删库之前：清图失败就整体中止，
+        // 否则项目行没了、图还在，就再也没有入口清理（历史遗留问题正是这么产生的）。
+        try {
+            codeGraphService.deleteProjectGraph(projectId);
+        } catch (Exception e) {
+            log.error("删除项目代码图谱失败 projectId={}", projectId, e);
+            throw new BusinessException("清理代码图谱失败，请稍后重试");
+        }
+
         // 先删子表再删 project，避免服务器建表若带外键时的约束冲突
         projectSourceMapper.delete(new LambdaQueryWrapper<ProjectSource>()
                 .eq(ProjectSource::getProjectId, projectId));

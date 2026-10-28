@@ -14,6 +14,8 @@ public class ClassDescriptionBatch {
 
     @Data
     public static class Item {
+        /** 在本次 prompt 中的序号（1 起），批量补齐路径按它回填 uid */
+        private Integer index;
         private String qualifiedName;
         private String description;
     }

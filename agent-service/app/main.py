@@ -5,10 +5,15 @@ import uvicorn
 from fastapi import FastAPI
 
 from app.api.agent import router as agent_router
+from app.api.index import router as index_router
 from app.config import settings
+from app.core.indexer import Indexer
 from app.core.llm import LLMClient
-from app.tools.java_client import JavaClient
 from app.store.context_store import ContextStore
+from app.store.index_store import IndexStore
+from app.tools.embed_client import EmbedClient
+from app.tools.java_client import JavaClient
+from app.tools.qdrant_store import QdrantStore
 
 
 @asynccontextmanager
@@ -29,17 +34,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.java_client = JavaClient()
     app.state.llm_client = LLMClient()
     app.state.context_store = ContextStore()
+    # R4：索引链路。Qdrant/embed 客户端都不在构造时联网，服务起来不依赖它们先就绪
+    app.state.embed_client = EmbedClient()
+    app.state.qdrant = QdrantStore()
+    app.state.index_store = IndexStore()
+    app.state.indexer = Indexer(
+        app.state.java_client, app.state.embed_client,
+        app.state.qdrant, app.state.index_store,
+    )
     # 把控制权交给FastAPI，服务正式上线，开始监听端口，接收HTTP请求
     yield
-    # 清理代码：异步调用客户端的关闭防范，释放网络连接，资源关闭
+    # 清理代码：先停索引任务，再释放各客户端
+    await app.state.indexer.aclose()
     await app.state.java_client.aclose()
     await app.state.llm_client.aclose()
     await app.state.context_store.aclose()
+    await app.state.embed_client.aclose()
+    await app.state.qdrant.aclose()
+    await app.state.index_store.aclose()
 
 
 app = FastAPI(title="ArchMind Agent Service", version="0.1.0", lifespan=lifespan)
 # 把agent中写的所有接口注册到app里，让主服务能识别这些接口
 app.include_router(agent_router)
+app.include_router(index_router)
 
 
 @app.get("/health")
@@ -56,6 +74,8 @@ def health() -> dict:
         "redisUrl": settings.redis_url,
         "redisDb": settings.redis_db,
         "llmConfigured": bool(settings.deepseek_api_key),
+        "embedUrl": settings.embed_url,
+        "qdrantUrl": settings.qdrant_url,
     }
 
 

@@ -5,6 +5,7 @@ import com.example.archmind.common.util.CheckProjectUtil;
 import com.example.archmind.dto.request.InternalToolRequest;
 import com.example.archmind.dto.response.CallChainResponse;
 import com.example.archmind.dto.response.ClassNodeDTO;
+import com.example.archmind.dto.response.ClassPageResponse;
 import com.example.archmind.dto.response.ClassRelationsResponse;
 import com.example.archmind.dto.response.Evidence;
 import com.example.archmind.dto.response.MethodBodyResponse;
@@ -20,9 +21,11 @@ import com.example.archmind.service.ast.MethodBodyService;
 import com.example.archmind.service.ast.RelationDirection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
@@ -108,6 +111,25 @@ public class InternalToolController {
             return stamp(ToolEnvelope.success(data, evidence, truncated), projectId);
         } catch (BusinessException e) {
             log.warn("classes 工具返回失败 projectId={}: {}", projectId, e.getMessage());
+            return stamp(ToolEnvelope.failure(e.getMessage()), projectId);
+        }
+    }
+
+    /**
+     * 索引服务专用：按 uid 游标分页拉全量类（含 description）。
+     * 每页最多 200，响应带 rev；调用方发现 rev 变化要中止重来。
+     */
+    @GetMapping("/classes/page")
+    public ToolEnvelope<ClassPageResponse> classesPage(
+            @RequestParam Long projectId,
+            @RequestParam(required = false) String afterUid,
+            @RequestParam(defaultValue = "200") int limit) {
+        try {
+            checkProjectUtil.checkProjectExists(projectId);
+            ClassPageResponse data = codeGraphQueryService.listClassesPage(projectId, afterUid, limit);
+            return stamp(ToolEnvelope.success(data), projectId);
+        } catch (BusinessException e) {
+            log.warn("classes/page 返回失败 projectId={}: {}", projectId, e.getMessage());
             return stamp(ToolEnvelope.failure(e.getMessage()), projectId);
         }
     }

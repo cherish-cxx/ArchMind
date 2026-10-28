@@ -47,6 +47,11 @@ public class CodeGraphServiceImpl implements CodeGraphService {
     private final FileContentService fileContentService;
 
     @Override
+    public void deleteProjectGraph(Long projectId) {
+        graphWriter.deleteProjectGraph(projectId);
+    }
+
+    @Override
     public void rebuild(Long projectId, ProgressReporter reporter) {
         Path extractDir = Paths.get(findSource(projectId).getContent());
         List<FileEntity> candidates = listJavaFiles(projectId);

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.archmind.common.constant.AnalysisStage;
 import com.example.archmind.common.constant.ProjectAnalysisStatus;
+import com.example.archmind.common.constant.RedisKeys;
 import com.example.archmind.common.constant.TaskStatus;
 import com.example.archmind.common.constant.TaskType;
 import com.example.archmind.common.exception.BusinessException;
@@ -26,6 +27,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -37,9 +39,9 @@ import java.util.concurrent.TimeUnit;
 public class TaskServiceImpl implements TaskService {
 
     /** 项目级分析锁：防止同一项目并发提交导致重复调用 LLM */
-    public static final String ANALYZE_LOCK_KEY_PREFIX = "project:analyze:lock:";
+    public static final String ANALYZE_LOCK_KEY_PREFIX = RedisKeys.ANALYZE_LOCK;
     /** 任务实时进度（高频，只写 Redis） */
-    public static final String TASK_PROGRESS_KEY_PREFIX = "task:progress:";
+    public static final String TASK_PROGRESS_KEY_PREFIX = RedisKeys.TASK_PROGRESS;
 
     private static final long LOCK_TTL_SECONDS = 300;
     private static final int ERROR_MAX_LEN = 500;
@@ -78,11 +80,22 @@ public class TaskServiceImpl implements TaskService {
     @PostConstruct
     public void resetStaleTasks() {
         try {
+            List<Task> stale = taskMapper.selectList(new LambdaQueryWrapper<Task>()
+                    .in(Task::getStatus, TaskStatus.PENDING, TaskStatus.RUNNING));
             int updated = taskMapper.update(null, new LambdaUpdateWrapper<Task>()
                     .in(Task::getStatus, TaskStatus.PENDING, TaskStatus.RUNNING)
                     .set(Task::getStatus, TaskStatus.FAILED)
                     .set(Task::getError, "应用重启，任务中断")
                     .set(Task::getUpdateTime, LocalDateTime.now()));
+            // 分析任务中断后项目状态不能停在 PENDING，否则描述补齐的闸门会一直挡住
+            for (Task task : stale) {
+                if (TaskType.ANALYSIS.equals(task.getType()) && task.getProjectId() != null) {
+                    Project update = new Project();
+                    update.setId(task.getProjectId());
+                    update.setAnalysisStatus(ProjectAnalysisStatus.FAILED);
+                    projectMapper.updateById(update);
+                }
+            }
             if (updated > 0) {
                 log.warn("启动清理僵尸任务 {} 条", updated);
             }
@@ -142,6 +155,8 @@ public class TaskServiceImpl implements TaskService {
             redisUtil.delete(lockKey);   // 落库失败要放锁，否则该项目被永久锁死
             throw new BusinessException("创建分析任务失败: " + e.getMessage());
         }
+        // 重分析期间状态不能停留在 COMPLETED，否则描述补齐的闸门会误放行
+        updateProjectStatus(task.getId(), ProjectAnalysisStatus.PENDING);
 //其实是被AOP代理拦去线程池，如果去掉注解就变成了同步跑了
         executor.run(task.getId(), projectId, userId);
         return toResponse(task);
@@ -162,8 +177,10 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     public TaskResponse getLatestByProject(Long projectId, Long currentUserId) {
+        // 只看分析任务：描述补齐任务也在 task 表里，但它不是「项目是否在分析」的依据
         Task task = taskMapper.selectOne(new LambdaQueryWrapper<Task>()
                 .eq(Task::getProjectId, projectId)
+                .eq(Task::getType, TaskType.ANALYSIS)
                 .orderByDesc(Task::getId)
                 .last("limit 1"));
         if (task == null) {
@@ -187,7 +204,7 @@ public class TaskServiceImpl implements TaskService {
 
 //    更新task的信息，
     @Override
-    public void enterStage(Long taskId, AnalysisStage stage) {
+    public void enterStage(Long taskId, Long projectId, AnalysisStage stage) {
         Task upd = new Task();
         upd.setId(taskId);
         upd.setCurrentStage(stage.name());
@@ -198,13 +215,27 @@ public class TaskServiceImpl implements TaskService {
         // 阶段起始也同步给 Redis，避免刚 enterStage、还没 report 时查询读到上一阶段的旧进度
         redisUtil.set(TASK_PROGRESS_KEY_PREFIX + taskId,
                 stage.getStart() + "|" + stage.name(), 1, TimeUnit.HOURS);
+        renewAnalyzeLock(projectId);
     }
 
     @Override
-    public void reportProgress(Long taskId, AnalysisStage stage, int pctWithin) {
+    public void reportProgress(Long taskId, Long projectId, AnalysisStage stage, int pctWithin) {
         int progress = stage.progressAt(pctWithin);
         redisUtil.set(TASK_PROGRESS_KEY_PREFIX + taskId,
                 progress + "|" + stage.name(), 1, TimeUnit.HOURS);
+        // 大项目分析可能超过锁的 TTL，不续期会让描述补齐的闸门误判「当前没有分析」
+        renewAnalyzeLock(projectId);
+    }
+
+    private void renewAnalyzeLock(Long projectId) {
+        if (projectId == null) {
+            return;
+        }
+        try {
+            redisUtil.expire(ANALYZE_LOCK_KEY_PREFIX + projectId, LOCK_TTL_SECONDS, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.debug("续期分析锁失败 projectId={}", projectId, e);
+        }
     }
 
     @Override

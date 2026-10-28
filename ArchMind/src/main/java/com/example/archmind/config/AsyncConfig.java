@@ -34,4 +34,22 @@ public class AsyncConfig {
             return executor;
     }
 
+    /**
+     * 描述补齐专用池：LLM 调用是长 IO，且一个项目一次只跑一批，
+     * 和 AST 解析分池，避免补齐把分析线程占满。
+     */
+    @Bean("descriptionExecutor")
+    public ThreadPoolTaskExecutor descriptionExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(20);
+        executor.setThreadNamePrefix("describe-");
+        // 队列满时直接拒绝，由投递方记录；不能用 CallerRuns 把补齐跑进分析线程
+        executor.setRejectedExecutionHandler(
+                new ThreadPoolExecutor.AbortPolicy());
+        executor.initialize();
+        return executor;
+    }
+
 }

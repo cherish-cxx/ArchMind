@@ -18,14 +18,15 @@ import logging
 from typing import Any, TypeVar
 
 import httpx
-from pydantic import ValidationError
 
 from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.models.tool import (
     CallChain,
     ChainDirection,
     ClassNode,
+    ClassPage,
     ClassRelations,
+    DescribeStatus,
     MethodBody,
     ProjectOverview,
     RelationDirection,
@@ -41,6 +42,8 @@ DEFAULT_CHAIN_DEPTH = 2     # 往下 2 层：正好覆盖「接口 → 实现 �
 DEFAULT_MAX_NODES = 40      # 调用链单次节点预算
 DEFAULT_MAX_METHODS = 3
 DEFAULT_MAX_LINES = 120
+#: 索引分页：Java 侧硬上限 200，和它对齐
+DEFAULT_PAGE_SIZE = 200
 #: 方法级锁定（methodUid）只切 1 个方法，行数放宽到 Java 侧硬上限 300 ——
 #: 120 行很容易把带事务的长方法切成半截。
 DEFAULT_METHOD_MAX_LINES = 300
@@ -54,6 +57,8 @@ _PATH_CLASSES = f"{_PREFIX}/classes"
 _PATH_CLASS_RELATIONS = f"{_PREFIX}/class-relations"
 _PATH_CALL_CHAIN = f"{_PREFIX}/call-chain"
 _PATH_METHOD_BODY = f"{_PREFIX}/method-body"
+_PATH_CLASSES_PAGE = f"{_PREFIX}/classes/page"
+_PATH_DESCRIBE_STATUS = "/internal/describe/status"
 
 
 class JavaClientError(Exception):
@@ -187,8 +192,28 @@ class JavaClient:
             args["methodUid"] = method_uid
         return await self._post(_PATH_METHOD_BODY, project_id, args, ToolEnvelope[MethodBody])
 
+    # ── R4：索引所需的两类读接口 ────────────────────────────────────────────
+
+    async def classes_page(
+        self, project_id: int, after_uid: str | None = None, limit: int = DEFAULT_PAGE_SIZE
+    ) -> ToolEnvelope[ClassPage]:
+        """按 uid 游标拉一页类。`after_uid=None` 是第一页；`next_cursor=None` 表示拉完了。"""
+        params: dict[str, Any] = {"projectId": project_id, "limit": limit}
+        if after_uid:
+            params["afterUid"] = after_uid
+        resp = await self._send("GET", _PATH_CLASSES_PAGE, params=params)
+        return ToolEnvelope[ClassPage].model_validate(resp.json())
+
+    async def describe_status(self, project_id: int) -> DescribeStatus:
+        """描述覆盖情况。只有 `pending == 0` 且分析完成才允许建索引。"""
+        resp = await self._send("GET", _PATH_DESCRIBE_STATUS, params={"projectId": project_id})
+        payload = resp.json()
+        if payload.get("code") != 0 or payload.get("data") is None:
+            raise JavaClientError(f"describe/status 失败: {payload.get('message')}")
+        return DescribeStatus.model_validate(payload["data"])
+
     # ── 唯一的 HTTP 出口 ────────────────────────────────────────────────────
-    # 这里是Java client的唯一HTTP出口，所有5个工具方法全部复用这个使用方法完成网络请求
+    # 这里是Java client的唯一HTTP出口，所有工具方法全部复用这个发送方法完成网络请求
     async def _post(
         self,
         path: str,
@@ -203,35 +228,35 @@ class JavaClient:
         （`ToolEnvelope` 的明确设计，避免把业务结果变成 500）。
         """
         # projectId 由 Java 注入，不是用户身份 —— 内部接口不收 JWT，租户边界靠这个字段守
-        # 组装请求体，Python字典，后续加给json=body
         body = {"projectId": project_id, "args": args}
+        resp = await self._send("POST", path, json=body)
+        return envelope.model_validate(resp.json())
+
+    async def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Any = None,
+        params: dict[str, Any] | None = None,
+    ) -> httpx.Response:
+        """所有内部接口共用的发送与错误分类。"""
         try:
-            # 异步POST网络请求
-            resp = await self._client.post(path, json=body)
+            resp = await self._client.request(method, path, json=json, params=params)
         except httpx.TransportError as e:
             # 连不上 / 超时 / 连接被重置 —— 都没拿到信封
-            logger.warning("工具调用失败 path=%s: %s", path, e)
+            logger.warning("工具调用失败 %s %s: %s", method, path, e)
             raise ToolTransportError(f"{path} 调用失败: {e}") from e
-        # 401场景代表java的过滤器校验共享Token失败
-        # 请求地道Tomcat，先走过滤链，InternalTokenFilter识别这个接口，取出请求头里的token密钥对比，发现不对直接401
+        # 401 说明两边共享密钥对不上，这是配置错误，必须炸出来
         if resp.status_code == 401:
             logger.error("内部接口鉴权失败 path=%s —— 查两边 INTERNAL_TOKEN 是否一致", path)
             raise InternalAuthError(
                 "Java 侧拒绝鉴权（401）：INTERNAL_TOKEN 与 application.yml 不一致"
             )
-        # 这里的200说明：鉴权通过，请求走到了java1的InternalToolController，Controller执行完毕返回响应
-        #但是只能说明鉴权成功不能代表业务没问题
         if resp.status_code != 200:
             logger.warning("工具调用返回 HTTP %s path=%s", resp.status_code, path)
             raise ToolTransportError(
                 f"{path} 返回 HTTP {resp.status_code}: {resp.text[:200]}"
             )
-
-        # ★ 到这里 ok:false 也走正常路径 —— 那是业务结果，交给调用方按 ok 分支
-        try:
-            return envelope.model_validate(resp.json())
-        except ValidationError:
-            # 契约漂移：Java 发的形状和 models/tool.py 对不上。
-            # **故意不兜** —— 这是编程错误，吞掉只会让现场更难查。
-            logger.exception("响应无法反序列化 path=%s —— 契约漂移？", path)
-            raise
+        # ★ 200 + ok:false 也走正常路径 —— 那是业务结果，交给调用方按 ok 分支
+        return resp

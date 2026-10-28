@@ -42,6 +42,12 @@ public class CodeGraphNeo4jWriter {
     private static final String CLEAR =
             "MATCH (n:CodeNode {projectId: $pid}) DETACH DELETE n";
 
+    /** 项目删除用：:CodeNode 与 :GraphMeta 都要清，否则 rev 会和孤儿 meta 一起留下 */
+    private static final String DELETE_CODE_NODES =
+            "MATCH (n:CodeNode {projectId: $pid}) DETACH DELETE n";
+    private static final String DELETE_GRAPH_META =
+            "MATCH (g:GraphMeta {projectId: $pid}) DELETE g";
+
     /**
      * 图版本号：每次重写图 +1。与图在同一个事务里递增，避免「图变了 rev 没变」或反之。
      *
@@ -128,6 +134,23 @@ public class CodeGraphNeo4jWriter {
                         .flatMap(f -> f.getClasses().stream())
                         .mapToInt(c -> c.getMethods().size()).sum(),
                 project.getEdges().size());
+    }
+
+    /**
+     * 删除某项目在 Neo4j 里的全部痕迹：代码节点、关系、图版本节点。
+     *
+     * <p>必须在 MySQL 项目行删除**之前**调用 —— 失败时让删除操作整体中止，
+     * 否则项目没了、图还在，就再也找不到入口清理（当前遗留问题就是这么来的）。</p>
+     */
+    public void deleteProjectGraph(Long projectId) {
+        try (Session session = driver.session()) {
+            session.executeWrite(tx -> {
+                tx.run(DELETE_CODE_NODES, Map.of("pid", projectId)).consume();
+                tx.run(DELETE_GRAPH_META, Map.of("pid", projectId)).consume();
+                return null;
+            });
+        }
+        log.info("Neo4j 项目图已删除 projectId={}", projectId);
     }
 
     /**

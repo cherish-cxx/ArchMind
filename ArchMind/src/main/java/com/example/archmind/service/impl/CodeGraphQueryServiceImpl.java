@@ -2,6 +2,7 @@ package com.example.archmind.service.impl;
 
 import com.example.archmind.common.exception.BusinessException;
 import com.example.archmind.dto.response.ClassNodeDTO;
+import com.example.archmind.dto.response.ClassPageResponse;
 import com.example.archmind.dto.response.ClassRelationsResponse;
 import com.example.archmind.dto.response.RelatedClassDTO;
 import com.example.archmind.service.ast.CodeGraphQueryService;
@@ -13,6 +14,7 @@ import org.neo4j.driver.Record;
 import org.neo4j.driver.Result;
 import org.neo4j.driver.Session;
 import org.neo4j.driver.Value;
+import org.neo4j.driver.Values;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -35,6 +37,13 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
 
     private static final String LIST_CLASSES =
             "MATCH (c:Class {projectId: $pid}) RETURN c ORDER BY c.packageName, c.name LIMIT $limit";
+
+    /** keyset 分页：按 uid 升序，游标是上一页最后一个 uid。 */
+    private static final String LIST_CLASSES_PAGE = """
+            MATCH (c:Class {projectId: $pid})
+            WHERE $afterUid IS NULL OR c.uid > $afterUid
+            RETURN c ORDER BY c.uid LIMIT $limit
+            """;
 
     private static final String FIND_CENTER =
             "MATCH (c:Class {projectId: $pid, uid: $uid}) RETURN c";
@@ -131,6 +140,34 @@ public class CodeGraphQueryServiceImpl implements CodeGraphQueryService {
             }
             return list;
         }
+    }
+
+    @Override
+    public ClassPageResponse listClassesPage(Long projectId, String afterUid, int limit) {
+        int size = Math.max(1, Math.min(limit, 200));
+        Set<String> coreUids = Set.copyOf(coreClassUids(projectId));
+
+        List<ClassNodeDTO> items = new ArrayList<>();
+        try (Session session = driver.session()) {
+            // 多取一条，用来判断是否还有下一页，省掉一次 count
+            Result result = session.run(LIST_CLASSES_PAGE, Values.parameters(
+                    "pid", projectId, "afterUid", afterUid, "limit", size + 1));
+            while (result.hasNext()) {
+                items.add(toClassNode(result.next().get("c"), coreUids));
+            }
+        }
+
+        String nextCursor = null;
+        if (items.size() > size) {
+            items = new ArrayList<>(items.subList(0, size));
+            nextCursor = items.get(items.size() - 1).getQualifiedName();
+        }
+
+        ClassPageResponse resp = new ClassPageResponse();
+        resp.setItems(items);
+        resp.setNextCursor(nextCursor);
+        resp.setRev(graphRev(projectId));
+        return resp;
     }
 
     @Override

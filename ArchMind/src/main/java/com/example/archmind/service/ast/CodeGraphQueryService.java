@@ -1,6 +1,7 @@
 package com.example.archmind.service.ast;
 
 import com.example.archmind.dto.response.ClassNodeDTO;
+import com.example.archmind.dto.response.ClassPageResponse;
 import com.example.archmind.dto.response.ClassRelationsResponse;
 
 import java.util.Collection;
@@ -41,6 +42,17 @@ public interface CodeGraphQueryService {
 
     /** 同上，指定 Top N。 */
     List<String> coreClassUids(Long projectId, int limit);
+
+    /**
+     * 按 uid 游标分页拉取类清单，供外部索引服务流式消费。
+     *
+     * <p>用 keyset（{@code c.uid > afterUid}）而不是 offset：索引期间即使有并发写入，
+     * 也不会重复或漏行。返回的 {@code rev} 用于调用方检测图是否在两页之间被重建。</p>
+     *
+     * @param afterUid 上一页最后一个 uid；null 表示第一页
+     * @param limit    本页最多返回多少个类（服务端钳在 1~200）
+     */
+    ClassPageResponse listClassesPage(Long projectId, String afterUid, int limit);
 
     /**
      * 批量查这些 uid 里，**哪些确实是这个项目的类节点**。
