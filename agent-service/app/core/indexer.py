@@ -186,6 +186,13 @@ class Indexer:
 
         await self._qdrant.ensure_collection()
 
+        if active_rev is None:
+            # 没有任何可保护的版本（这个项目从没成功索引过），先清掉遗留点。
+            # 不清的话，上一次失败留下的点会和这一次混在同一个 rev 下，
+            # 数量校验永远对不上 —— 而它们本来就没有服务价值。
+            # active_rev 有值时**绝不能**走这里：那时旧点是唯一能对外服务的版本。
+            await self._qdrant.delete_project(project_id)
+
         try:
             processed = await self._stream(project_id, rev, status.describable)
         except Exception:

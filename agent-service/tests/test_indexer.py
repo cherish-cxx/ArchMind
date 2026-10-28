@@ -141,8 +141,8 @@ async def test_index_streams_pages_and_sets_ready():
     await indexer._index(1)
 
     assert java.calls == [None, "com.x.B"]
-    # ★ 不再先删旧点：新点先写进去，切换 activeRev 之后才清理旧版本
-    assert qdrant.deleted == []
+    # 从没成功索引过（activeRev 为空）→ 先清掉遗留点，否则旧点会和这次混在一起
+    assert qdrant.deleted == [1]
     assert qdrant.cleaned == [(1, 7)]
     assert len(qdrant.points) == 3
     assert store.state["status"] == "ready"
@@ -199,6 +199,21 @@ async def test_delete_project_removes_points_and_state():
 
 
 # ==================== R4：activeRev 与覆盖率 ====================
+
+
+@pytest.mark.asyncio
+async def test_existing_active_version_is_not_cleared():
+    """有可服务的旧版本时**不清空** —— 清空了重新索引期间就没有数据可查了。"""
+    pages = {None: _page(7, [_node("com.x.A", "A", "A 的职责")], None)}
+    qdrant = FakeQdrant()
+    store = FakeStore()
+    store.state = {"status": "ready", "activeRev": 6, "rev": 6}
+    indexer = Indexer(FakeJava(_status(describable=1), pages), FakeEmbed(), qdrant, store)
+
+    await indexer._index(1)
+
+    assert qdrant.deleted == []
+    assert store.state["activeRev"] == 7
 
 
 @pytest.mark.asyncio
