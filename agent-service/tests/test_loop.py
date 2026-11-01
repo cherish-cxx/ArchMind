@@ -11,7 +11,7 @@ import pytest
 
 from app.core.llm import LLMNotConfiguredError, LLMTransportError
 from app.core.loop import run_turn
-from app.models.context import AgentContext
+from app.models.context import AgentContext, MessageRole
 from app.models.intent import Intent
 from app.models.response import NodeRef, NodeRefType
 from app.tools.java_client import InternalAuthError, ToolTransportError
@@ -286,7 +286,7 @@ async def test_ghost_citation_is_dropped_but_real_one_survives():
 # ==================== 预算与历史 ====================
 
 
-async def test_history_and_turn_count_accumulate_across_turns():
+async def test_messages_accumulate_across_turns():
     java = FakeJava(ok_chain())
     llm = FakeLLM(
         [_intent(Intent.EXPLORE_FLOW), _explain("第一轮回答。")] * 2
@@ -296,9 +296,10 @@ async def test_history_and_turn_count_accumulate_across_turns():
     await run_turn(ctx, "第一次", java, llm)
     await run_turn(ctx, "第二次", java, llm)
 
-    assert ctx.budget.turns == 2
-    assert [h.q for h in ctx.history] == ["第一次", "第二次"]
-    assert ctx.history[0].intent is Intent.EXPLORE_FLOW
+    user_texts = [m.content for m in ctx.messages if m.role is MessageRole.USER]
+    assert user_texts == ["第一次", "第二次"]
+    # 轮号由落库层回填，run_turn 自己不再推进预算
+    assert ctx.turn.intent is Intent.EXPLORE_FLOW
 
 
 async def test_second_turn_llm2_sees_first_turn_history():
@@ -314,7 +315,7 @@ async def test_second_turn_llm2_sees_first_turn_history():
     user = llm.calls[3]["messages"][1]["content"]
     assert "第一次" in user, "第一轮的原话必须出现在第二轮讲解的 prompt 里"
     assert "第一轮回答。" in user, "第一轮的摘要必须出现在第二轮讲解的 prompt 里"
-    assert "原话：第二次" in user, "本轮问题要用用户原话，而不是改写后的句子"
+    assert "[用户] 第二次" in user, "本轮问题要用用户原话，而不是改写后的句子"
 
 
 async def test_per_turn_counters_reset():
@@ -362,6 +363,42 @@ async def test_entity_ref_outside_candidates_is_dropped():
 
     assert java.calls == []
     assert "OrderServiceImpl" in r.message
+
+
+async def test_low_anchor_score_falls_back_to_clarification():
+    """模型自己说只是"沾边"（anchorScore=1）→ 不拿它当起点，改问用户。
+
+    这条是「必须选一个」的修正：候选在、uid 也合法，但相关性不够时不能硬查，
+    否则就是从错节点拉一张看起来对的图。
+    """
+    uid = "com.hmall.trade.service.impl.OrderServiceImpl"
+    java = FakeJava(ok_chain())
+    llm = FakeLLM([_intent(Intent.EXPLORE_FLOW, entityRef=uid, anchorScore=1)])
+    retriever = FakeRetriever([candidate(uid, desc="负责下单")], skipped=None)
+
+    r = await run_turn(_ctx(focus_uid=None), "订单状态字段有哪些", java, llm, retriever)
+
+    assert java.calls == []
+    assert "OrderServiceImpl" in r.message
+    assert "可能的起点" in r.message
+
+
+async def test_user_named_class_is_not_gated_by_low_score():
+    """用户原话里点了名 → 即使模型给低分也不能丢。
+
+    与 resolve_entity_ref 的第 3 条规则一致：用户自己给的锚点优先于检索排序。
+    """
+    uid = "com.hmall.trade.service.impl.OrderServiceImpl"
+    java = FakeJava(ok_chain())
+    llm = FakeLLM([
+        _intent(Intent.EXPLORE_RELATION, entityRef=uid, anchorScore=1),
+        _explain(),
+    ])
+    retriever = FakeRetriever([candidate(uid, desc="负责下单")], skipped=None)
+
+    await run_turn(_ctx(focus_uid=None), "OrderServiceImpl 被谁调用", java, llm, retriever)
+
+    assert java.calls == [("class-relations", PROJECT_ID, uid)]
 
 
 async def test_focus_skips_retrieval():

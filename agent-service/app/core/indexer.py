@@ -18,7 +18,7 @@ import uuid
 from qdrant_client.models import PointStruct, SparseVector
 
 from app.config import settings
-from app.models.tool import ClassNode
+from app.models.tool import ClassCard, ClassNode
 from app.store.index_store import IndexStore
 from app.tools.embed_client import EmbedClient
 from app.tools.java_client import JavaClient
@@ -27,6 +27,25 @@ from app.tools.qdrant_store import QdrantStore
 logger = logging.getLogger(__name__)
 
 _KIND_LABELS = {"CLASS": "类", "INTERFACE": "接口", "ENUM": "枚举"}
+
+#: 卡片文本里最多带几个方法名。再多会稀释描述，也拉长 embed 输入。
+_MAX_CARD_METHODS = 8
+
+
+def _method_names(node: ClassNode) -> list[str]:
+    """取可读的方法名，过滤构造器和空值；保持 Java 返回的顺序（按名字排序）。"""
+    methods = getattr(node, "methods", None) or []
+    names: list[str] = []
+    for m in methods:
+        if m.is_constructor:
+            continue
+        name = (m.name or "").strip()
+        if not name or name.startswith("<") or name in names:
+            continue
+        names.append(name)
+        if len(names) >= _MAX_CARD_METHODS:
+            break
+    return names
 
 
 class IndexError(Exception):
@@ -51,16 +70,22 @@ def build_card(node: ClassNode) -> tuple[str, str]:
 
     有描述就用描述；没有时用结构化兜底，保证每个类都能进索引，
     且兜底文本对每个类不同，不会在向量空间里挤成一团。
+    方法名接在后面：它是「用户说方法、问某个动作」时唯一能对上的词。
     """
     description = (node.description or "").strip()
     if description:
-        return f"{node.simple_name}：{description}", "LLM"
+        text, source = f"{node.simple_name}：{description}", "LLM"
+    else:
+        kind = _KIND_LABELS.get(node.kind.value, "类")
+        text = f"{kind} {node.simple_name}"
+        if node.package_name:
+            text += f"，位于包 {node.package_name}"
+        source = "FALLBACK"
 
-    kind = _KIND_LABELS.get(node.kind.value, "类")
-    text = f"{kind} {node.simple_name}"
-    if node.package_name:
-        text += f"，位于包 {node.package_name}"
-    return text, "FALLBACK"
+    names = _method_names(node)
+    if names:
+        text += "；方法：" + "、".join(names)
+    return text, source
 
 
 def chunked(items: list, size: int) -> list[list]:
@@ -235,11 +260,11 @@ class Indexer:
         processed = 0
         pages = 0
         while True:
-            page = await self._java.classes_page(
+            page = await self._java.class_cards_page(
                 project_id, cursor, settings.index_page_size
             )
             if not page.ok or page.data is None:
-                raise IndexError(f"classes/page 失败: {page.note}")
+                raise IndexError(f"classes/cards 失败: {page.note}")
             data = page.data
             if data.rev != rev:
                 raise StaleGraphError(f"拉取期间图被重建: rev {rev} -> {data.rev}")
@@ -289,7 +314,7 @@ class Indexer:
             logger.warning("清理失败版本的索引点失败 projectId=%s rev=%s",
                            project_id, rev, exc_info=True)
 
-    async def _index_page(self, project_id: int, rev: int, items: list[ClassNode]) -> None:
+    async def _index_page(self, project_id: int, rev: int, items: list[ClassCard]) -> None:
         entries = [(item, *build_card(item)) for item in items]
         for start in range(0, len(entries), settings.index_embed_batch):
             batch = entries[start:start + settings.index_embed_batch]
@@ -305,7 +330,7 @@ class Indexer:
     def _point(
         project_id: int,
         rev: int,
-        item: ClassNode,
+        item: ClassCard,
         source: str,
         dense: list[float],
         sparse: dict[int, float],
@@ -331,6 +356,17 @@ class Indexer:
                 "description": item.description,
                 "descriptionSource": source,
                 "filePath": item.file_path,
+                # 方法/上下游只进 payload，供候选展示与后续工具使用；
+                # 进向量的只有卡片文本（描述 + 少量方法名），避免稀释语义。
+                "methods": [
+                    {"name": m.name, "signature": m.signature} for m in item.methods
+                ],
+                "methodCount": item.method_count,
+                "upstream": item.upstream.model_dump(by_alias=True),
+                "downstream": item.downstream.model_dump(by_alias=True),
+                "methodsTruncated": item.methods_truncated,
+                "upstreamTruncated": item.upstream_truncated,
+                "downstreamTruncated": item.downstream_truncated,
                 "rev": rev,
             },
         )

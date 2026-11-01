@@ -200,31 +200,46 @@ def ok_method_body(code: str = LOCKED_CODE) -> ToolEnvelope:
 
 
 class FakeContextStore:
-    """内存版 ContextStore（P4.1）。
+    """内存版 `ConversationStore`（R5）。
 
-    **为什么需要它**：`test_contract.py` 走的是真 app（`TestClient(app)` 会跑 lifespan，
-    于是建一个真 `ContextStore` → 真连 Redis）。契约测试的红只应该代表「契约漂移了」，
-    不该因为本机没起 Redis 就红 —— 和 conftest 里「Java 不可达就 skip」是同一条铁律。
+    **为什么需要它**：`test_contract.py` / `test_viewport.py` 走的是真 app
+    （`TestClient(app)` 会跑 lifespan，于是建真的 Redis + MySQL 连接）。
+    测试的红只应该代表「逻辑漂移了」，不该因为本机没起 MySQL 就红 ——
+    和 conftest 里「Java 不可达就 skip」是同一条铁律。
 
-    语义必须和真 store 对齐：**load 取不到就返回新建的，不返回 None**
-    （P3 的 `_load_context` 就是这个语义，换了存储也不变）。
+    语义必须和真门面对齐：
+      - `load` 取不到就返回新建的，不返回 None
+      - `load_or_none` 不存在返回 None，不创建
+      - `commit_turn` 成功返回 True；替身里永远成功
     """
 
     def __init__(self) -> None:
         self._data: dict[tuple[int, str], AgentContext] = {}
+        self._turns: dict[tuple[int, str], int] = {}
 
-    async def load(self, project_id: int, conversation_id: str) -> AgentContext:
+    async def load(self, user_id: int, project_id: int,
+                   conversation_id: str) -> AgentContext:
         key = (project_id, conversation_id)
         if key not in self._data:
             self._data[key] = AgentContext(conversation_id=conversation_id, project_id=project_id)
         return self._data[key]
 
-    async def load_or_none(self, project_id: int, conversation_id: str) -> AgentContext | None:
+    async def load_or_none(self, user_id: int, project_id: int,
+                           conversation_id: str) -> AgentContext | None:
         """语义必须和真 store 一致：**不存在返回 None，不创建**（P4.2 决策 A）。"""
         return self._data.get((project_id, conversation_id))
 
     async def save(self, ctx: AgentContext) -> None:
         self._data[(ctx.project_id, ctx.conversation_id)] = ctx
+
+    async def commit_turn(self, ctx: AgentContext, user_id: int,
+                          project_id: int) -> bool:
+        key = (project_id, ctx.conversation_id)
+        self._turns[key] = self._turns.get(key, 0) + 1
+        ctx.budget.turns = self._turns[key]
+        ctx.prune_window(40, 48000)
+        self._data[key] = ctx
+        return True
 
     async def evict_project(self, project_id: int) -> int:
         doomed = [k for k in self._data if k[0] == project_id]
@@ -283,6 +298,7 @@ class FakeRetriever:
 def candidate(
     uid: str, simple: str | None = None, *, kind: str = "CLASS",
     desc: str | None = None, score: float = 0.03,
+    methods: tuple[str, ...] = (),
 ) -> Candidate:
     """构造候选的小工具。默认从 uid 切出简单名与包名。"""
     head = uid.partition("#")[0]
@@ -294,4 +310,5 @@ def candidate(
         description=desc,
         rev=1,
         score=score,
+        methods=methods,
     )

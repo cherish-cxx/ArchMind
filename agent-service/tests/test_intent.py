@@ -13,7 +13,7 @@ import pytest
 from app.core.intent import IntentParseError, classify_intent, parse_intent
 from app.core.llm import LLMNotConfiguredError, LLMTransportError
 from app.core.prompt import intent_messages
-from app.models.context import AgentContext, HistoryItem
+from app.models.context import AgentContext, ChatMessage, MessageRole
 from app.models.intent import CONFIDENCE_THRESHOLD, Intent
 from app.models.response import NodeRef, NodeRefType
 from fakes import FakeLLM
@@ -40,6 +40,17 @@ def test_parse_intent_happy_path():
     assert r.intent is Intent.EXPLORE_FLOW
     assert r.confidence == 0.86
     assert r.slots.depth == 2
+
+
+def test_parse_intent_reads_anchor_score():
+    """anchorScore 是锚点匹配度，和 confidence 分开；缺省时保持 None（兼容旧输出）。"""
+    r = parse_intent(
+        '{"intent": "EXPLORE_FLOW", "confidence": 0.86,'
+        ' "slots": {"entityRef": "com.x.A", "anchorScore": 1}}'
+    )
+    assert r.slots.entity_ref == "com.x.A"
+    assert r.slots.anchor_score == 1
+    assert parse_intent('{"intent": "NAVIGATE", "confidence": 0.8}').slots.anchor_score is None
 
 
 def test_parse_intent_rejects_non_json():
@@ -155,18 +166,16 @@ def test_intent_prompt_says_so_when_no_focus():
 
 def test_intent_prompt_carries_all_history():
     """LLM #1 也放开到全部历史 —— 第 4 轮之后的承接不能凭空断掉。"""
-    ctx = AgentContext(
-        conversation_id="c",
-        project_id=1,
-        history=[
-            HistoryItem(turn=i, intent=Intent.EXPLORE_FLOW, q=f"第{i}问", a=f"第{i}答")
-            for i in range(1, 6)
-        ],
-    )
+    ctx = AgentContext(conversation_id="c", project_id=1)
+    for i in range(1, 6):
+        ctx.messages.append(ChatMessage(role=MessageRole.USER, content=f"第{i}问"))
+        ctx.messages.append(ChatMessage(role=MessageRole.ASSISTANT, content=f"第{i}答"))
+    # `begin_turn` 会把本轮问题追加为最后一条 USER；这里模拟一下
+    ctx.messages.append(ChatMessage(role=MessageRole.USER, content="继续说"))
 
     user = intent_messages(ctx, "继续说")[1]["content"]
 
     for i in range(1, 6):
         assert f"第{i}问" in user, f"第 {i} 轮被截断了"
         assert f"第{i}答" in user
-    assert "完整对话历史" in user
+    assert "之前的对话" in user

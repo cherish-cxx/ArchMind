@@ -7,3 +7,8 @@ pytest
 pytest-asyncio
 redis
 qdrant-client>=1.12,<2
+sqlalchemy[asyncio]>=2.0,<2.1
+aiomysql>=0.2,<1
+alembic>=1.13,<2
+# MySQL 8 的 caching_sha2_password 认证需要它（aiomysql 通过 pymysql 做 RSA 握手）
+cryptography>=42

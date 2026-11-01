@@ -15,9 +15,11 @@
 
 import json
 import logging
+import time
 
 from pydantic import ValidationError
 
+from app.config import settings
 from app.core.llm import Completer
 from app.core.prompt import intent_messages
 from app.models.context import AgentContext
@@ -87,7 +89,16 @@ async def classify_intent(
     """
     # intent_message拼好给LLM的提示词（系统prompt+用户消息+上下文信息）
     # json_mode = true 强制大模型返回标记JSON字符串，方便后面解析意图
+    started = time.perf_counter()
     raw = await llm.complete(intent_messages(ctx, message, candidates), json_mode=True)
+    ctx.turn.llm_calls.append({
+        "purpose": "intent",
+        "model": settings.llm_model,
+        "rawResponse": raw.text,
+        "tokensIn": raw.tokens_in,
+        "tokensOut": raw.tokens_out,
+        "latencyMs": int((time.perf_counter() - started) * 1000),
+    })
 
     try:
         return parse_intent(raw.text)

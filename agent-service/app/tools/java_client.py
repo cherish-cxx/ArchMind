@@ -23,6 +23,7 @@ from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.models.tool import (
     CallChain,
     ChainDirection,
+    ClassCardPage,
     ClassNode,
     ClassPage,
     ClassRelations,
@@ -58,6 +59,7 @@ _PATH_CLASS_RELATIONS = f"{_PREFIX}/class-relations"
 _PATH_CALL_CHAIN = f"{_PREFIX}/call-chain"
 _PATH_METHOD_BODY = f"{_PREFIX}/method-body"
 _PATH_CLASSES_PAGE = f"{_PREFIX}/classes/page"
+_PATH_CLASSES_CARDS = f"{_PREFIX}/classes/cards"
 _PATH_DESCRIBE_STATUS = "/internal/describe/status"
 
 
@@ -203,6 +205,19 @@ class JavaClient:
             params["afterUid"] = after_uid
         resp = await self._send("GET", _PATH_CLASSES_PAGE, params=params)
         return ToolEnvelope[ClassPage].model_validate(resp.json())
+
+    async def class_cards_page(
+        self, project_id: int, after_uid: str | None = None, limit: int = DEFAULT_PAGE_SIZE
+    ) -> ToolEnvelope[ClassCardPage]:
+        """索引专用：一页类卡片（类信息 + 方法摘要 + 上下游摘要）。
+
+        分页与 rev 语义和 `classes_page` 完全一致；调用方仍需在每页校验 rev。
+        """
+        params: dict[str, Any] = {"projectId": project_id, "limit": limit}
+        if after_uid:
+            params["afterUid"] = after_uid
+        resp = await self._send("GET", _PATH_CLASSES_CARDS, params=params)
+        return ToolEnvelope[ClassCardPage].model_validate(resp.json())
 
     async def describe_status(self, project_id: int) -> DescribeStatus:
         """描述覆盖情况。只有 `pending == 0` 且分析完成才允许建索引。"""

@@ -1,0 +1,3342 @@
+{
+  "generatedAt": "2026-10-31T05:13:55.722447+00:00",
+  "projectId": 2115334472151040002,
+  "rev": 1,
+  "collection": "archmind_classes",
+  "dataset": "scripts\\eval\\retrieval_dataset.archmind.json",
+  "datasetVersion": 1,
+  "indexState": {
+    "status": "ready",
+    "rev": 1,
+    "activeRev": 1,
+    "pendingRev": null,
+    "count": 104,
+    "actual": 104,
+    "expected": 104,
+    "partial": false,
+    "describable": 104,
+    "startedAt": 1793178386,
+    "finishedAt": 1793178395,
+    "projectId": 2115334472151040002,
+    "updatedAt": 1793178395
+  },
+  "indexedPoints": 104,
+  "topK": 10,
+  "metrics": {
+    "hybrid": {
+      "queries": 40,
+      "recall@1": 0.425,
+      "hit@1": 0.675,
+      "primary_hit@1": 0.55,
+      "recall@3": 0.6917,
+      "hit@3": 0.9,
+      "primary_hit@3": 0.85,
+      "recall@5": 0.7958,
+      "hit@5": 0.95,
+      "primary_hit@5": 0.95,
+      "recall@10": 0.9417,
+      "hit@10": 1.0,
+      "primary_hit@10": 1.0,
+      "mrr@10": 0.7935,
+      "anchor_recall@5": 0.7714,
+      "embed_ms": {
+        "p50": 392.6,
+        "p95": 495.4
+      },
+      "query_ms": {
+        "p50": 65.8,
+        "p95": 73.7
+      },
+      "total_ms": {
+        "p50": 447.2,
+        "p95": 562.7
+      }
+    },
+    "dense": {
+      "queries": 40,
+      "recall@1": 0.4417,
+      "hit@1": 0.7,
+      "primary_hit@1": 0.625,
+      "recall@3": 0.725,
+      "hit@3": 0.925,
+      "primary_hit@3": 0.875,
+      "recall@5": 0.8,
+      "hit@5": 0.975,
+      "primary_hit@5": 0.95,
+      "recall@10": 0.9292,
+      "hit@10": 1.0,
+      "primary_hit@10": 1.0,
+      "mrr@10": 0.8194,
+      "anchor_recall@5": 0.7571,
+      "embed_ms": {
+        "p50": 392.6,
+        "p95": 495.4
+      },
+      "query_ms": {
+        "p50": 65.8,
+        "p95": 73.7
+      },
+      "total_ms": {
+        "p50": 447.2,
+        "p95": 562.7
+      }
+    },
+    "sparse": {
+      "queries": 40,
+      "recall@1": 0.4125,
+      "hit@1": 0.65,
+      "primary_hit@1": 0.525,
+      "recall@3": 0.7167,
+      "hit@3": 0.925,
+      "primary_hit@3": 0.875,
+      "recall@5": 0.7833,
+      "hit@5": 0.95,
+      "primary_hit@5": 0.95,
+      "recall@10": 0.8917,
+      "hit@10": 0.95,
+      "primary_hit@10": 0.95,
+      "mrr@10": 0.7729,
+      "anchor_recall@5": 0.7714,
+      "embed_ms": {
+        "p50": 392.6,
+        "p95": 495.4
+      },
+      "query_ms": {
+        "p50": 65.8,
+        "p95": 73.7
+      },
+      "total_ms": {
+        "p50": 447.2,
+        "p95": 562.7
+      }
+    },
+    "dbsf": {
+      "queries": 40,
+      "recall@1": 0.425,
+      "hit@1": 0.675,
+      "primary_hit@1": 0.575,
+      "recall@3": 0.7375,
+      "hit@3": 0.925,
+      "primary_hit@3": 0.875,
+      "recall@5": 0.8208,
+      "hit@5": 0.975,
+      "primary_hit@5": 0.95,
+      "recall@10": 0.9167,
+      "hit@10": 0.975,
+      "primary_hit@10": 0.975,
+      "mrr@10": 0.8,
+      "anchor_recall@5": 0.8,
+      "embed_ms": {
+        "p50": 392.6,
+        "p95": 495.4
+      },
+      "query_ms": {
+        "p50": 65.8,
+        "p95": 73.7
+      },
+      "total_ms": {
+        "p50": 447.2,
+        "p95": 562.7
+      }
+    }
+  },
+  "perCategory": {
+    "analysis": {
+      "queries": 7,
+      "recall@5": 0.8095,
+      "mrr@10": 0.9286
+    },
+    "auth": {
+      "queries": 8,
+      "recall@5": 0.75,
+      "mrr@10": 0.5563
+    },
+    "graph": {
+      "queries": 2,
+      "recall@5": 0.25,
+      "mrr@10": 0.3125
+    },
+    "misc": {
+      "queries": 4,
+      "recall@5": 1.0,
+      "mrr@10": 1.0
+    },
+    "overview": {
+      "queries": 6,
+      "recall@5": 0.8333,
+      "mrr@10": 0.9167
+    },
+    "project": {
+      "queries": 4,
+      "recall@5": 0.9167,
+      "mrr@10": 0.8333
+    },
+    "task": {
+      "queries": 6,
+      "recall@5": 0.8333,
+      "mrr@10": 0.8889
+    },
+    "upload": {
+      "queries": 3,
+      "recall@5": 0.6667,
+      "mrr@10": 0.6667
+    }
+  },
+  "perQuery": [
+    {
+      "id": "Q01",
+      "question": "用户注册的时候密码是怎么加密保存的？",
+      "category": "auth",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.config.SecurityConfig",
+        "com.example.archmind.service.impl.UserServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.config.SecurityConfig": 5,
+        "com.example.archmind.service.impl.UserServiceImpl": 6
+      },
+      "mrr": 0.2,
+      "first_rank": 5,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 0.0,
+      "hit@3": 0.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 5,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 0.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.UserService",
+          "score": 0.75
+        },
+        {
+          "uid": "com.example.archmind.common.security.SecurityUser",
+          "score": 0.5833
+        },
+        {
+          "uid": "com.example.archmind.dto.request.RegisterRequest",
+          "score": 0.4762
+        },
+        {
+          "uid": "com.example.archmind.entity.User",
+          "score": 0.4762
+        },
+        {
+          "uid": "com.example.archmind.config.SecurityConfig",
+          "score": 0.3667
+        },
+        {
+          "uid": "com.example.archmind.service.impl.UserServiceImpl",
+          "score": 0.3333
+        },
+        {
+          "uid": "com.example.archmind.controller.AuthController",
+          "score": 0.2909
+        },
+        {
+          "uid": "com.example.archmind.service.AuthService",
+          "score": 0.2576
+        },
+        {
+          "uid": "com.example.archmind.service.UserDetailsServiceImpl",
+          "score": 0.1778
+        },
+        {
+          "uid": "com.example.archmind.dto.request.LoginRequest",
+          "score": 0.1769
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.security.SecurityUser",
+        "com.example.archmind.entity.User",
+        "com.example.archmind.service.UserService",
+        "com.example.archmind.config.SecurityConfig",
+        "com.example.archmind.service.AuthService"
+      ]
+    },
+    {
+      "id": "Q02",
+      "question": "登录成功后返回给前端的凭证里包含哪些信息？",
+      "category": "auth",
+      "difficulty": "easy",
+      "anchors": [
+        "com.example.archmind.dto.response.LoginResponse",
+        "com.example.archmind.controller.AuthController"
+      ],
+      "ranks": {
+        "com.example.archmind.dto.response.LoginResponse": 1,
+        "com.example.archmind.controller.AuthController": null
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 0.5,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.dto.response.LoginResponse",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.dto.response.UserInfoResponse",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.dto.request.LoginRequest",
+          "score": 0.4333
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassNodeDTO",
+          "score": 0.3958
+        },
+        {
+          "uid": "com.example.archmind.service.AuthService",
+          "score": 0.2714
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ProjectResponse",
+          "score": 0.2667
+        },
+        {
+          "uid": "com.example.archmind.dto.response.UploadResponse",
+          "score": 0.2338
+        },
+        {
+          "uid": "com.example.archmind.common.handler.AuthenticationEntryPointImpl",
+          "score": 0.2292
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.2198
+        },
+        {
+          "uid": "com.example.archmind.service.impl.AuthServiceImpl",
+          "score": 0.1806
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.dto.response.LoginResponse",
+        "com.example.archmind.dto.request.LoginRequest",
+        "com.example.archmind.dto.response.UserInfoResponse",
+        "com.example.archmind.service.AuthService",
+        "com.example.archmind.common.handler.AuthenticationEntryPointImpl"
+      ]
+    },
+    {
+      "id": "Q03",
+      "question": "访问令牌是怎么生成和校验的？",
+      "category": "auth",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.common.util.JwtUtil"
+      ],
+      "ranks": {
+        "com.example.archmind.common.util.JwtUtil": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 1.0,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.common.util.JwtUtil",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.service.AuthService",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.service.impl.AuthServiceImpl",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.controller.AuthController",
+          "score": 0.4
+        },
+        {
+          "uid": "com.example.archmind.common.util.CheckProjectUtil",
+          "score": 0.3333
+        },
+        {
+          "uid": "com.example.archmind.dao.UserMapper",
+          "score": 0.225
+        },
+        {
+          "uid": "com.example.archmind.dao.TaskMapper",
+          "score": 0.1909
+        },
+        {
+          "uid": "com.example.archmind.common.handler.AuthenticationEntryPointImpl",
+          "score": 0.1838
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectMapper",
+          "score": 0.1611
+        },
+        {
+          "uid": "com.example.archmind.config.JwtAuthenticationFilter",
+          "score": 0.1548
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.util.JwtUtil",
+        "com.example.archmind.service.AuthService",
+        "com.example.archmind.service.impl.AuthServiceImpl",
+        "com.example.archmind.controller.AuthController",
+        "com.example.archmind.common.util.CheckProjectUtil"
+      ]
+    },
+    {
+      "id": "Q04",
+      "question": "每次请求进来时是怎么识别当前用户的？",
+      "category": "auth",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.config.JwtAuthenticationFilter",
+        "com.example.archmind.common.security.SecurityUser"
+      ],
+      "ranks": {
+        "com.example.archmind.config.JwtAuthenticationFilter": 6,
+        "com.example.archmind.common.security.SecurityUser": null
+      },
+      "mrr": 0.16666666666666666,
+      "first_rank": 6,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 0.0,
+      "hit@3": 0.0,
+      "recall@5": 0.0,
+      "hit@5": 0.0,
+      "recall@10": 0.5,
+      "hit@10": 1.0,
+      "primary_rank": 6,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 0.0,
+      "primary_hit@5": 0.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.dto.request.LoginRequest",
+          "score": 0.75
+        },
+        {
+          "uid": "com.example.archmind.dto.request.ProjectCreateRequest",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.common.util.CheckProjectUtil",
+          "score": 0.4167
+        },
+        {
+          "uid": "com.example.archmind.dto.request.RegisterRequest",
+          "score": 0.4167
+        },
+        {
+          "uid": "com.example.archmind.service.impl.AuthServiceImpl",
+          "score": 0.3333
+        },
+        {
+          "uid": "com.example.archmind.config.JwtAuthenticationFilter",
+          "score": 0.2909
+        },
+        {
+          "uid": "com.example.archmind.common.handler.AuthenticationEntryPointImpl",
+          "score": 0.2679
+        },
+        {
+          "uid": "com.example.archmind.common.handler.AccessDeniedHandlerImpl",
+          "score": 0.2095
+        },
+        {
+          "uid": "com.example.archmind.entity.User",
+          "score": 0.2
+        },
+        {
+          "uid": "com.example.archmind.service.AuthService",
+          "score": 0.1667
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.dto.request.LoginRequest",
+        "com.example.archmind.service.impl.AuthServiceImpl",
+        "com.example.archmind.common.util.CheckProjectUtil",
+        "com.example.archmind.entity.User",
+        "com.example.archmind.service.AuthService"
+      ]
+    },
+    {
+      "id": "Q05",
+      "question": "用户认证信息是怎么从数据库加载给安全框架的？",
+      "category": "auth",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.service.UserDetailsServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.service.UserDetailsServiceImpl": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 1.0,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.UserDetailsServiceImpl",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.entity.User",
+          "score": 0.4583
+        },
+        {
+          "uid": "com.example.archmind.common.handler.AuthenticationEntryPointImpl",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.common.security.SecurityUser",
+          "score": 0.386
+        },
+        {
+          "uid": "com.example.archmind.dao.UserMapper",
+          "score": 0.3088
+        },
+        {
+          "uid": "com.example.archmind.dto.request.LoginRequest",
+          "score": 0.3
+        },
+        {
+          "uid": "com.example.archmind.config.JwtAuthenticationFilter",
+          "score": 0.2667
+        },
+        {
+          "uid": "com.example.archmind.dto.request.RegisterRequest",
+          "score": 0.202
+        },
+        {
+          "uid": "com.example.archmind.service.AuthService",
+          "score": 0.2017
+        },
+        {
+          "uid": "com.example.archmind.service.UserService",
+          "score": 0.1776
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.UserDetailsServiceImpl",
+        "com.example.archmind.common.security.SecurityUser",
+        "com.example.archmind.common.handler.AuthenticationEntryPointImpl",
+        "com.example.archmind.dto.request.LoginRequest",
+        "com.example.archmind.service.impl.AuthServiceImpl"
+      ]
+    },
+    {
+      "id": "Q06",
+      "question": "用户没有权限访问某个接口时会返回什么？",
+      "category": "auth",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.common.handler.AccessDeniedHandlerImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.common.handler.AccessDeniedHandlerImpl": 4
+      },
+      "mrr": 0.25,
+      "first_rank": 4,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 0.0,
+      "hit@3": 0.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 4,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 0.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.dao.UserMapper",
+          "score": 0.625
+        },
+        {
+          "uid": "com.example.archmind.common.handler.AuthenticationEntryPointImpl",
+          "score": 0.5588
+        },
+        {
+          "uid": "com.example.archmind.dto.response.UserInfoResponse",
+          "score": 0.5333
+        },
+        {
+          "uid": "com.example.archmind.common.handler.AccessDeniedHandlerImpl",
+          "score": 0.4103
+        },
+        {
+          "uid": "com.example.archmind.controller.AuthController",
+          "score": 0.3667
+        },
+        {
+          "uid": "com.example.archmind.dto.response.LoginResponse",
+          "score": 0.3167
+        },
+        {
+          "uid": "com.example.archmind.common.security.SecurityUser",
+          "score": 0.3125
+        },
+        {
+          "uid": "com.example.archmind.dao.TaskMapper",
+          "score": 0.2143
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectMapper",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.1625
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.handler.AuthenticationEntryPointImpl",
+        "com.example.archmind.common.handler.AccessDeniedHandlerImpl",
+        "com.example.archmind.dto.response.LoginResponse",
+        "com.example.archmind.dto.response.UserInfoResponse",
+        "com.example.archmind.controller.AuthController"
+      ]
+    },
+    {
+      "id": "Q07",
+      "question": "注册接口需要前端传哪些字段？",
+      "category": "auth",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.dto.request.RegisterRequest",
+        "com.example.archmind.service.impl.UserServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.dto.request.RegisterRequest": 2,
+        "com.example.archmind.service.impl.UserServiceImpl": 3
+      },
+      "mrr": 0.5,
+      "first_rank": 2,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 2,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.controller.AuthController",
+          "score": 0.8333
+        },
+        {
+          "uid": "com.example.archmind.dto.request.RegisterRequest",
+          "score": 0.8333
+        },
+        {
+          "uid": "com.example.archmind.service.impl.UserServiceImpl",
+          "score": 0.3429
+        },
+        {
+          "uid": "com.example.archmind.service.UserService",
+          "score": 0.2976
+        },
+        {
+          "uid": "com.example.archmind.dto.request.LoginRequest",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.service.AuthService",
+          "score": 0.2
+        },
+        {
+          "uid": "com.example.archmind.dao.UserMapper",
+          "score": 0.1984
+        },
+        {
+          "uid": "com.example.archmind.dto.response.LoginResponse",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectController",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectMapper",
+          "score": 0.1611
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.dto.request.RegisterRequest",
+        "com.example.archmind.controller.AuthController",
+        "com.example.archmind.dto.request.LoginRequest",
+        "com.example.archmind.service.AuthService",
+        "com.example.archmind.dto.response.LoginResponse"
+      ]
+    },
+    {
+      "id": "Q08",
+      "question": "登录之后怎么把旧令牌换成新的？",
+      "category": "auth",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.service.impl.AuthServiceImpl",
+        "com.example.archmind.controller.AuthController"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.AuthServiceImpl": 4,
+        "com.example.archmind.controller.AuthController": 3
+      },
+      "mrr": 0.3333333333333333,
+      "first_rank": 3,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 4,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 0.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.AuthService",
+          "score": 0.7
+        },
+        {
+          "uid": "com.example.archmind.common.util.JwtUtil",
+          "score": 0.7
+        },
+        {
+          "uid": "com.example.archmind.controller.AuthController",
+          "score": 0.5833
+        },
+        {
+          "uid": "com.example.archmind.service.impl.AuthServiceImpl",
+          "score": 0.5833
+        },
+        {
+          "uid": "com.example.archmind.dto.response.LoginResponse",
+          "score": 0.2857
+        },
+        {
+          "uid": "com.example.archmind.dto.request.LoginRequest",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.service.impl.UserServiceImpl",
+          "score": 0.1909
+        },
+        {
+          "uid": "com.example.archmind.common.handler.AuthenticationEntryPointImpl",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.common.util.RedisUtil",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.common.security.SecurityUser",
+          "score": 0.125
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.util.JwtUtil",
+        "com.example.archmind.service.impl.AuthServiceImpl",
+        "com.example.archmind.controller.AuthController",
+        "com.example.archmind.service.AuthService",
+        "com.example.archmind.common.util.RedisUtil"
+      ]
+    },
+    {
+      "id": "Q09",
+      "question": "上传的项目压缩包是怎么安全解压的？",
+      "category": "upload",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.service.impl.ZipExtractServiceImpl",
+        "com.example.archmind.service.impl.UploadServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.ZipExtractServiceImpl": 2,
+        "com.example.archmind.service.impl.UploadServiceImpl": 6
+      },
+      "mrr": 0.5,
+      "first_rank": 2,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 2,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.ZipExtractService",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.service.impl.ZipExtractServiceImpl",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.service.UploadService",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.config.UploadProperties",
+          "score": 0.3333
+        },
+        {
+          "uid": "com.example.archmind.dto.response.UploadResponse",
+          "score": 0.325
+        },
+        {
+          "uid": "com.example.archmind.service.impl.UploadServiceImpl",
+          "score": 0.3111
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectSourceController",
+          "score": 0.2054
+        },
+        {
+          "uid": "com.example.archmind.config.SecurityConfig",
+          "score": 0.1833
+        },
+        {
+          "uid": "com.example.archmind.common.util.RedisUtil",
+          "score": 0.1429
+        },
+        {
+          "uid": "com.example.archmind.service.UserDetailsServiceImpl",
+          "score": 0.125
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.ZipExtractService",
+        "com.example.archmind.service.impl.ZipExtractServiceImpl",
+        "com.example.archmind.service.UploadService",
+        "com.example.archmind.service.impl.UploadServiceImpl",
+        "com.example.archmind.config.UploadProperties"
+      ]
+    },
+    {
+      "id": "Q10",
+      "question": "上传源码后文件记录是怎么写进数据库的？",
+      "category": "upload",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.service.impl.UploadServiceImpl",
+        "com.example.archmind.service.impl.FileScannerServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.UploadServiceImpl": 2,
+        "com.example.archmind.service.impl.FileScannerServiceImpl": 7
+      },
+      "mrr": 0.5,
+      "first_rank": 2,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 2,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.dao.ProjectSourceMapper",
+          "score": 0.75
+        },
+        {
+          "uid": "com.example.archmind.service.impl.UploadServiceImpl",
+          "score": 0.75
+        },
+        {
+          "uid": "com.example.archmind.entity.ProjectSource",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.dto.response.UploadResponse",
+          "score": 0.4762
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectSourceController",
+          "score": 0.4
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedFile",
+          "score": 0.2338
+        },
+        {
+          "uid": "com.example.archmind.service.impl.FileScannerServiceImpl",
+          "score": 0.2222
+        },
+        {
+          "uid": "com.example.archmind.service.impl.AstParserServiceImpl",
+          "score": 0.1806
+        },
+        {
+          "uid": "com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter",
+          "score": 0.1769
+        },
+        {
+          "uid": "com.example.archmind.service.UploadService",
+          "score": 0.175
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.impl.UploadServiceImpl",
+        "com.example.archmind.dto.response.UploadResponse",
+        "com.example.archmind.dao.ProjectSourceMapper",
+        "com.example.archmind.controller.ProjectSourceController",
+        "com.example.archmind.entity.ProjectSource"
+      ]
+    },
+    {
+      "id": "Q11",
+      "question": "项目的文件树是怎么构建和查询的？",
+      "category": "project",
+      "difficulty": "easy",
+      "anchors": [
+        "com.example.archmind.service.impl.FileTreeNodeServiceImpl",
+        "com.example.archmind.dto.response.FileTreeNode"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.FileTreeNodeServiceImpl": 2,
+        "com.example.archmind.dto.response.FileTreeNode": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 2,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.dto.response.FileTreeNode",
+          "score": 0.75
+        },
+        {
+          "uid": "com.example.archmind.service.impl.FileTreeNodeServiceImpl",
+          "score": 0.7
+        },
+        {
+          "uid": "com.example.archmind.service.FileTreeNodeService",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectSourceController",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ProjectIndexTest",
+          "score": 0.2193
+        },
+        {
+          "uid": "com.example.archmind.entity.ProjectSource",
+          "score": 0.2095
+        },
+        {
+          "uid": "com.example.archmind.service.ProjectService",
+          "score": 0.1944
+        },
+        {
+          "uid": "com.example.archmind.entity.FileEntity",
+          "score": 0.1838
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ProjectIndex",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectSourceMapper",
+          "score": 0.1429
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.dto.response.FileTreeNode",
+        "com.example.archmind.service.FileTreeNodeService",
+        "com.example.archmind.controller.ProjectSourceController",
+        "com.example.archmind.service.impl.FileTreeNodeServiceImpl",
+        "com.example.archmind.model.ast.ProjectIndex"
+      ]
+    },
+    {
+      "id": "Q12",
+      "question": "上传文件的大小限制在哪里配置？",
+      "category": "upload",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.config.UploadProperties"
+      ],
+      "ranks": {
+        "com.example.archmind.config.UploadProperties": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 1.0,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.config.UploadProperties",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.service.UploadService",
+          "score": 0.5333
+        },
+        {
+          "uid": "com.example.archmind.dto.response.UploadResponse",
+          "score": 0.5333
+        },
+        {
+          "uid": "com.example.archmind.service.impl.UploadServiceImpl",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.service.ZipExtractService",
+          "score": 0.2576
+        },
+        {
+          "uid": "com.example.archmind.config.SecurityConfig",
+          "score": 0.254
+        },
+        {
+          "uid": "com.example.archmind.config.AsyncConfig",
+          "score": 0.2436
+        },
+        {
+          "uid": "com.example.archmind.service.FileContentService",
+          "score": 0.1833
+        },
+        {
+          "uid": "com.example.archmind.service.impl.ZipExtractServiceImpl",
+          "score": 0.175
+        },
+        {
+          "uid": "com.example.archmind.service.impl.FileContentServiceImpl",
+          "score": 0.1548
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.config.UploadProperties",
+        "com.example.archmind.service.UploadService",
+        "com.example.archmind.service.impl.UploadServiceImpl",
+        "com.example.archmind.dto.response.UploadResponse",
+        "com.example.archmind.service.ZipExtractService"
+      ]
+    },
+    {
+      "id": "Q13",
+      "question": "创建项目的接口和请求参数是什么？",
+      "category": "project",
+      "difficulty": "easy",
+      "anchors": [
+        "com.example.archmind.controller.ProjectController",
+        "com.example.archmind.dto.request.ProjectCreateRequest",
+        "com.example.archmind.service.impl.ProjectServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.controller.ProjectController": 2,
+        "com.example.archmind.dto.request.ProjectCreateRequest": 1,
+        "com.example.archmind.service.impl.ProjectServiceImpl": null
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.3333333333333333,
+      "hit@1": 1.0,
+      "recall@3": 0.6666666666666666,
+      "hit@3": 1.0,
+      "recall@5": 0.6666666666666666,
+      "hit@5": 1.0,
+      "recall@10": 0.6666666666666666,
+      "hit@10": 1.0,
+      "primary_rank": 2,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.dto.request.ProjectCreateRequest",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectController",
+          "score": 0.5333
+        },
+        {
+          "uid": "com.example.archmind.dto.request.LoginRequest",
+          "score": 0.4762
+        },
+        {
+          "uid": "com.example.archmind.dto.request.RegisterRequest",
+          "score": 0.4167
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectSourceMapper",
+          "score": 0.3167
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectDependencyMapper",
+          "score": 0.2476
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectMapper",
+          "score": 0.2361
+        },
+        {
+          "uid": "com.example.archmind.dao.UserMapper",
+          "score": 0.2222
+        },
+        {
+          "uid": "com.example.archmind.dao.TaskMapper",
+          "score": 0.1833
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectOverviewMapper",
+          "score": 0.1769
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.dto.request.ProjectCreateRequest",
+        "com.example.archmind.controller.ProjectController",
+        "com.example.archmind.dao.ProjectSourceMapper",
+        "com.example.archmind.dao.ProjectDependencyMapper",
+        "com.example.archmind.dto.request.RegisterRequest"
+      ]
+    },
+    {
+      "id": "Q14",
+      "question": "删除项目的时候会清理哪些数据？",
+      "category": "project",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.service.impl.ProjectServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.ProjectServiceImpl": 3
+      },
+      "mrr": 0.3333333333333333,
+      "first_rank": 3,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 3,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.ProjectService",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectController",
+          "score": 0.5833
+        },
+        {
+          "uid": "com.example.archmind.service.impl.ProjectServiceImpl",
+          "score": 0.5833
+        },
+        {
+          "uid": "com.example.archmind.entity.FileEntity",
+          "score": 0.2476
+        },
+        {
+          "uid": "com.example.archmind.service.ZipExtractService",
+          "score": 0.2
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ProjectResponse",
+          "score": 0.1769
+        },
+        {
+          "uid": "com.example.archmind.dao.FileEntityMapper",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.common.util.CheckProjectUtil",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.common.util.RedisUtil",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectOverviewMapper",
+          "score": 0.1429
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.ProjectService",
+        "com.example.archmind.service.impl.ProjectServiceImpl",
+        "com.example.archmind.controller.ProjectController",
+        "com.example.archmind.service.ZipExtractService",
+        "com.example.archmind.common.util.RedisUtil"
+      ]
+    },
+    {
+      "id": "Q15",
+      "question": "怎么保证用户只能操作自己的项目？",
+      "category": "project",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.common.util.CheckProjectUtil"
+      ],
+      "ranks": {
+        "com.example.archmind.common.util.CheckProjectUtil": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 1.0,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.common.util.CheckProjectUtil",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.entity.User",
+          "score": 0.4444
+        },
+        {
+          "uid": "com.example.archmind.service.ProjectService",
+          "score": 0.4333
+        },
+        {
+          "uid": "com.example.archmind.service.UserService",
+          "score": 0.3667
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectController",
+          "score": 0.3333
+        },
+        {
+          "uid": "com.example.archmind.dto.response.UserInfoResponse",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.common.security.SecurityUser",
+          "score": 0.2436
+        },
+        {
+          "uid": "com.example.archmind.entity.Project",
+          "score": 0.2198
+        },
+        {
+          "uid": "com.example.archmind.dao.UserMapper",
+          "score": 0.2
+        },
+        {
+          "uid": "com.example.archmind.service.AuthService",
+          "score": 0.1917
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.util.CheckProjectUtil",
+        "com.example.archmind.service.ProjectService",
+        "com.example.archmind.controller.ProjectController",
+        "com.example.archmind.service.UserService",
+        "com.example.archmind.common.security.SecurityUser"
+      ]
+    },
+    {
+      "id": "Q16",
+      "question": "分析任务提交后是怎么异步执行的？",
+      "category": "analysis",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.config.AsyncConfig",
+        "com.example.archmind.service.task.AnalysisTaskExecutor",
+        "com.example.archmind.service.impl.TaskServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.config.AsyncConfig": 5,
+        "com.example.archmind.service.task.AnalysisTaskExecutor": 1,
+        "com.example.archmind.service.impl.TaskServiceImpl": 4
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.3333333333333333,
+      "hit@1": 1.0,
+      "recall@3": 0.3333333333333333,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 5,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 0.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.task.AnalysisTaskExecutor",
+          "score": 0.8333
+        },
+        {
+          "uid": "com.example.archmind.service.ProgressReporter",
+          "score": 0.625
+        },
+        {
+          "uid": "com.example.archmind.service.TaskService",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.service.impl.TaskServiceImpl",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.config.AsyncConfig",
+          "score": 0.3929
+        },
+        {
+          "uid": "com.example.archmind.entity.Task",
+          "score": 0.3667
+        },
+        {
+          "uid": "com.example.archmind.service.AnalysisPipelineService",
+          "score": 0.2429
+        },
+        {
+          "uid": "com.example.archmind.service.impl.AnalysisPipelineServiceImpl",
+          "score": 0.2111
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectAnalysisController",
+          "score": 0.1825
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.1806
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.ProgressReporter",
+        "com.example.archmind.service.task.AnalysisTaskExecutor",
+        "com.example.archmind.service.impl.TaskServiceImpl",
+        "com.example.archmind.entity.Task",
+        "com.example.archmind.service.TaskService"
+      ]
+    },
+    {
+      "id": "Q17",
+      "question": "分析流程分成几个阶段，各阶段进度是多少？",
+      "category": "analysis",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.common.constant.AnalysisStage",
+        "com.example.archmind.service.impl.AnalysisPipelineServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.common.constant.AnalysisStage": 1,
+        "com.example.archmind.service.impl.AnalysisPipelineServiceImpl": 2
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.common.constant.AnalysisStage",
+          "score": 0.75
+        },
+        {
+          "uid": "com.example.archmind.service.impl.AnalysisPipelineServiceImpl",
+          "score": 0.75
+        },
+        {
+          "uid": "com.example.archmind.service.AnalysisPipelineService",
+          "score": 0.5333
+        },
+        {
+          "uid": "com.example.archmind.service.ProgressReporter",
+          "score": 0.4762
+        },
+        {
+          "uid": "com.example.archmind.service.TaskService",
+          "score": 0.3667
+        },
+        {
+          "uid": "com.example.archmind.service.task.AnalysisTaskExecutor",
+          "score": 0.2917
+        },
+        {
+          "uid": "com.example.archmind.service.impl.TaskServiceImpl",
+          "score": 0.2679
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectAnalysisController",
+          "score": 0.2111
+        },
+        {
+          "uid": "com.example.archmind.config.AsyncConfig",
+          "score": 0.202
+        },
+        {
+          "uid": "com.example.archmind.ArchMindApplication",
+          "score": 0.1909
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.constant.AnalysisStage",
+        "com.example.archmind.service.ProgressReporter",
+        "com.example.archmind.service.impl.AnalysisPipelineServiceImpl",
+        "com.example.archmind.service.AnalysisPipelineService",
+        "com.example.archmind.service.TaskService"
+      ]
+    },
+    {
+      "id": "Q18",
+      "question": "项目里的 Java 文件是怎么被扫描出来的？",
+      "category": "analysis",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.service.impl.FileScannerServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.FileScannerServiceImpl": 2
+      },
+      "mrr": 0.5,
+      "first_rank": 2,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 2,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.FileScannerService",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.service.impl.FileScannerServiceImpl",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.service.impl.CodeGraphServiceImpl",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.entity.ProjectSource",
+          "score": 0.2667
+        },
+        {
+          "uid": "com.example.archmind.common.util.CheckProjectUtil",
+          "score": 0.2556
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectSourceMapper",
+          "score": 0.2361
+        },
+        {
+          "uid": "com.example.archmind.entity.FileEntity",
+          "score": 0.2
+        },
+        {
+          "uid": "com.example.archmind.dto.response.FileTreeNode",
+          "score": 0.1778
+        },
+        {
+          "uid": "com.example.archmind.service.ZipExtractService",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedProject",
+          "score": 0.1429
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.FileScannerService",
+        "com.example.archmind.service.impl.FileScannerServiceImpl",
+        "com.example.archmind.service.impl.CodeGraphServiceImpl",
+        "com.example.archmind.common.util.CheckProjectUtil",
+        "com.example.archmind.service.ZipExtractService"
+      ]
+    },
+    {
+      "id": "Q19",
+      "question": "Java 源码是怎么解析成类、字段和方法的？",
+      "category": "analysis",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.service.impl.AstParserServiceImpl",
+        "com.example.archmind.model.ast.ParsedClass",
+        "com.example.archmind.model.ast.ParsedMethod"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.AstParserServiceImpl": 1,
+        "com.example.archmind.model.ast.ParsedClass": 8,
+        "com.example.archmind.model.ast.ParsedMethod": 2
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.3333333333333333,
+      "hit@1": 1.0,
+      "recall@3": 0.6666666666666666,
+      "hit@3": 1.0,
+      "recall@5": 0.6666666666666666,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.impl.AstParserServiceImpl",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedMethod",
+          "score": 0.5833
+        },
+        {
+          "uid": "com.example.archmind.service.ast.RelationResolver",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.service.ast.TypeResolver",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedFile",
+          "score": 0.2917
+        },
+        {
+          "uid": "com.example.archmind.service.ast.AstParserService",
+          "score": 0.2429
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ClassKind",
+          "score": 0.2429
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedClass",
+          "score": 0.2361
+        },
+        {
+          "uid": "com.example.archmind.service.impl.AstParserServiceImplTest",
+          "score": 0.2
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ProjectIndex",
+          "score": 0.1944
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.impl.AstParserServiceImpl",
+        "com.example.archmind.service.ast.RelationResolver",
+        "com.example.archmind.model.ast.ParsedMethod",
+        "com.example.archmind.service.ast.TypeResolver",
+        "com.example.archmind.model.ast.ParsedFile"
+      ]
+    },
+    {
+      "id": "Q20",
+      "question": "方法之间的调用关系是怎么推断出来的？",
+      "category": "analysis",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.service.ast.RelationResolver",
+        "com.example.archmind.service.ast.TypeResolver"
+      ],
+      "ranks": {
+        "com.example.archmind.service.ast.RelationResolver": 1,
+        "com.example.archmind.service.ast.TypeResolver": 7
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.ast.RelationResolver",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedMethod",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassRelationsResponse",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ProjectIndex",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.service.ast.RelationResolverTest",
+          "score": 0.3095
+        },
+        {
+          "uid": "com.example.archmind.entity.ProjectDependency",
+          "score": 0.3095
+        },
+        {
+          "uid": "com.example.archmind.service.ast.TypeResolver",
+          "score": 0.2159
+        },
+        {
+          "uid": "com.example.archmind.model.ast.EdgeType",
+          "score": 0.1909
+        },
+        {
+          "uid": "com.example.archmind.service.ast.CodeGraphQueryService",
+          "score": 0.188
+        },
+        {
+          "uid": "com.example.archmind.service.impl.CodeGraphQueryServiceImpl",
+          "score": 0.15
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.ast.RelationResolver",
+        "com.example.archmind.model.ast.ParsedMethod",
+        "com.example.archmind.dto.response.ClassRelationsResponse",
+        "com.example.archmind.model.ast.ProjectIndex",
+        "com.example.archmind.service.ast.RelationResolverTest"
+      ]
+    },
+    {
+      "id": "Q21",
+      "question": "解析结果是怎么批量写进图数据库的？",
+      "category": "graph",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter",
+        "com.example.archmind.service.impl.CodeGraphServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter": 2,
+        "com.example.archmind.service.impl.CodeGraphServiceImpl": null
+      },
+      "mrr": 0.5,
+      "first_rank": 2,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 0.5,
+      "hit@10": 1.0,
+      "primary_rank": 2,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.model.ast.ParsedProject",
+          "score": 0.8333
+        },
+        {
+          "uid": "com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter",
+          "score": 0.75
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedMethod",
+          "score": 0.3409
+        },
+        {
+          "uid": "com.example.archmind.service.impl.CodeGraphQueryServiceImplTest",
+          "score": 0.3333
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedFile",
+          "score": 0.2917
+        },
+        {
+          "uid": "com.example.archmind.service.ast.TypeResolver",
+          "score": 0.2588
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedClass",
+          "score": 0.2262
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.2
+        },
+        {
+          "uid": "com.example.archmind.service.ProgressReporter",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.service.ast.AstParserService",
+          "score": 0.1611
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.model.ast.ParsedProject",
+        "com.example.archmind.service.impl.CodeGraphQueryServiceImplTest",
+        "com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter",
+        "com.example.archmind.dto.response.TaskResponse",
+        "com.example.archmind.service.ProgressReporter"
+      ]
+    },
+    {
+      "id": "Q22",
+      "question": "怎么查一个类被谁调用、又依赖了谁？",
+      "category": "graph",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.service.impl.CodeGraphQueryServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.CodeGraphQueryServiceImpl": 8
+      },
+      "mrr": 0.125,
+      "first_rank": 8,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 0.0,
+      "hit@3": 0.0,
+      "recall@5": 0.0,
+      "hit@5": 0.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 8,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 0.0,
+      "primary_hit@5": 0.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.ast.RelationResolver",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ProjectIndex",
+          "score": 0.5769
+        },
+        {
+          "uid": "com.example.archmind.common.util.CheckProjectUtil",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassRelationsResponse",
+          "score": 0.3611
+        },
+        {
+          "uid": "com.example.archmind.dto.response.RelatedClassDTO",
+          "score": 0.2917
+        },
+        {
+          "uid": "com.example.archmind.service.ast.CodeGraphQueryService",
+          "score": 0.2778
+        },
+        {
+          "uid": "com.example.archmind.controller.TaskController",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.service.impl.CodeGraphQueryServiceImpl",
+          "score": 0.2476
+        },
+        {
+          "uid": "com.example.archmind.controller.CodeGraphController",
+          "score": 0.2262
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ClassKind",
+          "score": 0.2262
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.util.CheckProjectUtil",
+        "com.example.archmind.service.ast.RelationResolver",
+        "com.example.archmind.controller.TaskController",
+        "com.example.archmind.service.impl.CodeGraphQueryServiceImpl",
+        "com.example.archmind.service.ast.CodeGraphQueryService"
+      ]
+    },
+    {
+      "id": "Q23",
+      "question": "类和方法的快速查找索引是怎么建立的？",
+      "category": "analysis",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.model.ast.ProjectIndex"
+      ],
+      "ranks": {
+        "com.example.archmind.model.ast.ProjectIndex": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 1.0,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.model.ast.ProjectIndex",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ProjectIndexTest",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.service.ast.RelationResolver",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedMethod",
+          "score": 0.3929
+        },
+        {
+          "uid": "com.example.archmind.service.ClassDescriptionService",
+          "score": 0.2917
+        },
+        {
+          "uid": "com.example.archmind.service.ast.CodeGraphQueryService",
+          "score": 0.2576
+        },
+        {
+          "uid": "com.example.archmind.service.impl.CodeGraphQueryServiceImpl",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.service.impl.ClassDescriptionServiceImpl",
+          "score": 0.1944
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ClassKind",
+          "score": 0.1944
+        },
+        {
+          "uid": "com.example.archmind.dto.response.RelatedClassDTO",
+          "score": 0.1776
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.model.ast.ProjectIndex",
+        "com.example.archmind.model.ast.ProjectIndexTest",
+        "com.example.archmind.service.ast.RelationResolver",
+        "com.example.archmind.service.impl.CodeGraphQueryServiceImpl",
+        "com.example.archmind.service.ast.CodeGraphQueryService"
+      ]
+    },
+    {
+      "id": "Q24",
+      "question": "一个源文件解析后用什么对象表示？",
+      "category": "analysis",
+      "difficulty": "easy",
+      "anchors": [
+        "com.example.archmind.model.ast.ParsedFile",
+        "com.example.archmind.model.ast.ParsedClass"
+      ],
+      "ranks": {
+        "com.example.archmind.model.ast.ParsedFile": 1,
+        "com.example.archmind.model.ast.ParsedClass": 8
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.model.ast.ParsedFile",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.service.ast.AstParserService",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.entity.ProjectSource",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedProject",
+          "score": 0.3667
+        },
+        {
+          "uid": "com.example.archmind.service.ast.TypeResolver",
+          "score": 0.3
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedMethod",
+          "score": 0.2917
+        },
+        {
+          "uid": "com.example.archmind.service.impl.AstParserServiceImpl",
+          "score": 0.2857
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedClass",
+          "score": 0.2361
+        },
+        {
+          "uid": "com.example.archmind.entity.FileEntity",
+          "score": 0.1944
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectSourceMapper",
+          "score": 0.1742
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.model.ast.ParsedFile",
+        "com.example.archmind.service.ast.AstParserService",
+        "com.example.archmind.entity.ProjectSource",
+        "com.example.archmind.service.ast.TypeResolver",
+        "com.example.archmind.model.ast.ParsedProject"
+      ]
+    },
+    {
+      "id": "Q25",
+      "question": "任务状态有哪些取值，怎么判断任务已经结束？",
+      "category": "task",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.common.constant.TaskStatus",
+        "com.example.archmind.entity.Task"
+      ],
+      "ranks": {
+        "com.example.archmind.common.constant.TaskStatus": 1,
+        "com.example.archmind.entity.Task": 8
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.common.constant.TaskStatus",
+          "score": 0.8333
+        },
+        {
+          "uid": "com.example.archmind.common.constant.TaskType",
+          "score": 0.7
+        },
+        {
+          "uid": "com.example.archmind.service.TaskService",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.4242
+        },
+        {
+          "uid": "com.example.archmind.common.constant.ProjectAnalysisStatus",
+          "score": 0.3409
+        },
+        {
+          "uid": "com.example.archmind.controller.TaskController",
+          "score": 0.3095
+        },
+        {
+          "uid": "com.example.archmind.service.impl.TaskServiceImpl",
+          "score": 0.2917
+        },
+        {
+          "uid": "com.example.archmind.entity.Task",
+          "score": 0.2429
+        },
+        {
+          "uid": "com.example.archmind.dao.TaskMapper",
+          "score": 0.225
+        },
+        {
+          "uid": "com.example.archmind.service.ProgressReporter",
+          "score": 0.1944
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.constant.TaskStatus",
+        "com.example.archmind.dto.response.TaskResponse",
+        "com.example.archmind.service.TaskService",
+        "com.example.archmind.common.constant.TaskType",
+        "com.example.archmind.controller.TaskController"
+      ]
+    },
+    {
+      "id": "Q26",
+      "question": "分析任务的状态和进度是怎么更新的？",
+      "category": "task",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.service.impl.TaskServiceImpl",
+        "com.example.archmind.controller.ProjectAnalysisController"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.TaskServiceImpl": 3,
+        "com.example.archmind.controller.ProjectAnalysisController": 4
+      },
+      "mrr": 0.3333333333333333,
+      "first_rank": 3,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 3,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.TaskService",
+          "score": 0.8333
+        },
+        {
+          "uid": "com.example.archmind.service.ProgressReporter",
+          "score": 0.8333
+        },
+        {
+          "uid": "com.example.archmind.service.impl.TaskServiceImpl",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectAnalysisController",
+          "score": 0.3667
+        },
+        {
+          "uid": "com.example.archmind.service.AnalysisPipelineService",
+          "score": 0.2769
+        },
+        {
+          "uid": "com.example.archmind.controller.TaskController",
+          "score": 0.2576
+        },
+        {
+          "uid": "com.example.archmind.service.task.AnalysisTaskExecutor",
+          "score": 0.2429
+        },
+        {
+          "uid": "com.example.archmind.config.AsyncConfig",
+          "score": 0.2361
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.2054
+        },
+        {
+          "uid": "com.example.archmind.common.constant.TaskStatus",
+          "score": 0.2019
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.ProgressReporter",
+        "com.example.archmind.service.TaskService",
+        "com.example.archmind.service.impl.TaskServiceImpl",
+        "com.example.archmind.controller.ProjectAnalysisController",
+        "com.example.archmind.controller.TaskController"
+      ]
+    },
+    {
+      "id": "Q27",
+      "question": "分析任务实体里包含哪些字段？",
+      "category": "task",
+      "difficulty": "easy",
+      "anchors": [
+        "com.example.archmind.entity.Task",
+        "com.example.archmind.dto.response.TaskResponse"
+      ],
+      "ranks": {
+        "com.example.archmind.entity.Task": 1,
+        "com.example.archmind.dto.response.TaskResponse": null
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 0.5,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.entity.Task",
+          "score": 0.8333
+        },
+        {
+          "uid": "com.example.archmind.service.TaskService",
+          "score": 0.6429
+        },
+        {
+          "uid": "com.example.archmind.entity.ProjectOverview",
+          "score": 0.381
+        },
+        {
+          "uid": "com.example.archmind.service.AnalysisPipelineService",
+          "score": 0.35
+        },
+        {
+          "uid": "com.example.archmind.controller.TaskController",
+          "score": 0.3
+        },
+        {
+          "uid": "com.example.archmind.service.ProgressReporter",
+          "score": 0.2769
+        },
+        {
+          "uid": "com.example.archmind.service.impl.TaskServiceImpl",
+          "score": 0.254
+        },
+        {
+          "uid": "com.example.archmind.service.task.AnalysisTaskExecutor",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectAnalysisController",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.service.impl.FileScannerServiceImpl",
+          "score": 0.25
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.entity.Task",
+        "com.example.archmind.entity.ProjectOverview",
+        "com.example.archmind.service.impl.FileScannerServiceImpl",
+        "com.example.archmind.controller.TaskController",
+        "com.example.archmind.entity.Project"
+      ]
+    },
+    {
+      "id": "Q28",
+      "question": "查询项目最新分析任务走的是哪个接口？",
+      "category": "task",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.controller.ProjectAnalysisController"
+      ],
+      "ranks": {
+        "com.example.archmind.controller.ProjectAnalysisController": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 1.0,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.controller.ProjectAnalysisController",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.controller.TaskController",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.service.ProgressReporter",
+          "score": 0.375
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectController",
+          "score": 0.3667
+        },
+        {
+          "uid": "com.example.archmind.service.AnalysisPipelineService",
+          "score": 0.3611
+        },
+        {
+          "uid": "com.example.archmind.dao.TaskMapper",
+          "score": 0.3
+        },
+        {
+          "uid": "com.example.archmind.service.impl.TaskServiceImpl",
+          "score": 0.2361
+        },
+        {
+          "uid": "com.example.archmind.service.TaskService",
+          "score": 0.2338
+        },
+        {
+          "uid": "com.example.archmind.service.task.AnalysisTaskExecutor",
+          "score": 0.2333
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectMapper",
+          "score": 0.1984
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.controller.ProjectAnalysisController",
+        "com.example.archmind.controller.TaskController",
+        "com.example.archmind.service.ProgressReporter",
+        "com.example.archmind.dao.TaskMapper",
+        "com.example.archmind.controller.ProjectController"
+      ]
+    },
+    {
+      "id": "Q29",
+      "question": "系统里有哪些任务类型？",
+      "category": "task",
+      "difficulty": "easy",
+      "anchors": [
+        "com.example.archmind.common.constant.TaskType"
+      ],
+      "ranks": {
+        "com.example.archmind.common.constant.TaskType": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 1.0,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.common.constant.TaskType",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.controller.TaskController",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.dao.TaskMapper",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.service.TaskService",
+          "score": 0.325
+        },
+        {
+          "uid": "com.example.archmind.common.constant.TaskStatus",
+          "score": 0.3111
+        },
+        {
+          "uid": "com.example.archmind.entity.Task",
+          "score": 0.2917
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.2857
+        },
+        {
+          "uid": "com.example.archmind.service.impl.TaskServiceImpl",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.service.AnalysisPipelineService",
+          "score": 0.1742
+        },
+        {
+          "uid": "com.example.archmind.service.ProgressReporter",
+          "score": 0.1736
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.constant.TaskType",
+        "com.example.archmind.controller.TaskController",
+        "com.example.archmind.dao.TaskMapper",
+        "com.example.archmind.service.TaskService",
+        "com.example.archmind.service.impl.TaskServiceImpl"
+      ]
+    },
+    {
+      "id": "Q30",
+      "question": "任务详情是怎么查的？",
+      "category": "task",
+      "difficulty": "easy",
+      "anchors": [
+        "com.example.archmind.controller.TaskController",
+        "com.example.archmind.dto.response.TaskResponse"
+      ],
+      "ranks": {
+        "com.example.archmind.controller.TaskController": 1,
+        "com.example.archmind.dto.response.TaskResponse": 4
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.controller.TaskController",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.entity.Task",
+          "score": 0.5333
+        },
+        {
+          "uid": "com.example.archmind.dao.TaskMapper",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.3929
+        },
+        {
+          "uid": "com.example.archmind.service.TaskService",
+          "score": 0.325
+        },
+        {
+          "uid": "com.example.archmind.common.constant.TaskStatus",
+          "score": 0.3125
+        },
+        {
+          "uid": "com.example.archmind.service.ProgressReporter",
+          "score": 0.2361
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectAnalysisController",
+          "score": 0.2198
+        },
+        {
+          "uid": "com.example.archmind.service.impl.TaskServiceImpl",
+          "score": 0.1833
+        },
+        {
+          "uid": "com.example.archmind.common.constant.TaskType",
+          "score": 0.1667
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.controller.TaskController",
+        "com.example.archmind.entity.Task",
+        "com.example.archmind.dto.response.TaskResponse",
+        "com.example.archmind.service.TaskService",
+        "com.example.archmind.dao.TaskMapper"
+      ]
+    },
+    {
+      "id": "Q31",
+      "question": "项目概览是怎么生成并缓存的？",
+      "category": "overview",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.service.impl.ProjectOverviewServiceImpl",
+        "com.example.archmind.service.ProjectOverviewService"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.ProjectOverviewServiceImpl": 2,
+        "com.example.archmind.service.ProjectOverviewService": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 2,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.impl.ProjectOverviewServiceImpl",
+          "score": 0.8333
+        },
+        {
+          "uid": "com.example.archmind.service.ProjectOverviewService",
+          "score": 0.8333
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ProjectOverviewResponse",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.entity.ProjectOverview",
+          "score": 0.4167
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectOverviewMapper",
+          "score": 0.3667
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectAnalysisController",
+          "score": 0.2198
+        },
+        {
+          "uid": "com.example.archmind.service.ClassDescriptionService",
+          "score": 0.2083
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ProjectResponse",
+          "score": 0.2054
+        },
+        {
+          "uid": "com.example.archmind.service.ProjectService",
+          "score": 0.202
+        },
+        {
+          "uid": "com.example.archmind.service.impl.FileScannerServiceImpl",
+          "score": 0.1825
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.impl.ProjectOverviewServiceImpl",
+        "com.example.archmind.service.ProjectOverviewService",
+        "com.example.archmind.dto.response.ProjectOverviewResponse",
+        "com.example.archmind.dao.ProjectOverviewMapper",
+        "com.example.archmind.entity.ProjectOverview"
+      ]
+    },
+    {
+      "id": "Q32",
+      "question": "项目概览数据存在哪个实体和表里？",
+      "category": "overview",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.entity.ProjectOverview",
+        "com.example.archmind.dao.ProjectOverviewMapper"
+      ],
+      "ranks": {
+        "com.example.archmind.entity.ProjectOverview": 1,
+        "com.example.archmind.dao.ProjectOverviewMapper": 2
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.entity.ProjectOverview",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectOverviewMapper",
+          "score": 0.5833
+        },
+        {
+          "uid": "com.example.archmind.entity.FileEntity",
+          "score": 0.4444
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ProjectOverviewResponse",
+          "score": 0.4
+        },
+        {
+          "uid": "com.example.archmind.entity.Project",
+          "score": 0.3929
+        },
+        {
+          "uid": "com.example.archmind.service.ProjectOverviewService",
+          "score": 0.3333
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectAnalysisController",
+          "score": 0.2159
+        },
+        {
+          "uid": "com.example.archmind.entity.ProjectSource",
+          "score": 0.2159
+        },
+        {
+          "uid": "com.example.archmind.service.impl.ProjectOverviewServiceImpl",
+          "score": 0.2095
+        },
+        {
+          "uid": "com.example.archmind.service.impl.FileScannerServiceImpl",
+          "score": 0.1714
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.entity.ProjectOverview",
+        "com.example.archmind.dao.ProjectOverviewMapper",
+        "com.example.archmind.entity.Project",
+        "com.example.archmind.dto.response.ProjectOverviewResponse",
+        "com.example.archmind.service.ProjectOverviewService"
+      ]
+    },
+    {
+      "id": "Q33",
+      "question": "核心类的描述是怎么让大模型生成的？",
+      "category": "overview",
+      "difficulty": "hard",
+      "anchors": [
+        "com.example.archmind.service.impl.ClassDescriptionServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.ClassDescriptionServiceImpl": 2
+      },
+      "mrr": 0.5,
+      "first_rank": 2,
+      "recall@1": 0.0,
+      "hit@1": 0.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 2,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.ClassDescriptionService",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.service.impl.ClassDescriptionServiceImpl",
+          "score": 0.5833
+        },
+        {
+          "uid": "com.example.archmind.service.impl.ClassDescriptionServiceImplTest",
+          "score": 0.5833
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ClassKind",
+          "score": 0.3111
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassDescriptionBatch",
+          "score": 0.3111
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassRelationsResponse",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassNodeDTO",
+          "score": 0.2381
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ProjectIndex",
+          "score": 0.2159
+        },
+        {
+          "uid": "com.example.archmind.dto.response.RelatedClassDTO",
+          "score": 0.2143
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedClass",
+          "score": 0.1984
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.ClassDescriptionService",
+        "com.example.archmind.service.impl.ClassDescriptionServiceImpl",
+        "com.example.archmind.service.impl.ClassDescriptionServiceImplTest",
+        "com.example.archmind.model.ast.ClassKind",
+        "com.example.archmind.dto.response.ClassNodeDTO"
+      ]
+    },
+    {
+      "id": "Q34",
+      "question": "批量补类描述的接口返回什么结构？",
+      "category": "overview",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.dto.response.ClassDescriptionBatch",
+        "com.example.archmind.service.impl.ClassDescriptionServiceImpl"
+      ],
+      "ranks": {
+        "com.example.archmind.dto.response.ClassDescriptionBatch": 1,
+        "com.example.archmind.service.impl.ClassDescriptionServiceImpl": 7
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.dto.response.ClassDescriptionBatch",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassRelationsResponse",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassNodeDTO",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.dto.response.RelatedClassDTO",
+          "score": 0.3111
+        },
+        {
+          "uid": "com.example.archmind.dto.response.FileTreeNode",
+          "score": 0.2857
+        },
+        {
+          "uid": "com.example.archmind.controller.CodeGraphController",
+          "score": 0.2292
+        },
+        {
+          "uid": "com.example.archmind.service.impl.ClassDescriptionServiceImpl",
+          "score": 0.2019
+        },
+        {
+          "uid": "com.example.archmind.common.result.Result",
+          "score": 0.2
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ProjectResponse",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ParsedClass",
+          "score": 0.1588
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.dto.response.ClassDescriptionBatch",
+        "com.example.archmind.dto.response.ClassRelationsResponse",
+        "com.example.archmind.dto.response.ClassNodeDTO",
+        "com.example.archmind.common.result.Result",
+        "com.example.archmind.dto.response.ProjectResponse"
+      ]
+    },
+    {
+      "id": "Q35",
+      "question": "项目依赖关系是怎么存储的？",
+      "category": "overview",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.entity.ProjectDependency",
+        "com.example.archmind.dao.ProjectDependencyMapper"
+      ],
+      "ranks": {
+        "com.example.archmind.entity.ProjectDependency": 1,
+        "com.example.archmind.dao.ProjectDependencyMapper": 2
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.entity.ProjectDependency",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectDependencyMapper",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.entity.Project",
+          "score": 0.3667
+        },
+        {
+          "uid": "com.example.archmind.service.ast.RelationResolver",
+          "score": 0.3088
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectMapper",
+          "score": 0.2625
+        },
+        {
+          "uid": "com.example.archmind.service.impl.FileTreeNodeServiceImpl",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassRelationsResponse",
+          "score": 0.2193
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ProjectResponse",
+          "score": 0.2083
+        },
+        {
+          "uid": "com.example.archmind.dao.FileEntityMapper",
+          "score": 0.1984
+        },
+        {
+          "uid": "com.example.archmind.service.ProjectService",
+          "score": 0.1929
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.entity.ProjectDependency",
+        "com.example.archmind.dao.ProjectDependencyMapper",
+        "com.example.archmind.service.ast.RelationResolver",
+        "com.example.archmind.dao.ProjectMapper",
+        "com.example.archmind.entity.Project"
+      ]
+    },
+    {
+      "id": "Q36",
+      "question": "项目基本信息返回给前端是什么结构？",
+      "category": "overview",
+      "difficulty": "easy",
+      "anchors": [
+        "com.example.archmind.dto.response.ProjectResponse",
+        "com.example.archmind.entity.Project"
+      ],
+      "ranks": {
+        "com.example.archmind.dto.response.ProjectResponse": 1,
+        "com.example.archmind.entity.Project": 6
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 0.5,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.dto.response.ProjectResponse",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.dto.response.UserInfoResponse",
+          "score": 0.5333
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ProjectOverviewResponse",
+          "score": 0.5333
+        },
+        {
+          "uid": "com.example.archmind.dto.response.FileTreeNode",
+          "score": 0.5
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassNodeDTO",
+          "score": 0.3333
+        },
+        {
+          "uid": "com.example.archmind.entity.Project",
+          "score": 0.254
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.2338
+        },
+        {
+          "uid": "com.example.archmind.dao.ProjectMapper",
+          "score": 0.202
+        },
+        {
+          "uid": "com.example.archmind.entity.ProjectOverview",
+          "score": 0.2019
+        },
+        {
+          "uid": "com.example.archmind.service.ProjectOverviewService",
+          "score": 0.1667
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.dto.response.ProjectResponse",
+        "com.example.archmind.dto.response.ProjectOverviewResponse",
+        "com.example.archmind.dto.response.FileTreeNode",
+        "com.example.archmind.dto.response.UserInfoResponse",
+        "com.example.archmind.dto.response.ClassNodeDTO"
+      ]
+    },
+    {
+      "id": "Q37",
+      "question": "接口统一的返回格式是怎么封装的？",
+      "category": "misc",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.common.result.Result",
+        "com.example.archmind.common.result.ResultCode"
+      ],
+      "ranks": {
+        "com.example.archmind.common.result.Result": 1,
+        "com.example.archmind.common.result.ResultCode": 2
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.common.result.Result",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.common.result.ResultCode",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.dto.response.UploadResponse",
+          "score": 0.3333
+        },
+        {
+          "uid": "com.example.archmind.common.exception.GlobalExceptionHandler",
+          "score": 0.3333
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.3111
+        },
+        {
+          "uid": "com.example.archmind.dto.response.LoginResponse",
+          "score": 0.2917
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ProjectResponse",
+          "score": 0.2778
+        },
+        {
+          "uid": "com.example.archmind.common.security.SecurityUser",
+          "score": 0.2625
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassNodeDTO",
+          "score": 0.2429
+        },
+        {
+          "uid": "com.example.archmind.dto.response.ClassRelationsResponse",
+          "score": 0.2338
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.result.Result",
+        "com.example.archmind.common.result.ResultCode",
+        "com.example.archmind.dto.response.UploadResponse",
+        "com.example.archmind.dto.response.TaskResponse",
+        "com.example.archmind.dto.response.LoginResponse"
+      ]
+    },
+    {
+      "id": "Q38",
+      "question": "业务异常是怎么统一处理的？",
+      "category": "misc",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.common.exception.GlobalExceptionHandler",
+        "com.example.archmind.common.exception.BusinessException"
+      ],
+      "ranks": {
+        "com.example.archmind.common.exception.GlobalExceptionHandler": 2,
+        "com.example.archmind.common.exception.BusinessException": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 2,
+      "primary_hit@1": 0.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.common.exception.BusinessException",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.common.exception.GlobalExceptionHandler",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.service.impl.UserServiceImpl",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.service.impl.AuthServiceImpl",
+          "score": 0.35
+        },
+        {
+          "uid": "com.example.archmind.service.ProgressReporter",
+          "score": 0.2778
+        },
+        {
+          "uid": "com.example.archmind.common.result.Result",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.service.UploadService",
+          "score": 0.2143
+        },
+        {
+          "uid": "com.example.archmind.common.handler.AuthenticationEntryPointImpl",
+          "score": 0.202
+        },
+        {
+          "uid": "com.example.archmind.dto.response.TaskResponse",
+          "score": 0.2019
+        },
+        {
+          "uid": "com.example.archmind.common.handler.AccessDeniedHandlerImpl",
+          "score": 0.2019
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.exception.BusinessException",
+        "com.example.archmind.common.exception.GlobalExceptionHandler",
+        "com.example.archmind.service.impl.AuthServiceImpl",
+        "com.example.archmind.service.impl.UserServiceImpl",
+        "com.example.archmind.service.ProgressReporter"
+      ]
+    },
+    {
+      "id": "Q39",
+      "question": "项目列表查询是由哪个服务完成的？",
+      "category": "misc",
+      "difficulty": "easy",
+      "anchors": [
+        "com.example.archmind.service.impl.ProjectServiceImpl",
+        "com.example.archmind.controller.ProjectController"
+      ],
+      "ranks": {
+        "com.example.archmind.service.impl.ProjectServiceImpl": 1,
+        "com.example.archmind.controller.ProjectController": 4
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 0.5,
+      "hit@1": 1.0,
+      "recall@3": 0.5,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.service.impl.ProjectServiceImpl",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.service.ProjectService",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.service.FileTreeNodeService",
+          "score": 0.45
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectController",
+          "score": 0.3125
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ProjectIndexTest",
+          "score": 0.2667
+        },
+        {
+          "uid": "com.example.archmind.service.ProjectOverviewService",
+          "score": 0.2
+        },
+        {
+          "uid": "com.example.archmind.common.util.CheckProjectUtil",
+          "score": 0.1984
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectSourceController",
+          "score": 0.1929
+        },
+        {
+          "uid": "com.example.archmind.controller.ProjectAnalysisController",
+          "score": 0.1776
+        },
+        {
+          "uid": "com.example.archmind.entity.ProjectOverview",
+          "score": 0.1736
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.service.impl.ProjectServiceImpl",
+        "com.example.archmind.service.ProjectService",
+        "com.example.archmind.service.FileTreeNodeService",
+        "com.example.archmind.service.ProjectOverviewService",
+        "com.example.archmind.model.ast.ProjectIndexTest"
+      ]
+    },
+    {
+      "id": "Q40",
+      "question": "Redis 的缓存读写操作封装在哪个工具类？",
+      "category": "misc",
+      "difficulty": "medium",
+      "anchors": [
+        "com.example.archmind.common.util.RedisUtil"
+      ],
+      "ranks": {
+        "com.example.archmind.common.util.RedisUtil": 1
+      },
+      "mrr": 1.0,
+      "first_rank": 1,
+      "recall@1": 1.0,
+      "hit@1": 1.0,
+      "recall@3": 1.0,
+      "hit@3": 1.0,
+      "recall@5": 1.0,
+      "hit@5": 1.0,
+      "recall@10": 1.0,
+      "hit@10": 1.0,
+      "primary_rank": 1,
+      "primary_hit@1": 1.0,
+      "primary_hit@3": 1.0,
+      "primary_hit@5": 1.0,
+      "primary_hit@10": 1.0,
+      "top": [
+        {
+          "uid": "com.example.archmind.common.util.RedisUtil",
+          "score": 1.0
+        },
+        {
+          "uid": "com.example.archmind.config.RedisConfig",
+          "score": 0.6667
+        },
+        {
+          "uid": "com.example.archmind.common.security.SecurityUser",
+          "score": 0.375
+        },
+        {
+          "uid": "com.example.archmind.common.result.Result",
+          "score": 0.3095
+        },
+        {
+          "uid": "com.example.archmind.service.impl.ProjectOverviewServiceImpl",
+          "score": 0.2526
+        },
+        {
+          "uid": "com.example.archmind.service.ast.RelationResolver",
+          "score": 0.25
+        },
+        {
+          "uid": "com.example.archmind.common.constant.TaskStatus",
+          "score": 0.2
+        },
+        {
+          "uid": "com.example.archmind.service.FileContentService",
+          "score": 0.1667
+        },
+        {
+          "uid": "com.example.archmind.model.ast.ProjectIndex",
+          "score": 0.1436
+        },
+        {
+          "uid": "com.example.archmind.common.constant.ProjectAnalysisStatus",
+          "score": 0.1429
+        }
+      ],
+      "dense_top": [
+        "com.example.archmind.common.util.RedisUtil",
+        "com.example.archmind.config.RedisConfig",
+        "com.example.archmind.service.ast.RelationResolver",
+        "com.example.archmind.service.impl.ProjectOverviewServiceImpl",
+        "com.example.archmind.service.FileContentService"
+      ]
+    }
+  ],
+  "negatives": [
+    {
+      "id": "N01",
+      "question": "帮我写一个快速排序算法",
+      "top1_score": 0.75,
+      "top1_uid": "com.example.archmind.model.ast.ProjectIndex"
+    },
+    {
+      "id": "N02",
+      "question": "今天北京的天气怎么样？",
+      "top1_score": 0.75,
+      "top1_uid": "com.example.archmind.common.exception.BusinessException"
+    },
+    {
+      "id": "N03",
+      "question": "这个项目用的是 Vue 还是 React？",
+      "top1_score": 0.8333,
+      "top1_uid": "com.example.archmind.dto.response.ProjectResponse"
+    },
+    {
+      "id": "N04",
+      "question": "如何把服务部署到 Kubernetes？",
+      "top1_score": 0.5,
+      "top1_uid": "com.example.archmind.service.UploadService"
+    },
+    {
+      "id": "N05",
+      "question": "推荐几条 Java 后端学习路线",
+      "top1_score": 0.5714,
+      "top1_uid": "com.example.archmind.dto.response.ClassNodeDTO"
+    },
+    {
+      "id": "N06",
+      "question": "解释一下分布式事务的两阶段提交",
+      "top1_score": 0.8333,
+      "top1_uid": "com.example.archmind.service.impl.TaskServiceImpl"
+    },
+    {
+      "id": "N07",
+      "question": "这个项目的开源许可证是什么？",
+      "top1_score": 0.7,
+      "top1_uid": "com.example.archmind.entity.ProjectSource"
+    },
+    {
+      "id": "N08",
+      "question": "帮我优化一下 MySQL 的慢查询",
+      "top1_score": 0.6667,
+      "top1_uid": "com.example.archmind.controller.TaskController"
+    }
+  ],
+  "checks": {
+    "missingAnchors": [],
+    "scopeViolations": 0,
+    "emptyResults": 0
+  }
+}

@@ -9,7 +9,7 @@ import pytest
 
 from app.core.explain import ExplainParseError, _parse_and_ground, explain
 from app.core.prompt import explain_messages
-from app.models.context import AgentContext, HistoryItem
+from app.models.context import AgentContext, ChatMessage, MessageRole
 from app.models.intent import Intent
 from app.models.response import NodeRef, NodeRefType
 from fakes import FakeLLM, ok_chain
@@ -19,11 +19,14 @@ B = "com.demo.B"
 GHOST = "com.demo.Ghost"
 
 
-def _ctx(history: list[HistoryItem] | None = None, focus_uid: str | None = None) -> AgentContext:
+def _ctx(prior: list[tuple[str, str]] | None = None,
+         focus_uid: str | None = None) -> AgentContext:
     focus = NodeRef(type=NodeRefType.CLASS, uid=focus_uid) if focus_uid else None
-    return AgentContext(
-        conversation_id="c_test", project_id=1, focus=focus, history=history or []
-    )
+    ctx = AgentContext(conversation_id="c_test", project_id=1, focus=focus)
+    for q, a in (prior or []):
+        ctx.messages.append(ChatMessage(role=MessageRole.USER, content=q))
+        ctx.messages.append(ChatMessage(role=MessageRole.ASSISTANT, content=a))
+    return ctx
 
 
 def _payload(**overrides) -> str:
@@ -133,14 +136,10 @@ def test_prompt_carries_the_new_contract():
 # ==================== 会话记忆进入 LLM #2 ====================
 
 
-def test_explain_prompt_carries_all_history_and_current_focus():
+def test_explain_prompt_carries_all_prior_messages_and_current_focus():
     """全部历史都要进 prompt —— 只给最近三轮等于每三轮重新认识一次用户。"""
-    history = [
-        HistoryItem(turn=i, intent=Intent.EXPLORE_FLOW,
-                    q=f"第{i}问", a=f"第{i}答", focus_after=A if i % 2 else B)
-        for i in range(1, 6)
-    ]
-    ctx = _ctx(history=history, focus_uid=A)
+    ctx = _ctx(prior=[(f"第{i}问", f"第{i}答") for i in range(1, 6)], focus_uid=A)
+    ctx.messages.append(ChatMessage(role=MessageRole.USER, content="它呢"))
 
     user = explain_messages(Intent.EXPLORE_FLOW, [], "它呢", ctx)[1]["content"]
 
@@ -148,7 +147,7 @@ def test_explain_prompt_carries_all_history_and_current_focus():
         assert f"第{i}问" in user, f"第 {i} 轮被截断了"
         assert f"第{i}答" in user
     assert f"当前锚点 focus = {A}" in user
-    assert "原话：它呢" in user
+    assert "[用户] 它呢" in user
 
 
 def test_explain_prompt_says_first_turn_when_history_empty():
@@ -159,11 +158,12 @@ def test_explain_prompt_says_first_turn_when_history_empty():
 def test_explain_prompt_marks_rewritten_as_interpretation():
     """原话与改写同时出现，改写过的话必须标明是「系统理解」，不能冒充用户原话。"""
     ctx = _ctx(focus_uid=A)
+    ctx.messages.append(ChatMessage(role=MessageRole.USER, content="它呢"))
     user = explain_messages(
         Intent.EXPLORE_FLOW, [], "它呢", ctx, rewritten=f"{A} 的调用方是谁",
     )[1]["content"]
 
-    assert "原话：它呢" in user
+    assert "[用户] 它呢" in user
     assert f"系统对这句话的理解：{A} 的调用方是谁" in user
 
 

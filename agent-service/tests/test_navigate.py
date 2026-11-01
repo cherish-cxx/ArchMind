@@ -17,6 +17,7 @@ from app.models.response import NodeRef, NodeRefType
 from fakes import FakeContextStore
 
 _PROJECT_ID = 1001
+_USER_ID = 2001
 _H = {INTERNAL_TOKEN_HEADER: settings.internal_token}
 
 
@@ -44,7 +45,7 @@ def client(store) -> TestClient:
 
 
 def _body(cid: str, op: str = "BACK", **kw) -> dict:
-    return {"projectId": _PROJECT_ID, "conversationId": cid, "op": op, **kw}
+    return {"projectId": _PROJECT_ID, "userId": _USER_ID, "conversationId": cid, "op": op, **kw}
 
 
 # ==================== 出栈（BACK）====================

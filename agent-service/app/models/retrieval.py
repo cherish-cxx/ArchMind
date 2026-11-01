@@ -34,6 +34,8 @@ class Candidate:
     #: RRF 融合分。**只能排序，不能设阈值，也不能给用户看** ——
     #: 它不是相似度，跨轮次之间没有可比性。
     score: float
+    #: 索引时写入的方法名（payload 里带），给 LLM1 消歧用；不是证据。
+    methods: tuple[str, ...] = ()
 
     @property
     def kind_label(self) -> str:

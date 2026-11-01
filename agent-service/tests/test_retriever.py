@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.config import settings
 from app.core.retriever import Retriever, resolve_entity_ref, to_candidate
 from app.core.prompt import explain_messages, intent_messages
 from app.models.context import AgentContext
@@ -92,7 +93,7 @@ async def test_ready_state_searches_with_active_rev():
     )
     result = await r.search(1, "下单扣库存")
 
-    assert qdrant.calls == [{"project_id": 1, "rev": 7, "limit": 5}]
+    assert qdrant.calls == [{"project_id": 1, "rev": 7, "limit": settings.retrieve_top_k}]
     assert [c.uid for c in result.candidates] == ["com.x.OrderServiceImpl"]
     assert result.ok is True
 
@@ -172,6 +173,15 @@ def test_to_candidate_drops_payload_without_uid():
     assert to_candidate(SimpleNamespace(payload={}, score=0.1)) is None
 
 
+def test_to_candidate_reads_method_names():
+    c = to_candidate(_point("com.x.A", simpleName="A", methods=[
+        {"name": "run", "signature": "run()"},
+        {"name": "stop", "signature": "stop()"},
+    ]))
+    assert c is not None
+    assert c.methods == ("run", "stop")
+
+
 # ==================== entityRef 校验 ====================
 
 
@@ -226,13 +236,26 @@ def test_intent_prompt_has_candidates_when_present():
     assert "com.moviesys.order.OrderServiceImpl" in system
     assert "候选使用规则" in system
     # 有候选时 entityRef 的语义是"本轮起点"，不能再说成"用户指代的类"
-    assert "这轮查图的起点" in system
+    assert "这轮查图的" in system and "起点" in system
+    # 按问题类型选，而不是一律选 Controller/Service；并要给出相关性分数
+    assert "anchorScore" in system
+    assert "配置类优先" in system
+    assert "不要一律选 Controller/Service" in system
 
 
 def test_intent_prompt_unchanged_without_candidates():
     """没检索时 prompt 必须与 R4 之前逐字相同 —— 这是回归基准。"""
     assert intent_messages(_ctx(), "问题") == intent_messages(_ctx(), "问题", [])
     assert "候选" not in intent_messages(_ctx(), "问题")[0]["content"]
+
+
+def test_intent_prompt_includes_candidate_methods():
+    """方法名是区分「查关系」和「解析关系」的关键信号，必须进候选块。"""
+    cands = [candidate("com.x.CodeGraphQueryServiceImpl", desc="查询图的类与关系",
+                       methods=("classRelations", "callRelations"))]
+    system = intent_messages(_ctx(), "怎么查一个类的关系", cands)[0]["content"]
+    assert "方法：" in system
+    assert "classRelations" in system
 
 
 def test_explain_prompt_marks_candidates_as_unverified():

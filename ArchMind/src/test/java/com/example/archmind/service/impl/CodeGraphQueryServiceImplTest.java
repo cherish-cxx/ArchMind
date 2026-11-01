@@ -1,8 +1,12 @@
 package com.example.archmind.service.impl;
 
 import com.example.archmind.common.exception.BusinessException;
+import com.example.archmind.dto.response.ClassCardDTO;
+import com.example.archmind.dto.response.ClassCardPageResponse;
 import com.example.archmind.dto.response.ClassNodeDTO;
+import com.example.archmind.dto.response.ClassPageResponse;
 import com.example.archmind.dto.response.ClassRelationsResponse;
+import com.example.archmind.dto.response.MethodBriefDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -215,5 +219,115 @@ class CodeGraphQueryServiceImplTest {
         // 空集合直接短路：澄清轮 / 空响应没有 uiCommand，不该为它白跑一次 Neo4j
         assertTrue(service.existingClassUids(1L, List.of()).isEmpty());
         verifyNoInteractions(session);
+    }
+
+    // ==================== 索引卡片：批量方法 + 上下游 ====================
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Value stringListVal(List<String> items) {
+        Value v = mock(Value.class);
+        when(v.isNull()).thenReturn(false);
+        doReturn(items).when(v).asList(any(java.util.function.Function.class));
+        return v;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Value methodListVal(List<MethodBriefDTO> items) {
+        Value v = mock(Value.class);
+        when(v.isNull()).thenReturn(false);
+        doReturn(items).when(v).asList(any(java.util.function.Function.class));
+        return v;
+    }
+
+    private static Value cardInt(int i) {
+        Value v = mock(Value.class);
+        when(v.isNull()).thenReturn(false);
+        when(v.asInt(anyInt())).thenReturn(i);
+        return v;
+    }
+
+    private static Record cardRow(String target, Value list, int total) {
+        Value targetVal = strVal(target);
+        Value totalVal = cardInt(total);
+        Record r = mock(Record.class);
+        when(r.get("target")).thenReturn(targetVal);
+        when(r.get("uids")).thenReturn(list);
+        when(r.get("total")).thenReturn(totalVal);
+        return r;
+    }
+
+    private static Record methodRow(String owner, Value methods, int count) {
+        Value ownerVal = strVal(owner);
+        Value countVal = cardInt(count);
+        Record r = mock(Record.class);
+        when(r.get("owner")).thenReturn(ownerVal);
+        when(r.get("methods")).thenReturn(methods);
+        when(r.get("methodCount")).thenReturn(countVal);
+        return r;
+    }
+
+    @Test
+    void listClassCardsPageAddsMethodsAndRelations() {
+        ClassNodeDTO node = new ClassNodeDTO();
+        node.setQualifiedName("com.x.A");
+        node.setSimpleName("A");
+        node.setPackageName("com.x");
+        node.setKind("CLASS");
+
+        ClassPageResponse base = new ClassPageResponse();
+        base.setRev(7);
+        base.setNextCursor("com.x.A");
+        base.setItems(List.of(node));
+
+        CodeGraphQueryServiceImpl spied = spy(new CodeGraphQueryServiceImpl(driver));
+        doReturn(base).when(spied).listClassesPage(1L, null, 200);
+        when(driver.session()).thenReturn(session);
+
+        MethodBriefDTO run = new MethodBriefDTO();
+        run.setName("run");
+        run.setSignature("run()");
+
+        // 先构造好所有行/结果，再进 when(...).thenReturn(...)；
+        // 在 thenReturn 参数里创建 mock 会触发 Mockito 的 UnfinishedStubbing。
+        Result empty = resultOf(List.of());
+        Result methodsResult = resultOf(List.of(
+                methodRow("com.x.A", methodListVal(List.of(run)), 3)));
+        Result callersResult = resultOf(List.of(
+                cardRow("com.x.A", stringListVal(List.of("com.x.Caller")), 2)));
+
+        when(session.run(contains("allMethods[0..$cap]"), anyMap())).thenReturn(methodsResult);
+        when(session.run(contains("caller:Method"), anyMap())).thenReturn(callersResult);
+        when(session.run(contains("cc:Class {projectId: $pid})-[:DEPENDS]->(c:Class"), anyMap()))
+                .thenReturn(empty);
+        when(session.run(contains("cc:Class {projectId: $pid})-[:EXTENDS|IMPLEMENTS]->(c:Class"), anyMap()))
+                .thenReturn(empty);
+        when(session.run(contains("t:Method {projectId: $pid})"), anyMap())).thenReturn(empty);
+        when(session.run(contains("MATCH (c:Class {projectId: $pid})-[:DEPENDS]->(cc:Class"), anyMap()))
+                .thenReturn(empty);
+        when(session.run(contains("MATCH (c:Class {projectId: $pid})-[:EXTENDS|IMPLEMENTS]->(cc:Class"), anyMap()))
+                .thenReturn(empty);
+
+        ClassCardPageResponse page = spied.listClassCardsPage(1L, null, 200);
+
+        assertEquals(7, page.getRev());
+        assertEquals("com.x.A", page.getNextCursor());
+        assertEquals(1, page.getItems().size());
+
+        ClassCardDTO card = page.getItems().get(0);
+        assertEquals("com.x.A", card.getQualifiedName());
+        assertEquals(3, card.getMethodCount());
+        assertEquals(1, card.getMethods().size());
+        assertEquals("run()", card.getMethods().get(0).getSignature());
+        assertTrue(card.isMethodsTruncated());
+
+        assertEquals(2, card.getUpstream().getCallerCount());
+        assertEquals(List.of("com.x.Caller"), card.getUpstream().getCallers());
+        assertTrue(card.isUpstreamTruncated());
+
+        assertEquals(0, card.getDownstream().getCalleeCount());
+        assertFalse(card.isDownstreamTruncated());
+
+        // 7 条批量查询：类页 + 方法 + 3 上游 + 3 下游；不是逐类 6 条
+        verify(session, times(7)).run(anyString(), anyMap());
     }
 }

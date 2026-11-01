@@ -6,24 +6,40 @@
 import pytest
 
 from app.core.indexer import Indexer, InsufficientCoverage, StaleGraphError, build_card
-from app.models.tool import ClassNode, ClassPage, DescribeStatus, NodeKind, ToolEnvelope
+from app.models.tool import (
+    ClassCard,
+    ClassCardPage,
+    DescribeStatus,
+    MethodBrief,
+    NodeKind,
+    ToolEnvelope,
+)
 
 
-def _node(uid: str, name: str, desc: str | None, kind: NodeKind = NodeKind.CLASS) -> ClassNode:
-    return ClassNode(
+def _method(name: str, signature: str | None = None, *, ctor: bool = False) -> MethodBrief:
+    return MethodBrief(name=name, signature=signature or f"{name}()", is_constructor=ctor)
+
+
+def _node(
+    uid: str, name: str, desc: str | None, kind: NodeKind = NodeKind.CLASS,
+    methods: list[MethodBrief] | None = None,
+) -> ClassCard:
+    return ClassCard(
         qualified_name=uid,
         simple_name=name,
         package_name="com.x",
         kind=kind,
         description=desc,
         file_path=f"com/x/{name}.java",
+        methods=methods or [],
+        method_count=len(methods or []),
     )
 
 
-def _page(rev: int, items: list[ClassNode], cursor: str | None) -> ToolEnvelope[ClassPage]:
-    return ToolEnvelope[ClassPage](
+def _page(rev: int, items: list[ClassCard], cursor: str | None) -> ToolEnvelope[ClassCardPage]:
+    return ToolEnvelope[ClassCardPage](
         ok=True,
-        data=ClassPage(rev=rev, items=items, next_cursor=cursor),
+        data=ClassCardPage(rev=rev, items=items, next_cursor=cursor),
         truncated=False,
     )
 
@@ -37,7 +53,7 @@ class FakeJava:
     async def describe_status(self, project_id: int) -> DescribeStatus:
         return self._status
 
-    async def classes_page(self, project_id: int, after_uid: str | None, limit: int):
+    async def class_cards_page(self, project_id: int, after_uid: str | None, limit: int):
         self.calls.append(after_uid)
         return self._pages[after_uid]
 
@@ -127,6 +143,41 @@ def test_build_card_falls_back_to_structure():
     assert source == "FALLBACK"
 
 
+def test_build_card_includes_method_names():
+    node = _node("com.x.OrderService", "OrderService", "负责下单", methods=[
+        _method("createOrder", "createOrder(OrderRequest)"),
+        _method("<init>", ctor=True),
+        _method("cancel"),
+        _method("createOrder", "createOrder(OrderRequest)"),
+    ])
+    text, source = build_card(node)
+    assert text == "OrderService：负责下单；方法：createOrder、cancel"
+    assert source == "LLM"
+
+
+def test_class_card_page_parses_java_camel_case():
+    """契约防漂移：Java 发驼峰，Python 必须能按别名解析出卡片字段。"""
+    page = ClassCardPage.model_validate({
+        "rev": 7, "nextCursor": None,
+        "items": [{
+            "qualifiedName": "com.x.A", "simpleName": "A", "packageName": "com.x",
+            "kind": "CLASS", "description": "负责下单", "filePath": "A.java",
+            "methodCount": 12,
+            "methods": [{"name": "createOrder", "signature": "createOrder(OrderRequest)"}],
+            "upstream": {"callers": ["com.x.Controller"], "callerCount": 1},
+            "downstream": {"callees": ["com.x.Mapper"], "calleeCount": 1},
+            "methodsTruncated": True,
+        }],
+    })
+    card = page.items[0]
+    assert card.simple_name == "A"
+    assert card.method_count == 12
+    assert card.methods[0].signature == "createOrder(OrderRequest)"
+    assert card.upstream.caller_count == 1
+    assert card.downstream.callee_count == 1
+    assert card.methods_truncated is True
+
+
 @pytest.mark.asyncio
 async def test_index_streams_pages_and_sets_ready():
     pages = {
@@ -176,13 +227,18 @@ async def test_index_skips_when_descriptions_pending():
 
 
 def test_point_sparse_indices_are_sorted():
+    node = _node("com.x.A", "A", "A 的职责", methods=[_method("run")])
     point = Indexer._point(
-        1, 7, _node("com.x.A", "A", "A 的职责"), "LLM", [0.1],
+        1, 7, node, "LLM", [0.1],
         {5: 0.2, 2: 0.9, 9: 0.1},
     )
     assert point.vector["sparse"].indices == [2, 5, 9]
     assert point.vector["sparse"].values == [0.9, 0.2, 0.1]
     assert point.payload["descriptionSource"] == "LLM"
+    assert point.payload["methods"][0]["name"] == "run"
+    assert point.payload["methodCount"] == 1
+    assert point.payload["upstream"]["callers"] == []
+    assert point.payload["downstream"]["callees"] == []
 
 
 @pytest.mark.asyncio

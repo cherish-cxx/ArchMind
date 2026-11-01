@@ -62,6 +62,10 @@
 | 安全性和数据一致性 | 使用共享数据库，存在导致操作同一批数据时候在操作期间存在误差导致结果不符          | 解决共享数据库，存在导致操作同一批数据时候在操作期间存在误差导致结果不符，以及用户信息安全问题 | java侧建立通信首先在需要运行请求进入[[SecurityConfig]]添加白名单路径。[[InternalTokenFilter]]过滤调用无token的请求以及token错误的请求。Python侧请求：请求agent-Service，java_client：五个工具接口:<br>overview,classes,class_relations,call_chain,method_body | python侧的LLM的解析，agentContext上下文，上下文中抽出来的uid，java侧根据实际情况从数据库中返回的数据          | java侧的SecurityConfig文件，InternalTokenFilter文件做的请求校验<br>python侧的loop文件，registry文件，java_client文件 | 避免数据库共享导致的数据不一致问题。以及避免其他用户能够越权访问其他用户项目信息 |                                                          |
 |           |                                               |                                                 |                                                                                                                                                                                                         |                                                                           |                                                                                               |                                          |                                                          |
 
+---
+## RAG
+离线索引构建的实现路线：
+AnalysisTaskExecutor---(核心类简要描述)--->AnalysisPipelineServiceImpl---（describeStage）--->ClassDescriptionServiceImpl
 
 
 

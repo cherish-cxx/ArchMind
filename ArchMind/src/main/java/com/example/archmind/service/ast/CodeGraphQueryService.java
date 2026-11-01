@@ -1,5 +1,6 @@
 package com.example.archmind.service.ast;
 
+import com.example.archmind.dto.response.ClassCardPageResponse;
 import com.example.archmind.dto.response.ClassNodeDTO;
 import com.example.archmind.dto.response.ClassPageResponse;
 import com.example.archmind.dto.response.ClassRelationsResponse;
@@ -53,6 +54,16 @@ public interface CodeGraphQueryService {
      * @param limit    本页最多返回多少个类（服务端钳在 1~200）
      */
     ClassPageResponse listClassesPage(Long projectId, String afterUid, int limit);
+
+    /**
+     * 索引专用：在 {@link #listClassesPage} 的分页之上，批量补方法摘要与上下游摘要。
+     *
+     * <p>方法通过 {@code Method.owner} 批量取（没有 HAS_METHOD 边）；上下游按
+     * 「本页所有 uid」做集合查询，而不是逐类跑 6 条 Cypher。结果按
+     * {@code methodCap / relationCap} 截断，并用 {@code *Count} 与
+     * {@code *Truncated} 标记总量和截断。</p>
+     */
+    ClassCardPageResponse listClassCardsPage(Long projectId, String afterUid, int limit);
 
     /**
      * 批量查这些 uid 里，**哪些确实是这个项目的类节点**。

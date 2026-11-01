@@ -93,6 +93,8 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
      * 选批查询。{@code WITH c ORDER BY c.uid LIMIT $limit} 必须在展开关系之前，
      * 否则 LIMIT 作用在方法行上，一批可能只有几个类。
      * 条件必须与 {@link #COUNTS} 的 pending 完全一致，否则 remaining 落不到 0。
+     * 在同一个项目pid下，查询节点class，过滤描述为空的类，支持额外拼接条件%s，分页取limit条；
+     * 同时关联它的父类/接口和自身防范，最后聚合返回
      */
     private static final String PENDING_SKELETON = """
             MATCH (c:Class {projectId: $pid})
@@ -106,7 +108,9 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
                    collect(DISTINCT p.name) AS parents,
                    collect(DISTINCT m.signature) AS methods
             """.formatted(TOP_LEVEL);
-
+    /**
+     * 找到这个项目下哟有的类：返回总共有多少个类，满足条件的，需要写说明的类有多少个，满足条件的并且还没写说明的类有多少个。
+     */
     private static final String COUNTS = """
             MATCH (c:Class {projectId: $pid})
             RETURN count(c) AS total,
@@ -130,6 +134,7 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
 
     @Override
     public void describeCoreClasses(Long projectId, ProgressReporter reporter) {
+//        调用queryCoreClasses,拿到排好序的Top核心类完整信息(uid,类名,包,父类,方法等)
         List<CoreClass> cores = queryCoreClasses(projectId, DEFAULT_TOP_N);
         reporter.report(20);
         if (cores.isEmpty()) {
@@ -138,6 +143,7 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
             return;
         }
 
+//        把这些核心信息瓶装成给大模型的提示词prompt;
         String prompt = buildPrompt(cores);
         reporter.report(40);
 
@@ -201,13 +207,18 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
             redisUtil.delete(lockKey);
         }
     }
+    /**
+     * 对外提供的批量补类描述的接口方法
+     * 具有:状态校验,冷却,Redis分布式锁,过期校验,统计返回
+     */
 
     @Override
     public DescribeBatchResult describePending(Long projectId, int limit) {
+//        接收项目id,本次最多处理多少,ClampBatchLimit是把limit限制在一个上下限之间,初始化返回对象.
         int batchSize = clampBatchLimit(limit);
         DescribeBatchResult resp = new DescribeBatchResult();
         resp.setLimit(batchSize);
-
+//        进行状态校验: 对project校验,分析状态.
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
             return fail(resp, "项目不存在", 0);
@@ -220,25 +231,31 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
             return blocked(resp, DescribeBatchResult.STATUS_ANALYSIS_RUNNING,
                     "项目正在分析中", ANALYSIS_RUNNING_RETRY_MS);
         }
+//冷却控制:上一次LLM调用失败后会设置冷却时间,冷却期内不允许在调用,防止放开刷LLM
         long cooldownMs = cooldownRemainingMs(projectId);
         if (cooldownMs > 0) {
             return fail(resp, "描述服务刚失败，冷却中", cooldownMs);
         }
-
+//分布式锁：redis分布式锁同一个项目统一时间只能够跑一批描述任务，避免并发多次调用LLM，重复写数据。抢不到锁就返回busy。并带有过期时间
         String lockKey = RedisKeys.DESCRIBE_LOCK + projectId;
         if (!Boolean.TRUE.equals(redisUtil.setIfAbsent(lockKey, "1", DESCRIBE_LOCK_TTL_SECONDS, TimeUnit.SECONDS))) {
             return blocked(resp, DescribeBatchResult.STATUS_BUSY, "已有描述批次在处理", BUSY_RETRY_MS);
         }
-
         try {
             // 抢到锁后再校验一次，关闭「检查闸门 → 抢锁」之间的窗口
             if (isAnalyzing(projectId)) {
                 return blocked(resp, DescribeBatchResult.STATUS_ANALYSIS_RUNNING,
                         "项目正在分析中", ANALYSIS_RUNNING_RETRY_MS);
             }
+            /*
+            * 拿当前的版本号
+            * */
             long rev = graphRevService.currentRev(projectId);
-
+            /*
+            * 获得一批描述为空的列表，并存入pending列表中
+            * */
             List<Skeleton> pending = loadPendingClasses(projectId, batchSize);
+//            需要写描述的数量
             Counts counts = countClasses(projectId);
             resp.setTotal(counts.total());
             resp.setDescribable(counts.describable());
@@ -269,6 +286,7 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
                 allowed.add(s.uid());
             }
             Set<String> coreUids = Set.copyOf(codeGraphQueryService.coreClassUids(projectId));
+//            在这里已经完成了对有描述的类的写入，然后返回一个列表
             List<ClassDescriptionsResponse.Item> items =
                     writeBackOnDemand(projectId, mapByIndex(raw, pending), allowed, coreUids);
 
@@ -318,16 +336,21 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
     }
 
     // ==================== 查询 ====================
-
+//这个项目ID，返回一个限制数量列表
     List<CoreClass> queryCoreClasses(Long projectId, int limit) {
+//拿到这个核心类的uid结合，最多拿limit个uid
         List<String> uids = codeGraphQueryService.coreClassUids(projectId, limit);
+//        如果uid是空，直接返回空集合，不用查数据库
         if (uids.isEmpty()) {
             return List.of();
         }
-
+//创建一个byUid核心类对象，LinkedHashMap能够记住放进去的顺序
         Map<String, CoreClass> byUid = new LinkedHashMap<>();
+//        打开Neo4j会话，执行Cypher语句SKELETON，参数传项目id和uid列表，但是只是有uid列表而已，没有其他内容所以需要根据该uid列表去拿到
+//        每一uid所对应的详细内容
         try (Session session = driver.session()) {
             Result skel = session.run(SKELETON, Map.of("pid", projectId, "uids", uids));
+//            遍历查到的每一条结果记录，uid，拼装成CoreClass对象，放进map里
             while (skel.hasNext()) {
                 Record r = skel.next();
                 String uid = r.get("uid").asString();
@@ -340,7 +363,7 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
                         strings(r.get("methods"))));
             }
         }
-
+//按最一开始拿到的uids顺序重新组装结果，循环uid列表，去map里找对应的CoreClass，能找到就假如最终返回列表里；数据库查不到这个uid的就直接不要
         List<CoreClass> filled = new ArrayList<>();
         for (String uid : uids) {
             CoreClass c = byUid.get(uid);
@@ -399,7 +422,9 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
         }
         return out;
     }
-
+/*
+* 统计类的数量。拿到项目 id，开一个 Neo4j 会话，执行上面那条统计 Cypher 语句，传入项目 id。如果查不到数据，直接返回三个数都是 0 的统计对象；有结果就取出 total、describable、pending 这三个数字，封装成 Counts 对象返回。用完会话自动关闭。
+* */
     private Counts countClasses(Long projectId) {
         try (Session session = driver.session()) {
             Result result = session.run(COUNTS, Map.of("pid", projectId));
@@ -424,8 +449,10 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
         sb.append("只输出 JSON，不要输出解释或代码块标记，格式：");
         sb.append("{\"items\":[{\"qualifiedName\":\"...\",\"description\":\"...\"}]}\n\n");
         sb.append("=== 核心类骨架 ===\n");
+//        加一个分隔标题,然后循环所有核心类,
         for (int i = 0; i < cores.size(); i++) {
             CoreClass c = cores.get(i);
+//            把每一个类的全限定名,类型,包,父类,方法签名拼到字符串
             appendSkeleton(sb, i + 1, c.qualifiedName(), c.kind(), c.pkg(), c.parents(), c.methods());
         }
         return sb.toString();
@@ -465,6 +492,7 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
         return sb.toString();
     }
 
+//循环每一个核心类,压缩骨架信息,拼进prompt
     private void appendSkeleton(StringBuilder sb, int index, String uid, String kind,
                                 String pkg, List<String> parents, List<String> methods) {
         sb.append(index).append(". ").append(uid);
@@ -484,7 +512,9 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
 
     private ClassDescriptionBatch callLlm(String prompt) {
         try {
+//            预先配置号的大模型实例,创建一个对话客户端
             ChatClient chatClient = ChatClient.create(chatModel);
+//            让框架自动解析LLM返回的JSON字符串,反射转换成ClassDescription这个java实体对象
             return chatClient.prompt(prompt).call().entity(ClassDescriptionBatch.class);
         } catch (Exception e) {
             log.error("调用 LLM 生成类描述失败", e);
@@ -534,9 +564,11 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
     // ==================== 写回 ====================
 
     private void writeBack(Long projectId, ClassDescriptionBatch batch) {
+//        逐行拆解:先兜底判断,如果LLM为空那么直接结束
         if (batch == null || batch.getItems() == null || batch.getItems().isEmpty()) {
             return;
         }
+//        准备一个集合用来存放记录,循环遍历AI返回的每一条全限类名+描述
         List<Map<String, Object>> rows = new ArrayList<>();
         for (ClassDescriptionBatch.Item item : batch.getItems()) {
             if (item.getQualifiedName() == null || item.getDescription() == null) {
@@ -557,12 +589,15 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
      */
     private List<ClassDescriptionsResponse.Item> writeBackOnDemand(
             Long projectId, ClassDescriptionBatch batch, Set<String> allowed, Set<String> coreUids) {
+//        先准备返回列表：如果批量数据为空，就直接返回空值
         List<ClassDescriptionsResponse.Item> items = new ArrayList<>();
         if (batch == null || batch.getItems() == null) {
             return items;
         }
+//        准备一个row数组
         List<Map<String, Object>> rows = new ArrayList<>();
         Set<String> seen = new HashSet<>();
+//        遍历每一条传入的描述
         for (ClassDescriptionBatch.Item item : batch.getItems()) {
             String uid = item.getQualifiedName();
             if (uid == null || item.getDescription() == null) {
@@ -583,10 +618,12 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
             out.setCore(coreUids.contains(uid));
             items.add(out);
         }
+//        这里已经完成了对Neo4j的写入
         writeRows(rows);
+//        回传一个列表包含了uid,描述,和是否需要分析
         return items;
     }
-
+//将传入的参数整理成一块完成的信息
     private Map<String, Object> row(Long projectId, String uid, String description) {
         Map<String, Object> row = new HashMap<>();
         row.put("projectId", projectId);
@@ -594,7 +631,7 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
         row.put("description", description);
         return row;
     }
-
+//写进Neo4j中去
     private void writeRows(List<Map<String, Object>> rows) {
         if (rows.isEmpty()) {
             return;
@@ -703,7 +740,10 @@ public class ClassDescriptionServiceImpl implements ClassDescriptionService {
     private boolean isAnalyzing(Long projectId) {
         return Boolean.TRUE.equals(redisUtil.hasKey(RedisKeys.ANALYZE_LOCK + projectId));
     }
-
+    /*
+    * 用项目Id拼接上redis的Key,通过redis查这个key还有多久过期
+    * 如果查到的过期时间部署null,而且大于0,就把秒转成毫秒返回
+    * */
     private long cooldownRemainingMs(Long projectId) {
         Long ttl = redisUtil.getExpire(RedisKeys.DESCRIBE_COOLDOWN + projectId);
         return ttl != null && ttl > 0 ? ttl * 1000 : 0L;

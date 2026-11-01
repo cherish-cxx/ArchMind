@@ -103,10 +103,11 @@ public class AgentClient {
                 .retrieve().body(ViewportAck.class), "viewport");
     }
 
-    /** 读回会话（刷新页面恢复屏幕用）。projectId 走 query 参数 —— Python 那边是这么收的。 */
-    public ConversationDTO getConversation(String conversationId, Long projectId) {
+    /** 读回会话（刷新页面恢复屏幕用）。projectId / userId 走 query 参数 —— Python 那边是这么收的。 */
+    public ConversationDTO getConversation(String conversationId, Long projectId, Long userId) {
         return execute(() -> longClient.get()
-                .uri(PATH_CONVERSATION + "?projectId={pid}", conversationId, projectId)
+                .uri(PATH_CONVERSATION + "?projectId={pid}&userId={uid}",
+                        conversationId, projectId, userId)
                 .retrieve().body(ConversationDTO.class), "conversations");
     }
 

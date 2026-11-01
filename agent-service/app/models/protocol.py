@@ -26,6 +26,8 @@ class AskRequest(CamelModel):
     """
 
     project_id: int
+    #: 由 Java 网关从 JWT 注入，Python 只信任这个值，**不接受前端直传**。
+    user_id: int
     message: str
     conversation_id: str | None = None   # P4 才有；P2 可不传
     focus: NodeRef | None = None         # 可为 null：用户直接问「这个项目是干嘛的」
@@ -58,6 +60,7 @@ class NavigateRequest(CamelModel):
     """
 
     project_id: int
+    user_id: int
     conversation_id: str
     op: NavigateOp
     target: NodeRef | None = None   # 目前 BACK 用不到；留给 EXPAND
@@ -81,6 +84,7 @@ class ViewportReport(CamelModel):
     """
 
     project_id: int
+    user_id: int
     conversation_id: str
     rev: int                                  # 单调递增；后端只接受比当前更大的
     visible_nodes: list[str] = []

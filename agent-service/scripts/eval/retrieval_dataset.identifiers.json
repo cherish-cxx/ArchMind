@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "ArchMind 标识符查询子集",
+  "projectId": 2115334472151040002,
+  "rev": 1,
+  "description": "12 条带类名/方法名的查询。语义入口解决的是「措辞对不上」，这组则衡量另一头：用户直接说出标识符时，词面召回是否有效。用于判断混合检索的稀疏分支值不值得保留。",
+  "questions": [
+    {"id": "I01", "question": "SecurityConfig 里配置了什么？", "anchors": ["com.example.archmind.config.SecurityConfig"], "category": "auth", "difficulty": "easy"},
+    {"id": "I02", "question": "JwtUtil 是怎么签令牌的？", "anchors": ["com.example.archmind.common.util.JwtUtil"], "category": "auth", "difficulty": "easy"},
+    {"id": "I03", "question": "AsyncConfig 的线程池参数是多少？", "anchors": ["com.example.archmind.config.AsyncConfig"], "category": "analysis", "difficulty": "easy"},
+    {"id": "I04", "question": "UploadProperties 有哪些字段？", "anchors": ["com.example.archmind.config.UploadProperties"], "category": "upload", "difficulty": "easy"},
+    {"id": "I05", "question": "CodeGraphNeo4jWriter 怎么写 CALLS 边？", "anchors": ["com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter"], "category": "graph", "difficulty": "medium"},
+    {"id": "I06", "question": "ProjectIndex 里怎么按短名查类？", "anchors": ["com.example.archmind.model.ast.ProjectIndex"], "category": "analysis", "difficulty": "medium"},
+    {"id": "I07", "question": "RelationResolver 支持哪些关系类型？", "anchors": ["com.example.archmind.service.ast.RelationResolver"], "category": "analysis", "difficulty": "medium"},
+    {"id": "I08", "question": "AnalysisStage 枚举包含哪些阶段？", "anchors": ["com.example.archmind.common.constant.AnalysisStage"], "category": "analysis", "difficulty": "easy"},
+    {"id": "I09", "question": "TaskServiceImpl 怎么更新任务进度？", "anchors": ["com.example.archmind.service.impl.TaskServiceImpl"], "category": "task", "difficulty": "medium"},
+    {"id": "I10", "question": "ClassDescriptionServiceImpl 的 prompt 长什么样？", "anchors": ["com.example.archmind.service.impl.ClassDescriptionServiceImpl"], "category": "overview", "difficulty": "medium"},
+    {"id": "I11", "question": "ProjectSourceMapper 对应哪张表？", "anchors": ["com.example.archmind.dao.ProjectSourceMapper"], "category": "project", "difficulty": "easy"},
+    {"id": "I12", "question": "GlobalExceptionHandler 处理哪些异常？", "anchors": ["com.example.archmind.common.exception.GlobalExceptionHandler"], "category": "misc", "difficulty": "easy"}
+  ],
+  "negatives": []
+}

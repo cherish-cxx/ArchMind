@@ -21,6 +21,14 @@ public class AgentAskRequest {
      */
     private Long projectId;
 
+    /**
+     * 当前用户 id。<b>由网关注入</b>，前端传值会被覆盖。
+     *
+     * <p>R5 起 Python 直连 MySQL，会话与记忆必须按 user 维度隔离；
+     * Python 拿不到登录态，只能信任网关注入的这个值。</p>
+     */
+    private Long userId;
+
     private String message;
 
     /** 不传 = 新会话（Python 那边会生成一个并回带）。 */

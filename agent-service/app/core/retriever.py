@@ -112,6 +112,10 @@ def to_candidate(point) -> Candidate | None:
     head, _, _ = uid.partition("#")
     simple = payload.get("simpleName") or head.rsplit(".", 1)[-1]
     package = payload.get("packageName") or head.rsplit(".", 1)[0]
+    method_names = tuple(
+        m.get("name") for m in (payload.get("methods") or [])
+        if isinstance(m, dict) and m.get("name")
+    )[:5]
     return Candidate(
         uid=uid,
         simple_name=simple,
@@ -120,6 +124,7 @@ def to_candidate(point) -> Candidate | None:
         description=payload.get("description"),
         rev=int(payload.get("rev") or 0),
         score=float(getattr(point, "score", 0.0) or 0.0),
+        methods=method_names,
     )
 
 

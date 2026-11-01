@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -38,6 +39,34 @@ class Settings(BaseSettings):
     redis_password:str = ""
     context_ttl_seconds: int = 7200
 
+    #     ——————————MySQL：持久化（R5）——————————————
+    # 和 Redis 一样：地址与密码分开，避免密码出现在 /health 里。
+    # 用 AGENT_MYSQL_* 前缀，和 Java 侧的 MYSQL_PASSWORD（Spring 用）区分开 ——
+    # 两边是两个不同权限的账号。
+    agent_mysql_host: str = "localhost"
+    agent_mysql_port: int = 3306
+    agent_mysql_database: str = "archmind"
+    agent_mysql_user: str = "archmind_agent"
+    agent_mysql_password: str = ""
+    agent_mysql_pool_size: int = 5
+    agent_mysql_max_overflow: int = 10
+    agent_mysql_echo: bool = False
+
+    # 上下文工作窗口上限。**持久化的是完整 transcript，窗口只决定喂给模型多少。**
+    message_window_max_messages: int = 40
+    message_window_max_chars: int = 48000
+    # 单轮落库的硬上限。超了就把工具返回体置空并置 truncated，绝不静默丢。
+    agent_turn_max_payload_bytes: int = 512 * 1024
+
+    @property
+    def mysql_dsn(self) -> str:
+        pwd = quote_plus(self.agent_mysql_password)
+        return (
+            f"mysql+aiomysql://{self.agent_mysql_user}:{pwd}"
+            f"@{self.agent_mysql_host}:{self.agent_mysql_port}"
+            f"/{self.agent_mysql_database}?charset=utf8mb4"
+        )
+
     # ── 向量索引（R4）──────────────────────────────────────────────────────
     # 服务端容器默认地址；compose 里用 EMBED_URL / QDRANT_URL 覆盖成宿主机地址
     embed_url: str = "http://localhost:8010"
@@ -58,8 +87,10 @@ class Settings(BaseSettings):
     # ── 检索（R4）──────────────────────────────────────────────────────────
     # 两路各取多少个进入融合。取少了融合没得挑，取多了白算。
     retrieve_prefetch_limit: int = 20
-    # 融合后给 LLM 看几个候选。再多模型选不准，prompt 也会撑长。
-    retrieve_top_k: int = 5
+    # 融合后给 LLM 看几个候选。R4 实测：正确入口经常排在第 6–10 名，
+    # 5 个候选会把它们截断（Q04/Q22）；放到 10 后任意锚点命中率 90% → 97.5%。
+    # 再多收益递减，prompt 也会明显变长。
+    retrieve_top_k: int = 10
     # 检索是附加路径，**绝不能拖住主链路**：embed 挂住时不能用 index_timeout=120
     retrieve_timeout: float = 8.0
 

@@ -11,6 +11,9 @@ from app.core.indexer import Indexer
 from app.core.llm import LLMClient
 from app.core.retriever import Retriever
 from app.store.context_store import ContextStore
+from app.store.conversation_repo import ConversationRepo
+from app.store.conversation_store import ConversationStore
+from app.store.db import Database
 from app.store.index_store import IndexStore
 from app.tools.embed_client import EmbedClient
 from app.tools.java_client import JavaClient
@@ -34,7 +37,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 服务器刚启动先跑这里：创建java客户端，llm客户端，并塞到app.state全局储物盒，此时还没有对发开放接口，用户请求进不来
     app.state.java_client = JavaClient()
     app.state.llm_client = LLMClient()
-    app.state.context_store = ContextStore()
+    # R5：MySQL 是真相，Redis 是热缓存。门面把两层藏起来，路由只认 ConversationStore。
+    app.state.database = Database()
+    app.state.conversation_repo = ConversationRepo(app.state.database)
+    app.state.context_store = ConversationStore(
+        ContextStore(), app.state.conversation_repo
+    )
     # R4：索引链路。Qdrant/embed 客户端都不在构造时联网，服务起来不依赖它们先就绪
     app.state.embed_client = EmbedClient()
     app.state.qdrant = QdrantStore()
@@ -67,18 +75,24 @@ app.include_router(index_router)
 
 
 @app.get("/health")
-def health() -> dict:
+async def health() -> dict:
     """存活探针。P6 容器化后 compose 靠它判断服务起没起。
 
     顺带报出**这个进程实际生效的配置** —— 曾经排查过一次「服务起来了但连的是
     本机 Redis」，就是因为看不出它在连哪个地址，绕了不少路。
-    redisUrl 不含密码（密码在单独的 redis_password 字段里）。
+    密码一律不出现。
     """
+    mysql_ok = False
+    db = getattr(app.state, "database", None)
+    if db is not None:
+        mysql_ok = await db.ping()
     return {
         "status": "ok",
         "javaBaseUrl": settings.java_base_url,
         "redisUrl": settings.redis_url,
         "redisDb": settings.redis_db,
+        "mysql": "ok" if mysql_ok else "down",
+        "agentMysqlHost": f"{settings.agent_mysql_host}:{settings.agent_mysql_port}",
         "llmConfigured": bool(settings.deepseek_api_key),
         "embedUrl": settings.embed_url,
         "qdrantUrl": settings.qdrant_url,

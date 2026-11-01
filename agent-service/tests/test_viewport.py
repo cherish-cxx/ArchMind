@@ -20,6 +20,7 @@ from app.models.response import NodeRef, NodeRefType
 from fakes import FakeContextStore, FakeLLM, FakeRetriever
 
 _PROJECT_ID = 1001
+_USER_ID = 2001
 _H = {INTERNAL_TOKEN_HEADER: settings.internal_token}
 
 
@@ -49,7 +50,7 @@ def client(store) -> TestClient:
 
 
 def _report(cid: str, rev: int, **kw) -> dict:
-    return {"projectId": _PROJECT_ID, "conversationId": cid, "rev": rev, **kw}
+    return {"projectId": _PROJECT_ID, "userId": _USER_ID, "conversationId": cid, "rev": rev, **kw}
 
 
 # ==================== 纯函数：快照截断 ====================
@@ -175,7 +176,7 @@ def test_get_conversation_returns_snapshot(client, store):
     ).conversation_id
 
     body = client.get(
-        f"/internal/agent/conversations/{cid}", params={"projectId": _PROJECT_ID}, headers=_H
+        f"/internal/agent/conversations/{cid}", params={"projectId": _PROJECT_ID, "userId": _USER_ID}, headers=_H
     ).json()
 
     assert body["exists"] is True
@@ -192,7 +193,7 @@ def test_get_conversation_returns_snapshot(client, store):
 
 def test_get_conversation_missing(client, store):
     body = client.get(
-        "/internal/agent/conversations/c_nope", params={"projectId": _PROJECT_ID}, headers=_H
+        "/internal/agent/conversations/c_nope", params={"projectId": _PROJECT_ID, "userId": _USER_ID}, headers=_H
     ).json()
     assert body == {"exists": False, "reason": "SESSION_GONE"}
 
@@ -208,7 +209,7 @@ def test_ask_expired_session_says_expired_not_new(client, store):
     """
     body = client.post(
         "/internal/agent/ask", headers=_H,
-        json={"projectId": _PROJECT_ID, "conversationId": "c_gone", "message": "它的调用链呢"},
+        json={"projectId": _PROJECT_ID, "userId": _USER_ID, "conversationId": "c_gone", "message": "它的调用链呢"},
     ).json()
 
     assert body["sessionExpired"] is True
@@ -226,7 +227,7 @@ def test_ask_without_cid_creates_new(client, store):
 
     body = client.post(
         "/internal/agent/ask", headers=_H,
-        json={"projectId": _PROJECT_ID, "message": "帮我写个登录接口"},
+        json={"projectId": _PROJECT_ID, "userId": _USER_ID, "message": "帮我写个登录接口"},
     ).json()
 
     cid = body["conversationId"]

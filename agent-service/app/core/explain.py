@@ -18,9 +18,11 @@ P2 的写法是**先选 citations，再用 citations 拼 message** —— 结构
 
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.config import settings
 from app.core.guard import split_citations
 from app.core.llm import Completer, LLMError, LLMNotConfiguredError
 from app.core.prompt import explain_messages
@@ -73,18 +75,35 @@ async def explain(
     这个区分和 P2 里 java_client 对 401 的处理是同一条原则。
     """
     try:
+        started = time.perf_counter()
         raw = await llm.complete(
             explain_messages(intent, envelopes, question, ctx,
                              rewritten=rewritten, candidates=candidates),
             json_mode=True,
         )
+        ctx.turn.llm_calls.append({
+            "purpose": "explain",
+            "model": settings.llm_model,
+            "rawResponse": raw.text,
+            "tokensIn": raw.tokens_in,
+            "tokensOut": raw.tokens_out,
+            "latencyMs": int((time.perf_counter() - started) * 1000),
+        })
         return _parse_and_ground(raw.text, evidenced)
     except LLMNotConfiguredError:
         raise
     except LLMError as e:
         logger.warning("LLM 讲解不可用，退化为模板输出（C2 降级）：%s", e)
+        ctx.turn.llm_calls.append({
+            "purpose": "explain", "model": settings.llm_model, "degraded": True,
+            "error": f"{type(e).__name__}: {e}",
+        })
     except ExplainParseError as e:
         logger.warning("LLM 讲解输出不可解析，退化为模板输出：%s", e)
+        ctx.turn.llm_calls.append({
+            "purpose": "explain", "model": settings.llm_model, "degraded": True,
+            "error": f"ExplainParseError: {e}",
+        })
 
     citations, message = _template(intent, envelopes, evidenced)
     return ExplainResult(message=message, citations=citations, degraded=True)

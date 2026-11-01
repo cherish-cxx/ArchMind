@@ -98,7 +98,7 @@ class AgentClientContractTest {
 
     @Test
     void getConversationReachesPython() {
-        ConversationDTO dto = client.getConversation("c_contract_probe", 1001L);
+        ConversationDTO dto = client.getConversation("c_contract_probe", 1001L, 2001L);
         assertFalse(dto.getExists());
         assertEquals("SESSION_GONE", dto.getReason());
     }
@@ -118,7 +118,7 @@ class AgentClientContractTest {
         // ★ 关键是**异常类型**：401 必须被归成 AgentAuthException（配置错误，要响），
         //   不能被归成 AgentTransportException（那会让部署事故看起来像网络抖动）
         AgentAuthException e = assertThrows(AgentAuthException.class,
-                () -> badToken.getConversation("c_contract_probe", 1001L));
+                () -> badToken.getConversation("c_contract_probe", 1001L, 2001L));
         assertTrue(e.getMessage().contains("401"), "异常信息里应带上 401 便于排查: " + e.getMessage());
     }
 }

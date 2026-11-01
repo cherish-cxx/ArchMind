@@ -42,8 +42,9 @@ class ContextStore:
     # 统一生成RedisKey，把项目ID+对话ID拼成一个Redis的Key
     # redis是KV数据库，需要靠key找数据
     @staticmethod
-    def _key(project_id: int, conversation_id: str) -> str:
-        return f"{_KEY_PREFIX}:{project_id}:{conversation_id}"
+    def _key(user_id: int, project_id: int, conversation_id: str) -> str:
+        # user_id 进 key：同一项目下的两个用户不能共用一份上下文（共享项目场景）
+        return f"{_KEY_PREFIX}:{user_id}:{project_id}:{conversation_id}"
 
     # 用完ContextStore后，关闭底层Redis连接，由于异步连接不主动关闭，连接会一直占用，连接会一直占用，连接池耗尽，服务卡死
     async def aclose(self) -> None:
@@ -53,13 +54,13 @@ class ContextStore:
     load用于会话上下文读取入口，自带降级策略：
     读不到数据，数据解析失败，
     """
-    async def load(self, project_id: int, conversation_id: str) -> AgentContext:
+    async def load(self, user_id: int, project_id: int, conversation_id: str) -> AgentContext:
         # 用上面写好的_key（）拼出redis的key
-        raw = await self._redis.get(self._key(project_id, conversation_id))
+        raw = await self._redis.get(self._key(user_id, project_id, conversation_id))
         # 如果raw是None：Redis里没有这句会话记录（说明是第一次聊天，或者会话过期被删掉了）
         if raw is None:
             logger.info("新建 Context projectId=%s conversationId=%s", project_id, conversation_id)
-            return AgentContext(conversation_id=conversation_id, project_id=project_id)
+            return AgentContext(conversation_id=conversation_id, project_id=project_id, user_id=user_id)
         try:
             # 读取到了字符串raw，这个字符串是之前存进去的JSON
             # model_validate_json是Pydantic的方法，把JOSN字符串直接解析成AgentContext
@@ -72,9 +73,9 @@ class ContextStore:
             # 改模型 → 老 key 反序列化失败 → 自然当新会话 → 2h 内 TTL 淘汰干净。
             logger.warning("Context 反序列化失败，按新会话重建 projectId=%s conversationId=%s",
                            project_id, conversation_id)
-            return AgentContext(conversation_id=conversation_id, project_id=project_id)
+            return AgentContext(conversation_id=conversation_id, project_id=project_id, user_id=user_id)
 
-    async def load_or_none(self, project_id: int, conversation_id: str) -> AgentContext | None:
+    async def load_or_none(self, user_id: int, project_id: int, conversation_id: str) -> AgentContext | None:
         """读一个**已存在**的 Context；不存在（或数据坏了）返回 `None`，**绝不创建**。
 
         和 `load` 的差别在**语义**，不在实现：
@@ -90,7 +91,7 @@ class ContextStore:
         `load` 会偷偷建一个，防线就漏了（TOCTOU）。一次读，不存在就是不存在，原子。
         """
         # 用上面写好的_key（）拼出redis的key
-        raw = await self._redis.get(self._key(project_id, conversation_id))
+        raw = await self._redis.get(self._key(user_id, project_id, conversation_id))
         if raw is None:
             return None
         try:
@@ -104,7 +105,7 @@ class ContextStore:
 
     async def save(self, ctx: AgentContext) -> None:
         await self._redis.set(
-            self._key(ctx.project_id, ctx.conversation_id),
+            self._key(ctx.user_id, ctx.project_id, ctx.conversation_id),
             # by_alias 显式写死：蛇形/驼峰两种都能 round-trip（base.py 的 populate_by_name），
             # 正因为都行，不写死就会依赖 pydantic 默认值 —— 那玩意儿容易记错、也可能随版本变
             ctx.model_dump_json(by_alias=True),
@@ -116,7 +117,7 @@ class ContextStore:
         """项目删除时清掉它全部的会话 Context。返回删掉的数量（路由层要回显）。"""
         # 必须用 scan_iter，不能用 KEYS —— KEYS 会阻塞整个 Redis 实例（单线程），
         # 连 db0 上 Java 的 overview 缓存都得等它扫完
-        pattern = f"{_KEY_PREFIX}:{project_id}:*"
+        pattern = f"{_KEY_PREFIX}:*:{project_id}:*"
         deleted = 0
         async for key in self._redis.scan_iter(match=pattern, count=100):
             await self._redis.delete(key)

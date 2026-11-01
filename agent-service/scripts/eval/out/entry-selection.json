@@ -1,0 +1,908 @@
+{
+  "generatedAt": "2026-10-31T06:15:19.881297+00:00",
+  "projectId": 2115334472151040002,
+  "rev": 1,
+  "dataset": "scripts\\eval\\retrieval_dataset.archmind.json",
+  "topK": [
+    10
+  ],
+  "indexState": {
+    "status": "ready",
+    "rev": 1,
+    "activeRev": 1,
+    "pendingRev": null,
+    "count": 104,
+    "actual": 104,
+    "expected": 104,
+    "partial": false,
+    "describable": 104,
+    "startedAt": 1793178386,
+    "finishedAt": 1793178395,
+    "projectId": 2115334472151040002,
+    "updatedAt": 1793178395
+  },
+  "summary": {
+    "10": {
+      "questions": 40,
+      "primary_accuracy": 0.9,
+      "any_anchor_accuracy": 1.0,
+      "wrong_selection": 0,
+      "null_ref": 0,
+      "gated_by_score": 0,
+      "errors": 0,
+      "mean_confidence": 0.845,
+      "mean_anchor_score": 2.88
+    }
+  },
+  "negatives": {
+    "count": 8,
+    "refused": 8,
+    "refusal_rate": 1.0,
+    "items": [
+      {
+        "id": "N01",
+        "question": "帮我写一个快速排序算法",
+        "intent": "OUT_OF_SCOPE",
+        "confidence": 0.97,
+        "entityRef": null,
+        "refused": true,
+        "top1": "com.example.archmind.model.ast.ProjectIndex"
+      },
+      {
+        "id": "N02",
+        "question": "今天北京的天气怎么样？",
+        "intent": "OUT_OF_SCOPE",
+        "confidence": 0.98,
+        "entityRef": null,
+        "refused": true,
+        "top1": "com.example.archmind.common.exception.BusinessException"
+      },
+      {
+        "id": "N03",
+        "question": "这个项目用的是 Vue 还是 React？",
+        "intent": "OUT_OF_SCOPE",
+        "confidence": 0.9,
+        "entityRef": null,
+        "refused": true,
+        "top1": "com.example.archmind.dto.response.ProjectResponse"
+      },
+      {
+        "id": "N04",
+        "question": "如何把服务部署到 Kubernetes？",
+        "intent": "OUT_OF_SCOPE",
+        "confidence": 0.95,
+        "entityRef": null,
+        "refused": true,
+        "top1": "com.example.archmind.service.UploadService"
+      },
+      {
+        "id": "N05",
+        "question": "推荐几条 Java 后端学习路线",
+        "intent": "OUT_OF_SCOPE",
+        "confidence": 0.95,
+        "entityRef": null,
+        "refused": true,
+        "top1": "com.example.archmind.dto.response.ClassNodeDTO"
+      },
+      {
+        "id": "N06",
+        "question": "解释一下分布式事务的两阶段提交",
+        "intent": "OUT_OF_SCOPE",
+        "confidence": 0.95,
+        "entityRef": null,
+        "refused": true,
+        "top1": "com.example.archmind.service.impl.TaskServiceImpl"
+      },
+      {
+        "id": "N07",
+        "question": "这个项目的开源许可证是什么？",
+        "intent": "OUT_OF_SCOPE",
+        "confidence": 0.9,
+        "entityRef": null,
+        "refused": true,
+        "top1": "com.example.archmind.entity.ProjectSource"
+      },
+      {
+        "id": "N08",
+        "question": "帮我优化一下 MySQL 的慢查询",
+        "intent": "OUT_OF_SCOPE",
+        "confidence": 0.95,
+        "entityRef": null,
+        "refused": true,
+        "top1": "com.example.archmind.controller.TaskController"
+      }
+    ]
+  },
+  "perQuestion": [
+    {
+      "id": "Q01",
+      "k": 10,
+      "question": "用户注册的时候密码是怎么加密保存的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 2,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.UserServiceImpl",
+      "chosen": "com.example.archmind.service.impl.UserServiceImpl",
+      "anchors": [
+        "com.example.archmind.config.SecurityConfig",
+        "com.example.archmind.service.impl.UserServiceImpl"
+      ],
+      "primary": "com.example.archmind.config.SecurityConfig",
+      "in_candidates": true,
+      "is_primary": false,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.UserService"
+    },
+    {
+      "id": "Q02",
+      "k": 10,
+      "question": "登录成功后返回给前端的凭证里包含哪些信息？",
+      "intent": "EXPLORE_RELATION",
+      "confidence": 0.82,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.dto.response.LoginResponse",
+      "chosen": "com.example.archmind.dto.response.LoginResponse",
+      "anchors": [
+        "com.example.archmind.dto.response.LoginResponse",
+        "com.example.archmind.controller.AuthController"
+      ],
+      "primary": "com.example.archmind.dto.response.LoginResponse",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.dto.response.LoginResponse"
+    },
+    {
+      "id": "Q03",
+      "k": 10,
+      "question": "访问令牌是怎么生成和校验的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.common.util.JwtUtil",
+      "chosen": "com.example.archmind.common.util.JwtUtil",
+      "anchors": [
+        "com.example.archmind.common.util.JwtUtil"
+      ],
+      "primary": "com.example.archmind.common.util.JwtUtil",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.common.util.JwtUtil"
+    },
+    {
+      "id": "Q04",
+      "k": 10,
+      "question": "每次请求进来时是怎么识别当前用户的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.config.JwtAuthenticationFilter",
+      "chosen": "com.example.archmind.config.JwtAuthenticationFilter",
+      "anchors": [
+        "com.example.archmind.config.JwtAuthenticationFilter",
+        "com.example.archmind.common.security.SecurityUser"
+      ],
+      "primary": "com.example.archmind.config.JwtAuthenticationFilter",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.dto.request.LoginRequest"
+    },
+    {
+      "id": "Q05",
+      "k": 10,
+      "question": "用户认证信息是怎么从数据库加载给安全框架的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.UserDetailsServiceImpl",
+      "chosen": "com.example.archmind.service.UserDetailsServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.UserDetailsServiceImpl"
+      ],
+      "primary": "com.example.archmind.service.UserDetailsServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.UserDetailsServiceImpl"
+    },
+    {
+      "id": "Q06",
+      "k": 10,
+      "question": "用户没有权限访问某个接口时会返回什么？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.72,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.common.handler.AccessDeniedHandlerImpl",
+      "chosen": "com.example.archmind.common.handler.AccessDeniedHandlerImpl",
+      "anchors": [
+        "com.example.archmind.common.handler.AccessDeniedHandlerImpl"
+      ],
+      "primary": "com.example.archmind.common.handler.AccessDeniedHandlerImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.dao.UserMapper"
+    },
+    {
+      "id": "Q07",
+      "k": 10,
+      "question": "注册接口需要前端传哪些字段？",
+      "intent": "EXPLORE_CODE",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.dto.request.RegisterRequest",
+      "chosen": "com.example.archmind.dto.request.RegisterRequest",
+      "anchors": [
+        "com.example.archmind.dto.request.RegisterRequest",
+        "com.example.archmind.service.impl.UserServiceImpl"
+      ],
+      "primary": "com.example.archmind.dto.request.RegisterRequest",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.dto.request.RegisterRequest"
+    },
+    {
+      "id": "Q08",
+      "k": 10,
+      "question": "登录之后怎么把旧令牌换成新的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.controller.AuthController",
+      "chosen": "com.example.archmind.controller.AuthController",
+      "anchors": [
+        "com.example.archmind.service.impl.AuthServiceImpl",
+        "com.example.archmind.controller.AuthController"
+      ],
+      "primary": "com.example.archmind.service.impl.AuthServiceImpl",
+      "in_candidates": true,
+      "is_primary": false,
+      "is_anchor": true,
+      "top1": "com.example.archmind.common.util.JwtUtil"
+    },
+    {
+      "id": "Q09",
+      "k": 10,
+      "question": "上传的项目压缩包是怎么安全解压的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.ZipExtractServiceImpl",
+      "chosen": "com.example.archmind.service.impl.ZipExtractServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.ZipExtractServiceImpl",
+        "com.example.archmind.service.impl.UploadServiceImpl"
+      ],
+      "primary": "com.example.archmind.service.impl.ZipExtractServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.ZipExtractService"
+    },
+    {
+      "id": "Q10",
+      "k": 10,
+      "question": "上传源码后文件记录是怎么写进数据库的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 2,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.UploadServiceImpl",
+      "chosen": "com.example.archmind.service.impl.UploadServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.UploadServiceImpl",
+        "com.example.archmind.service.impl.FileScannerServiceImpl"
+      ],
+      "primary": "com.example.archmind.service.impl.UploadServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.dao.ProjectSourceMapper"
+    },
+    {
+      "id": "Q11",
+      "k": 10,
+      "question": "项目的文件树是怎么构建和查询的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.FileTreeNodeServiceImpl",
+      "chosen": "com.example.archmind.service.impl.FileTreeNodeServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.FileTreeNodeServiceImpl",
+        "com.example.archmind.dto.response.FileTreeNode"
+      ],
+      "primary": "com.example.archmind.service.impl.FileTreeNodeServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.dto.response.FileTreeNode"
+    },
+    {
+      "id": "Q12",
+      "k": 10,
+      "question": "上传文件的大小限制在哪里配置？",
+      "intent": "EXPLORE_RELATION",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.config.UploadProperties",
+      "chosen": "com.example.archmind.config.UploadProperties",
+      "anchors": [
+        "com.example.archmind.config.UploadProperties"
+      ],
+      "primary": "com.example.archmind.config.UploadProperties",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.config.UploadProperties"
+    },
+    {
+      "id": "Q13",
+      "k": 10,
+      "question": "创建项目的接口和请求参数是什么？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.controller.ProjectController",
+      "chosen": "com.example.archmind.controller.ProjectController",
+      "anchors": [
+        "com.example.archmind.controller.ProjectController",
+        "com.example.archmind.dto.request.ProjectCreateRequest",
+        "com.example.archmind.service.impl.ProjectServiceImpl"
+      ],
+      "primary": "com.example.archmind.controller.ProjectController",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.dto.request.ProjectCreateRequest"
+    },
+    {
+      "id": "Q14",
+      "k": 10,
+      "question": "删除项目的时候会清理哪些数据？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.ProjectServiceImpl",
+      "chosen": "com.example.archmind.service.impl.ProjectServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.ProjectServiceImpl"
+      ],
+      "primary": "com.example.archmind.service.impl.ProjectServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.ProjectService"
+    },
+    {
+      "id": "Q15",
+      "k": 10,
+      "question": "怎么保证用户只能操作自己的项目？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.72,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.common.util.CheckProjectUtil",
+      "chosen": "com.example.archmind.common.util.CheckProjectUtil",
+      "anchors": [
+        "com.example.archmind.common.util.CheckProjectUtil"
+      ],
+      "primary": "com.example.archmind.common.util.CheckProjectUtil",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.common.util.CheckProjectUtil"
+    },
+    {
+      "id": "Q16",
+      "k": 10,
+      "question": "分析任务提交后是怎么异步执行的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 2,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.TaskServiceImpl",
+      "chosen": "com.example.archmind.service.impl.TaskServiceImpl",
+      "anchors": [
+        "com.example.archmind.config.AsyncConfig",
+        "com.example.archmind.service.task.AnalysisTaskExecutor",
+        "com.example.archmind.service.impl.TaskServiceImpl"
+      ],
+      "primary": "com.example.archmind.config.AsyncConfig",
+      "in_candidates": true,
+      "is_primary": false,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.task.AnalysisTaskExecutor"
+    },
+    {
+      "id": "Q17",
+      "k": 10,
+      "question": "分析流程分成几个阶段，各阶段进度是多少？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.common.constant.AnalysisStage",
+      "chosen": "com.example.archmind.common.constant.AnalysisStage",
+      "anchors": [
+        "com.example.archmind.common.constant.AnalysisStage",
+        "com.example.archmind.service.impl.AnalysisPipelineServiceImpl"
+      ],
+      "primary": "com.example.archmind.common.constant.AnalysisStage",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.common.constant.AnalysisStage"
+    },
+    {
+      "id": "Q18",
+      "k": 10,
+      "question": "项目里的 Java 文件是怎么被扫描出来的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.FileScannerServiceImpl",
+      "chosen": "com.example.archmind.service.impl.FileScannerServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.FileScannerServiceImpl"
+      ],
+      "primary": "com.example.archmind.service.impl.FileScannerServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.FileScannerService"
+    },
+    {
+      "id": "Q19",
+      "k": 10,
+      "question": "Java 源码是怎么解析成类、字段和方法的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.AstParserServiceImpl",
+      "chosen": "com.example.archmind.service.impl.AstParserServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.AstParserServiceImpl",
+        "com.example.archmind.model.ast.ParsedClass",
+        "com.example.archmind.model.ast.ParsedMethod"
+      ],
+      "primary": "com.example.archmind.service.impl.AstParserServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.impl.AstParserServiceImpl"
+    },
+    {
+      "id": "Q20",
+      "k": 10,
+      "question": "方法之间的调用关系是怎么推断出来的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.ast.RelationResolver",
+      "chosen": "com.example.archmind.service.ast.RelationResolver",
+      "anchors": [
+        "com.example.archmind.service.ast.RelationResolver",
+        "com.example.archmind.service.ast.TypeResolver"
+      ],
+      "primary": "com.example.archmind.service.ast.RelationResolver",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.ast.RelationResolver"
+    },
+    {
+      "id": "Q21",
+      "k": 10,
+      "question": "解析结果是怎么批量写进图数据库的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter",
+      "chosen": "com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter",
+      "anchors": [
+        "com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter",
+        "com.example.archmind.service.impl.CodeGraphServiceImpl"
+      ],
+      "primary": "com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.model.ast.ParsedProject"
+    },
+    {
+      "id": "Q22",
+      "k": 10,
+      "question": "怎么查一个类被谁调用、又依赖了谁？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.72,
+      "anchor_score": 2,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.CodeGraphQueryServiceImpl",
+      "chosen": "com.example.archmind.service.impl.CodeGraphQueryServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.CodeGraphQueryServiceImpl"
+      ],
+      "primary": "com.example.archmind.service.impl.CodeGraphQueryServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.ast.RelationResolver"
+    },
+    {
+      "id": "Q23",
+      "k": 10,
+      "question": "类和方法的快速查找索引是怎么建立的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.model.ast.ProjectIndex",
+      "chosen": "com.example.archmind.model.ast.ProjectIndex",
+      "anchors": [
+        "com.example.archmind.model.ast.ProjectIndex"
+      ],
+      "primary": "com.example.archmind.model.ast.ProjectIndex",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.model.ast.ProjectIndex"
+    },
+    {
+      "id": "Q24",
+      "k": 10,
+      "question": "一个源文件解析后用什么对象表示？",
+      "intent": "EXPLORE_RELATION",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.model.ast.ParsedFile",
+      "chosen": "com.example.archmind.model.ast.ParsedFile",
+      "anchors": [
+        "com.example.archmind.model.ast.ParsedFile",
+        "com.example.archmind.model.ast.ParsedClass"
+      ],
+      "primary": "com.example.archmind.model.ast.ParsedFile",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.model.ast.ParsedFile"
+    },
+    {
+      "id": "Q25",
+      "k": 10,
+      "question": "任务状态有哪些取值，怎么判断任务已经结束？",
+      "intent": "EXPLORE_CODE",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.common.constant.TaskStatus",
+      "chosen": "com.example.archmind.common.constant.TaskStatus",
+      "anchors": [
+        "com.example.archmind.common.constant.TaskStatus",
+        "com.example.archmind.entity.Task"
+      ],
+      "primary": "com.example.archmind.common.constant.TaskStatus",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.common.constant.TaskStatus"
+    },
+    {
+      "id": "Q26",
+      "k": 10,
+      "question": "分析任务的状态和进度是怎么更新的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.TaskServiceImpl",
+      "chosen": "com.example.archmind.service.impl.TaskServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.TaskServiceImpl",
+        "com.example.archmind.controller.ProjectAnalysisController"
+      ],
+      "primary": "com.example.archmind.service.impl.TaskServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.TaskService"
+    },
+    {
+      "id": "Q27",
+      "k": 10,
+      "question": "分析任务实体里包含哪些字段？",
+      "intent": "EXPLORE_RELATION",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.entity.Task",
+      "chosen": "com.example.archmind.entity.Task",
+      "anchors": [
+        "com.example.archmind.entity.Task",
+        "com.example.archmind.dto.response.TaskResponse"
+      ],
+      "primary": "com.example.archmind.entity.Task",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.entity.Task"
+    },
+    {
+      "id": "Q28",
+      "k": 10,
+      "question": "查询项目最新分析任务走的是哪个接口？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.controller.ProjectAnalysisController",
+      "chosen": "com.example.archmind.controller.ProjectAnalysisController",
+      "anchors": [
+        "com.example.archmind.controller.ProjectAnalysisController"
+      ],
+      "primary": "com.example.archmind.controller.ProjectAnalysisController",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.controller.ProjectAnalysisController"
+    },
+    {
+      "id": "Q29",
+      "k": 10,
+      "question": "系统里有哪些任务类型？",
+      "intent": "EXPLORE_OVERVIEW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.common.constant.TaskType",
+      "chosen": "com.example.archmind.common.constant.TaskType",
+      "anchors": [
+        "com.example.archmind.common.constant.TaskType"
+      ],
+      "primary": "com.example.archmind.common.constant.TaskType",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.common.constant.TaskType"
+    },
+    {
+      "id": "Q30",
+      "k": 10,
+      "question": "任务详情是怎么查的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.controller.TaskController",
+      "chosen": "com.example.archmind.controller.TaskController",
+      "anchors": [
+        "com.example.archmind.controller.TaskController",
+        "com.example.archmind.dto.response.TaskResponse"
+      ],
+      "primary": "com.example.archmind.controller.TaskController",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.controller.TaskController"
+    },
+    {
+      "id": "Q31",
+      "k": 10,
+      "question": "项目概览是怎么生成并缓存的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.9,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.ProjectOverviewServiceImpl",
+      "chosen": "com.example.archmind.service.impl.ProjectOverviewServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.ProjectOverviewServiceImpl",
+        "com.example.archmind.service.ProjectOverviewService"
+      ],
+      "primary": "com.example.archmind.service.impl.ProjectOverviewServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.impl.ProjectOverviewServiceImpl"
+    },
+    {
+      "id": "Q32",
+      "k": 10,
+      "question": "项目概览数据存在哪个实体和表里？",
+      "intent": "EXPLORE_RELATION",
+      "confidence": 0.72,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.entity.ProjectOverview",
+      "chosen": "com.example.archmind.entity.ProjectOverview",
+      "anchors": [
+        "com.example.archmind.entity.ProjectOverview",
+        "com.example.archmind.dao.ProjectOverviewMapper"
+      ],
+      "primary": "com.example.archmind.entity.ProjectOverview",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.entity.ProjectOverview"
+    },
+    {
+      "id": "Q33",
+      "k": 10,
+      "question": "核心类的描述是怎么让大模型生成的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.ClassDescriptionServiceImpl",
+      "chosen": "com.example.archmind.service.impl.ClassDescriptionServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.ClassDescriptionServiceImpl"
+      ],
+      "primary": "com.example.archmind.service.impl.ClassDescriptionServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.ClassDescriptionService"
+    },
+    {
+      "id": "Q34",
+      "k": 10,
+      "question": "批量补类描述的接口返回什么结构？",
+      "intent": "EXPLORE_CODE",
+      "confidence": 0.72,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.dto.response.ClassDescriptionBatch",
+      "chosen": "com.example.archmind.dto.response.ClassDescriptionBatch",
+      "anchors": [
+        "com.example.archmind.dto.response.ClassDescriptionBatch",
+        "com.example.archmind.service.impl.ClassDescriptionServiceImpl"
+      ],
+      "primary": "com.example.archmind.dto.response.ClassDescriptionBatch",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.dto.response.ClassDescriptionBatch"
+    },
+    {
+      "id": "Q35",
+      "k": 10,
+      "question": "项目依赖关系是怎么存储的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.72,
+      "anchor_score": 2,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.dao.ProjectDependencyMapper",
+      "chosen": "com.example.archmind.dao.ProjectDependencyMapper",
+      "anchors": [
+        "com.example.archmind.entity.ProjectDependency",
+        "com.example.archmind.dao.ProjectDependencyMapper"
+      ],
+      "primary": "com.example.archmind.entity.ProjectDependency",
+      "in_candidates": true,
+      "is_primary": false,
+      "is_anchor": true,
+      "top1": "com.example.archmind.entity.ProjectDependency"
+    },
+    {
+      "id": "Q36",
+      "k": 10,
+      "question": "项目基本信息返回给前端是什么结构？",
+      "intent": "EXPLORE_CODE",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.dto.response.ProjectResponse",
+      "chosen": "com.example.archmind.dto.response.ProjectResponse",
+      "anchors": [
+        "com.example.archmind.dto.response.ProjectResponse",
+        "com.example.archmind.entity.Project"
+      ],
+      "primary": "com.example.archmind.dto.response.ProjectResponse",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.dto.response.ProjectResponse"
+    },
+    {
+      "id": "Q37",
+      "k": 10,
+      "question": "接口统一的返回格式是怎么封装的？",
+      "intent": "EXPLORE_CODE",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.common.result.Result",
+      "chosen": "com.example.archmind.common.result.Result",
+      "anchors": [
+        "com.example.archmind.common.result.Result",
+        "com.example.archmind.common.result.ResultCode"
+      ],
+      "primary": "com.example.archmind.common.result.Result",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.common.result.Result"
+    },
+    {
+      "id": "Q38",
+      "k": 10,
+      "question": "业务异常是怎么统一处理的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.common.exception.GlobalExceptionHandler",
+      "chosen": "com.example.archmind.common.exception.GlobalExceptionHandler",
+      "anchors": [
+        "com.example.archmind.common.exception.GlobalExceptionHandler",
+        "com.example.archmind.common.exception.BusinessException"
+      ],
+      "primary": "com.example.archmind.common.exception.GlobalExceptionHandler",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.common.exception.BusinessException"
+    },
+    {
+      "id": "Q39",
+      "k": 10,
+      "question": "项目列表查询是由哪个服务完成的？",
+      "intent": "EXPLORE_FLOW",
+      "confidence": 0.85,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.service.impl.ProjectServiceImpl",
+      "chosen": "com.example.archmind.service.impl.ProjectServiceImpl",
+      "anchors": [
+        "com.example.archmind.service.impl.ProjectServiceImpl",
+        "com.example.archmind.controller.ProjectController"
+      ],
+      "primary": "com.example.archmind.service.impl.ProjectServiceImpl",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.service.impl.ProjectServiceImpl"
+    },
+    {
+      "id": "Q40",
+      "k": 10,
+      "question": "Redis 的缓存读写操作封装在哪个工具类？",
+      "intent": "EXPLORE_RELATION",
+      "confidence": 0.92,
+      "anchor_score": 3,
+      "gated_by_score": false,
+      "raw_ref": "com.example.archmind.common.util.RedisUtil",
+      "chosen": "com.example.archmind.common.util.RedisUtil",
+      "anchors": [
+        "com.example.archmind.common.util.RedisUtil"
+      ],
+      "primary": "com.example.archmind.common.util.RedisUtil",
+      "in_candidates": true,
+      "is_primary": true,
+      "is_anchor": true,
+      "top1": "com.example.archmind.common.util.RedisUtil"
+    }
+  ]
+}

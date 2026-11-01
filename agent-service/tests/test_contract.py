@@ -233,6 +233,7 @@ def test_6_hallucinated_citation_and_uicmd_are_filtered(
                 headers={INTERNAL_TOKEN_HEADER: settings.internal_token},
                 json={
                     "projectId": project_id,
+                    "userId": 2001,
                     "message": "订单创建的流程是什么",
                     "focus": {"type": "CLASS", "uid": chain_start},
                 },

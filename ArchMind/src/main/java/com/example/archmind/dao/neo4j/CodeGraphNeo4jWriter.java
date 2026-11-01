@@ -36,6 +36,9 @@ public class CodeGraphNeo4jWriter {
             "CREATE CONSTRAINT method_uid IF NOT EXISTS FOR (m:Method) REQUIRE (m.projectId, m.uid) IS UNIQUE";
     private static final String INDEX_PROJECT =
             "CREATE INDEX code_node_project IF NOT EXISTS FOR (n:CodeNode) ON (n.projectId)";
+    /** 索引卡片按 owner 批量取方法；没有这个索引时每一页都要扫全部 Method。 */
+    private static final String INDEX_METHOD_OWNER =
+            "CREATE INDEX method_owner IF NOT EXISTS FOR (m:Method) ON (m.projectId, m.owner)";
     private static final String CONSTRAINT_GRAPH_META =
             "CREATE CONSTRAINT graph_meta_project IF NOT EXISTS FOR (g:GraphMeta) REQUIRE g.projectId IS UNIQUE";
 
@@ -164,6 +167,7 @@ public class CodeGraphNeo4jWriter {
             session.run(CONSTRAINT_METHOD).consume();
             session.run(CONSTRAINT_GRAPH_META).consume();
             session.run(INDEX_PROJECT).consume();
+            session.run(INDEX_METHOD_OWNER).consume();
         }
     }
 

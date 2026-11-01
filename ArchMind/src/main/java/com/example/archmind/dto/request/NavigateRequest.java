@@ -15,6 +15,9 @@ public class NavigateRequest {
     /** 同 {@link AgentAskRequest#getProjectId()}，必须过租户校验。 */
     private Long projectId;
 
+    /** 当前用户 id，由网关注入（见 {@link AgentAskRequest#getUserId()}）。 */
+    private Long userId;
+
     /** 导航作用于一个**已经存在**的会话（焦点栈在它的 Context 里），所以必填。 */
     private String conversationId;
 

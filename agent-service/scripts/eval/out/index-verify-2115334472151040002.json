@@ -1,0 +1,66 @@
+{
+  "generatedAt": "2026-10-31T05:11:21.046084+00:00",
+  "projectId": 2115334472151040002,
+  "ok": true,
+  "failures": [],
+  "warnings": [
+    "索引快照与当前源码不一致：索引少 67 个、多 0 个顶层类型 （分析图是上传时的快照，源码改动后需重新分析；不是索引器 bug）"
+  ],
+  "info": {
+    "state": {
+      "status": "ready",
+      "rev": 1,
+      "activeRev": 1,
+      "pendingRev": null,
+      "count": 104,
+      "actual": 104,
+      "expected": 104,
+      "partial": false,
+      "describable": 104,
+      "startedAt": 1793178386,
+      "finishedAt": 1793178395,
+      "projectId": 2115334472151040002,
+      "updatedAt": 1793178395
+    },
+    "collection": {
+      "points": 136,
+      "dense": {
+        "size": 1024,
+        "distance": "Cosine"
+      },
+      "has_sparse": true,
+      "payload_schema": [
+        "projectId",
+        "rev"
+      ]
+    },
+    "counts": {
+      "project": 104,
+      "activeRev": 104
+    },
+    "descriptionSources": {
+      "LLM": 104,
+      "FALLBACK": 0
+    },
+    "sourceDrift": {
+      "localTopLevel": 171,
+      "indexed": 104,
+      "missingFromIndex": 67,
+      "extraInIndex": 0,
+      "missingSample": [
+        "com.example.archmind.common.constant.GraphPredicates",
+        "com.example.archmind.common.constant.RedisKeys",
+        "com.example.archmind.common.security.InternalTokenFilter",
+        "com.example.archmind.config.AgentProperties",
+        "com.example.archmind.controller.AgentController",
+        "com.example.archmind.controller.InternalDescribeController",
+        "com.example.archmind.controller.InternalToolController",
+        "com.example.archmind.dao.LanguageCount",
+        "com.example.archmind.dto.AgentNodeRef",
+        "com.example.archmind.dto.RelationRefDTO"
+      ]
+    },
+    "collectionTotal": 136,
+    "projectPoints": 104
+  }
+}

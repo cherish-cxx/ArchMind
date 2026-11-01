@@ -1,0 +1,299 @@
+{
+  "version": 1,
+  "name": "ArchMind 语义入口评测集",
+  "projectId": 2115334472151040002,
+  "rev": 1,
+  "description": "40 条自然语言问题 → 正确锚点类。锚点只取已进入向量索引的顶层类；问题措辞尽量不复述类名，用于衡量语义入口，而不是字符串匹配。",
+  "questions": [
+    {
+      "id": "Q01",
+      "question": "用户注册的时候密码是怎么加密保存的？",
+      "anchors": ["com.example.archmind.config.SecurityConfig", "com.example.archmind.service.impl.UserServiceImpl"],
+      "category": "auth",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q02",
+      "question": "登录成功后返回给前端的凭证里包含哪些信息？",
+      "anchors": ["com.example.archmind.dto.response.LoginResponse", "com.example.archmind.controller.AuthController"],
+      "category": "auth",
+      "difficulty": "easy"
+    },
+    {
+      "id": "Q03",
+      "question": "访问令牌是怎么生成和校验的？",
+      "anchors": ["com.example.archmind.common.util.JwtUtil"],
+      "category": "auth",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q04",
+      "question": "每次请求进来时是怎么识别当前用户的？",
+      "anchors": ["com.example.archmind.config.JwtAuthenticationFilter", "com.example.archmind.common.security.SecurityUser"],
+      "category": "auth",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q05",
+      "question": "用户认证信息是怎么从数据库加载给安全框架的？",
+      "anchors": ["com.example.archmind.service.UserDetailsServiceImpl"],
+      "category": "auth",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q06",
+      "question": "用户没有权限访问某个接口时会返回什么？",
+      "anchors": ["com.example.archmind.common.handler.AccessDeniedHandlerImpl"],
+      "category": "auth",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q07",
+      "question": "注册接口需要前端传哪些字段？",
+      "anchors": ["com.example.archmind.dto.request.RegisterRequest", "com.example.archmind.service.impl.UserServiceImpl"],
+      "category": "auth",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q08",
+      "question": "登录之后怎么把旧令牌换成新的？",
+      "anchors": ["com.example.archmind.service.impl.AuthServiceImpl", "com.example.archmind.controller.AuthController"],
+      "category": "auth",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q09",
+      "question": "上传的项目压缩包是怎么安全解压的？",
+      "anchors": ["com.example.archmind.service.impl.ZipExtractServiceImpl", "com.example.archmind.service.impl.UploadServiceImpl"],
+      "category": "upload",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q10",
+      "question": "上传源码后文件记录是怎么写进数据库的？",
+      "anchors": ["com.example.archmind.service.impl.UploadServiceImpl", "com.example.archmind.service.impl.FileScannerServiceImpl"],
+      "category": "upload",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q11",
+      "question": "项目的文件树是怎么构建和查询的？",
+      "anchors": ["com.example.archmind.service.impl.FileTreeNodeServiceImpl", "com.example.archmind.dto.response.FileTreeNode"],
+      "category": "project",
+      "difficulty": "easy"
+    },
+    {
+      "id": "Q12",
+      "question": "上传文件的大小限制在哪里配置？",
+      "anchors": ["com.example.archmind.config.UploadProperties"],
+      "category": "upload",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q13",
+      "question": "创建项目的接口和请求参数是什么？",
+      "anchors": ["com.example.archmind.controller.ProjectController", "com.example.archmind.dto.request.ProjectCreateRequest", "com.example.archmind.service.impl.ProjectServiceImpl"],
+      "category": "project",
+      "difficulty": "easy"
+    },
+    {
+      "id": "Q14",
+      "question": "删除项目的时候会清理哪些数据？",
+      "anchors": ["com.example.archmind.service.impl.ProjectServiceImpl"],
+      "category": "project",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q15",
+      "question": "怎么保证用户只能操作自己的项目？",
+      "anchors": ["com.example.archmind.common.util.CheckProjectUtil"],
+      "category": "project",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q16",
+      "question": "分析任务提交后是怎么异步执行的？",
+      "anchors": ["com.example.archmind.config.AsyncConfig", "com.example.archmind.service.task.AnalysisTaskExecutor", "com.example.archmind.service.impl.TaskServiceImpl"],
+      "category": "analysis",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q17",
+      "question": "分析流程分成几个阶段，各阶段进度是多少？",
+      "anchors": ["com.example.archmind.common.constant.AnalysisStage", "com.example.archmind.service.impl.AnalysisPipelineServiceImpl"],
+      "category": "analysis",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q18",
+      "question": "项目里的 Java 文件是怎么被扫描出来的？",
+      "anchors": ["com.example.archmind.service.impl.FileScannerServiceImpl"],
+      "category": "analysis",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q19",
+      "question": "Java 源码是怎么解析成类、字段和方法的？",
+      "anchors": ["com.example.archmind.service.impl.AstParserServiceImpl", "com.example.archmind.model.ast.ParsedClass", "com.example.archmind.model.ast.ParsedMethod"],
+      "category": "analysis",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q20",
+      "question": "方法之间的调用关系是怎么推断出来的？",
+      "anchors": ["com.example.archmind.service.ast.RelationResolver", "com.example.archmind.service.ast.TypeResolver"],
+      "category": "analysis",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q21",
+      "question": "解析结果是怎么批量写进图数据库的？",
+      "anchors": ["com.example.archmind.dao.neo4j.CodeGraphNeo4jWriter", "com.example.archmind.service.impl.CodeGraphServiceImpl"],
+      "category": "graph",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q22",
+      "question": "怎么查一个类被谁调用、又依赖了谁？",
+      "anchors": ["com.example.archmind.service.impl.CodeGraphQueryServiceImpl"],
+      "category": "graph",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q23",
+      "question": "类和方法的快速查找索引是怎么建立的？",
+      "anchors": ["com.example.archmind.model.ast.ProjectIndex"],
+      "category": "analysis",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q24",
+      "question": "一个源文件解析后用什么对象表示？",
+      "anchors": ["com.example.archmind.model.ast.ParsedFile", "com.example.archmind.model.ast.ParsedClass"],
+      "category": "analysis",
+      "difficulty": "easy"
+    },
+    {
+      "id": "Q25",
+      "question": "任务状态有哪些取值，怎么判断任务已经结束？",
+      "anchors": ["com.example.archmind.common.constant.TaskStatus", "com.example.archmind.entity.Task"],
+      "category": "task",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q26",
+      "question": "分析任务的状态和进度是怎么更新的？",
+      "anchors": ["com.example.archmind.service.impl.TaskServiceImpl", "com.example.archmind.controller.ProjectAnalysisController"],
+      "category": "task",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q27",
+      "question": "分析任务实体里包含哪些字段？",
+      "anchors": ["com.example.archmind.entity.Task", "com.example.archmind.dto.response.TaskResponse"],
+      "category": "task",
+      "difficulty": "easy"
+    },
+    {
+      "id": "Q28",
+      "question": "查询项目最新分析任务走的是哪个接口？",
+      "anchors": ["com.example.archmind.controller.ProjectAnalysisController"],
+      "category": "task",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q29",
+      "question": "系统里有哪些任务类型？",
+      "anchors": ["com.example.archmind.common.constant.TaskType"],
+      "category": "task",
+      "difficulty": "easy"
+    },
+    {
+      "id": "Q30",
+      "question": "任务详情是怎么查的？",
+      "anchors": ["com.example.archmind.controller.TaskController", "com.example.archmind.dto.response.TaskResponse"],
+      "category": "task",
+      "difficulty": "easy"
+    },
+    {
+      "id": "Q31",
+      "question": "项目概览是怎么生成并缓存的？",
+      "anchors": ["com.example.archmind.service.impl.ProjectOverviewServiceImpl", "com.example.archmind.service.ProjectOverviewService"],
+      "category": "overview",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q32",
+      "question": "项目概览数据存在哪个实体和表里？",
+      "anchors": ["com.example.archmind.entity.ProjectOverview", "com.example.archmind.dao.ProjectOverviewMapper"],
+      "category": "overview",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q33",
+      "question": "核心类的描述是怎么让大模型生成的？",
+      "anchors": ["com.example.archmind.service.impl.ClassDescriptionServiceImpl"],
+      "category": "overview",
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q34",
+      "question": "批量补类描述的接口返回什么结构？",
+      "anchors": ["com.example.archmind.dto.response.ClassDescriptionBatch", "com.example.archmind.service.impl.ClassDescriptionServiceImpl"],
+      "category": "overview",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q35",
+      "question": "项目依赖关系是怎么存储的？",
+      "anchors": ["com.example.archmind.entity.ProjectDependency", "com.example.archmind.dao.ProjectDependencyMapper"],
+      "category": "overview",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q36",
+      "question": "项目基本信息返回给前端是什么结构？",
+      "anchors": ["com.example.archmind.dto.response.ProjectResponse", "com.example.archmind.entity.Project"],
+      "category": "overview",
+      "difficulty": "easy"
+    },
+    {
+      "id": "Q37",
+      "question": "接口统一的返回格式是怎么封装的？",
+      "anchors": ["com.example.archmind.common.result.Result", "com.example.archmind.common.result.ResultCode"],
+      "category": "misc",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q38",
+      "question": "业务异常是怎么统一处理的？",
+      "anchors": ["com.example.archmind.common.exception.GlobalExceptionHandler", "com.example.archmind.common.exception.BusinessException"],
+      "category": "misc",
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q39",
+      "question": "项目列表查询是由哪个服务完成的？",
+      "anchors": ["com.example.archmind.service.impl.ProjectServiceImpl", "com.example.archmind.controller.ProjectController"],
+      "category": "misc",
+      "difficulty": "easy"
+    },
+    {
+      "id": "Q40",
+      "question": "Redis 的缓存读写操作封装在哪个工具类？",
+      "anchors": ["com.example.archmind.common.util.RedisUtil"],
+      "category": "misc",
+      "difficulty": "medium"
+    }
+  ],
+  "negatives": [
+    {"id": "N01", "question": "帮我写一个快速排序算法", "note": "编程任务，不属于项目导航"},
+    {"id": "N02", "question": "今天北京的天气怎么样？", "note": "完全域外"},
+    {"id": "N03", "question": "这个项目用的是 Vue 还是 React？", "note": "项目级问题，没有单一锚点类"},
+    {"id": "N04", "question": "如何把服务部署到 Kubernetes？", "note": "运维问题，代码图里没有答案"},
+    {"id": "N05", "question": "推荐几条 Java 后端学习路线", "note": "泛化建议"},
+    {"id": "N06", "question": "解释一下分布式事务的两阶段提交", "note": "通用知识，不指向本项目代码"},
+    {"id": "N07", "question": "这个项目的开源许可证是什么？", "note": "元信息问题，不指向类"},
+    {"id": "N08", "question": "帮我优化一下 MySQL 的慢查询", "note": "数据库调优，域外"}
+  ]
+}

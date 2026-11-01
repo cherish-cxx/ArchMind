@@ -124,6 +124,13 @@ public class AgentResponse {
         /** 让上层能发现「我讲的是旧图」。 */
         private Integer graphRev;
         private Integer latencyMs;
+        /**
+         * R5：本轮没能写进 MySQL —— 会话状态与回合流水都没落库。
+         *
+         * <p>不复用 {@link AgentResponse#getSessionExpired()}：那个是「会话不存在」，
+         * 这个是「回答给你了，但这一轮没存下来」。前端据此提示「本轮未保存」。</p>
+         */
+        private Boolean persistFailed;
     }
 
     // ==================== P5：图数据 ====================

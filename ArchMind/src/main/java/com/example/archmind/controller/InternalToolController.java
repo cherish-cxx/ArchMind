@@ -4,6 +4,7 @@ import com.example.archmind.common.exception.BusinessException;
 import com.example.archmind.common.util.CheckProjectUtil;
 import com.example.archmind.dto.request.InternalToolRequest;
 import com.example.archmind.dto.response.CallChainResponse;
+import com.example.archmind.dto.response.ClassCardPageResponse;
 import com.example.archmind.dto.response.ClassNodeDTO;
 import com.example.archmind.dto.response.ClassPageResponse;
 import com.example.archmind.dto.response.ClassRelationsResponse;
@@ -130,6 +131,26 @@ public class InternalToolController {
             return stamp(ToolEnvelope.success(data), projectId);
         } catch (BusinessException e) {
             log.warn("classes/page 返回失败 projectId={}: {}", projectId, e.getMessage());
+            return stamp(ToolEnvelope.failure(e.getMessage()), projectId);
+        }
+    }
+
+    /**
+     * 索引服务专用：在 classes/page 的分页之上，批量补方法摘要与上下游摘要。
+     * 每页最多 200；方法/关系按服务端 cap 截断，另带全量计数与截断标记。
+     */
+    @GetMapping("/classes/cards")
+    public ToolEnvelope<ClassCardPageResponse> classCardsPage(
+            @RequestParam Long projectId,
+            @RequestParam(required = false) String afterUid,
+            @RequestParam(defaultValue = "200") int limit) {
+        try {
+            checkProjectUtil.checkProjectExists(projectId);
+            ClassCardPageResponse data =
+                    codeGraphQueryService.listClassCardsPage(projectId, afterUid, limit);
+            return stamp(ToolEnvelope.success(data), projectId);
+        } catch (BusinessException e) {
+            log.warn("classes/cards 返回失败 projectId={}: {}", projectId, e.getMessage());
             return stamp(ToolEnvelope.failure(e.getMessage()), projectId);
         }
     }

@@ -178,6 +178,9 @@ class Meta(CamelModel):
     confidence: float
     graph_rev: int
     latency_ms: int
+    #: 本轮没能写进 MySQL（会话状态与回合流水都没落库）。
+    #: **给前端一个能直接分支的布尔**，而不是让用户以为历史已经保存。
+    persist_failed: bool = False
 
 
 # ==================== 顶层响应 ====================

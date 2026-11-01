@@ -9,9 +9,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # （2026-10-21 实测：阿里云、清华对服务器出口 IP 均返回 403，腾讯云与 pypi.org 正常）
 ARG PIP_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple/
 COPY requirements.txt .
-RUN pip install --no-cache-dir -i "$PIP_INDEX_URL" -r requirements.txt
+RUN pip install --no-cache-dir -i "$PIP_INDEX_URL" \
+        --extra-index-url https://pypi.org/simple/ \
+        -r requirements.txt
 
 COPY app ./app
+# R5：迁移文件与配置必须进镜像，否则 migrate 服务跑不起来
+COPY alembic.ini ./
+COPY alembic ./alembic
 
 EXPOSE 8000
 # 必须 0.0.0.0：main.py 里的 __main__ 是 127.0.0.1，只适合本机调试

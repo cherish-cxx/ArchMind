@@ -53,33 +53,18 @@ def _focus_line(ctx: AgentContext) -> str:
     return base
 
 
-def _history_lines(ctx: AgentContext, limit: int | None = 3) -> list[str]:
-    """把历史渲染成「第 N 轮：问…答…」的行。
+def _prior_conversation(ctx: AgentContext) -> str:
+    """把**本轮之前**的对话记录渲染成文本。
 
-    `limit=None` 表示**全部轮次** —— 意图判定和讲解都要承接整段对话，
-    只给最近几轮等于每三轮重新认识一次用户。
+    当前这轮的用户问题已经由 `ctx.begin_turn` 追加进 messages，
+    这里把它排除掉 —— 调用方会单独用「用户这次说」再给一次，
+    否则同一句话会出现两遍。
     """
-    if not ctx.history:
-        return []
-    items = ctx.history if limit is None else ctx.history[-limit:]
-    return [
-        f"  第{h.turn}轮：用户问「{h.q}」，你答「{h.a}」"
-        + (f"，结束时锚点 = {h.focus_after}" if h.focus_after else "")
-        for h in items
-    ]
-
-
-def _history_line(ctx: AgentContext, limit: int | None = None) -> str:
-    """把历史渲染成一段给 LLM 读的文字。
-
-    默认 `limit=None` = **全部轮次**。跨轮承接靠的就是它：
-    只给最近几轮，用户说到第 4 轮时系统就已经忘记第 1 轮了。
-    """
-    lines = _history_lines(ctx, limit)
-    if not lines:
+    prior = ctx.messages[:-1] if ctx.messages else []
+    if not prior:
         return ""
-    header = "完整对话历史：" if limit is None else f"最近 {limit} 轮对话："
-    return header + "\n" + "\n".join(lines)
+    body = ctx.render_messages(prior)
+    return "之前的对话：\n" + body if body else ""
 
 
 def _screen_line(ctx: AgentContext) -> str:
@@ -115,8 +100,16 @@ def _candidates_block(candidates: list[Candidate] | None) -> str:
         desc = (c.description or "（无描述）").strip().replace("\n", " ")
         if len(desc) > 60:
             desc = desc[:60] + "…"
-        lines.append(f"{i}. {c.uid} | {c.kind_label} | {desc}")
+        line = f"{i}. {c.uid} | {c.kind_label} | {desc}"
+        if c.methods:
+            line += " | 方法：" + "、".join(c.methods[:5])
+        lines.append(line)
     return "\n".join(lines)
+
+
+def render_candidates(candidates: list[Candidate] | None) -> str:
+    """检索候选渲染成文本 —— 供 `core/loop.py` 写进 retrieval 消息。"""
+    return _candidates_block(candidates)
 
 
 def intent_messages(
@@ -129,7 +122,7 @@ def intent_messages(
     """
     intents = "\n".join(f"- {i.value}：{_TRIGGERS[i]}" for i in Intent)
     context_block = "\n".join(
-        x for x in (_focus_line(ctx), _history_line(ctx)) if x
+        x for x in (_focus_line(ctx), _prior_conversation(ctx)) if x
     )
 
     # 没有候选时这一段是空串 —— prompt 与 R4 之前逐字相同，老行为不受影响
@@ -144,15 +137,23 @@ def intent_messages(
 {candidate_block}
 
 候选使用规则（这一轮的锚点就靠它）：
-- 只要候选里有与问题相关的类，**必须选一个**填进 slots.entityRef —— 它是这轮查图的**起点**。
-  问流程、问实现、问某个模块怎么走的，同样要选：系统需要一个起点去查调用链，
-  这不代表这个问题"只关于那一个类"。
-- 优先选业务入口（Controller、Service 实现类），别选 DTO、参数类、工具类、配置类、测试类。
-- 只有候选与问题**完全不相关**时才留 null。
+- slots.entityRef 是这轮查图的**起点**，不要求"整个问题只关于这个类"。
+  问流程、问实现、问某个模块怎么走的，同样要选一个起点。
+- **先判断问题类型，再按类型选**，不要一律选 Controller/Service：
+  - 问配置、加密、开关、阈值、过滤器、安全策略 → 配置类优先（*Config、*Properties）
+  - 问返回什么结构/字段/凭证/参数 → DTO / Response / Request 优先
+  - 问流程、调用链、一个请求怎么走 → Controller / Service 实现类优先
+  - 问“怎么查/从哪查/有没有接口/怎么获取关系” → 查询服务优先；有实现类时选实现类，
+    不要选“解析/推断”类的类（那是构建图时的逻辑，不是查询入口）
+  - 问“怎么解析/怎么推断/怎么构建” → 解析器优先
+  - 问谁调用它、被谁依赖、和谁有关系 → 用户问的那个类本身优先，不要替换成更泛的 Service 或接口
+  - 问具体怎么实现 → 实现类优先于接口
+- 选完后必须给 slots.anchorScore 打分：3=就是问它，2=高度相关，1=只是沾边，0=不匹配。
+  如果最高只有 0 或 1，slots.entityRef 留 null —— 系统会带着候选去问用户，不要硬选。
 - 照抄候选里的全限定名，不要改大小写、不要自己拼包名。
 """
-        entity_rule = ("- slots.entityRef 必须从上面候选里选一个（见候选使用规则），"
-                       "它是这轮查图的起点；只有候选完全不相关时才留 null。")
+        entity_rule = ("- slots.entityRef 从上面候选里选一个（见候选使用规则），"
+                       "并填 slots.anchorScore；没有把握就留 null。")
 
     system = f"""\
 你是代码图谱问答系统的意图分类器。用户会问关于一个 Java 项目的问题，你要判断他到底想干什么。
@@ -169,7 +170,7 @@ def intent_messages(
 - rewrittenQuery 是把代词消解掉之后的完整问句。
 
 只输出一个 JSON 对象，不要任何解释、不要 markdown 代码块。字段：
-{{"intent": "...", "confidence": 0.0, "slots": {{"entityRef": null, "direction": null, "depth": null}}, "rewrittenQuery": "..."}}"""
+{{"intent": "...", "confidence": 0.0, "slots": {{"entityRef": null, "anchorScore": null, "direction": null, "depth": null}}, "rewrittenQuery": "..."}}"""
 
     user = f"""{context_block}
 
@@ -299,6 +300,11 @@ def _render_envelope(env: ToolEnvelope) -> str:
     return json_dumps(data)
 
 
+def render_tool_result(env: ToolEnvelope) -> str:
+    """把工具结果渲染成一段文本 —— 供 `core/loop.py` 写进 tool 消息。"""
+    return _render_envelope(env)
+
+
 def json_dumps(obj) -> str:
     """兜底渲染。单独拆成函数是为了让上面那段读起来不被序列化细节打断。"""
     if hasattr(obj, "model_dump"):
@@ -360,13 +366,6 @@ def explain_messages(
     `question` 用**用户原话**，`rewritten` 只作为消歧提示。两者都给，
     才既不失真、又能处理代词。
     """
-    blocks: list[str] = []
-    for env in envelopes:
-        if env.ok and env.data is not None:
-            blocks.append(_render_envelope(env))
-        elif not env.ok:
-            blocks.append(f"（工具没答上来：{env.note or '未知原因'}）")
-
     truncated = [e for e in envelopes if getattr(e.data, "truncated", False)]
     evidence_block, uids = _render_evidence(envelopes)
 
@@ -418,8 +417,7 @@ def explain_messages(
 关于 citedUids：只填**给这一段提供依据**的 uid。如果这一段是在讲「图里没解析到」
 这类边界，就留空数组 —— 空数组是合法的，不要为了填满而硬塞 uid。"""
 
-    history = _history_lines(ctx, None)
-    history_block = "\n".join(history) if history else "（这是本会话的第一轮）"
+    conversation = ctx.render_messages() or "（这是本会话的第一轮）"
     rewritten_line = ""
     if rewritten and rewritten.strip() and rewritten.strip() != question.strip():
         rewritten_line = f"系统对这句话的理解：{rewritten.strip()}\n"
@@ -428,6 +426,7 @@ def explain_messages(
     screen = _screen_line(ctx)
     if screen:
         state_lines.append(screen)
+    state_lines.append(f"判定的意图：{intent.value}")
     state_block = "\n".join(state_lines)
     # 为空时连空行都不留，保证「没检索」的 prompt 与老版本一致
     reference_section = f"{reference_block}\n\n" if reference_block else ""
@@ -435,16 +434,9 @@ def explain_messages(
     user = f"""\
 === 当前会话状态 ===
 {state_block}
-
-=== 之前的对话（背景，不是本轮证据）===
-{history_block}
-
-=== 用户这轮的话 ===
-原话：{question}
-判定的意图：{intent.value}
 {rewritten_line}
-=== 查询到的信息 ===
-{chr(10).join(blocks) or '（没有查到数据）'}
+=== 对话与工具记录（历史与工具返回是背景，不是本轮证据）===
+{conversation}
 
 {reference_section}=== 图上的凭据 ===
 {evidence_block}

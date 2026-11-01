@@ -29,7 +29,7 @@ from app.models.protocol import (
     ViewportReport,
 )
 from app.models.response import AgentResponse, Meta
-from app.store.context_store import ContextStore
+from app.store.conversation_store import ConversationStore
 from app.tools.java_client import JavaClient
 
 
@@ -60,7 +60,7 @@ def get_java_client(request: Request) -> JavaClient:
 def get_llm_client(request: Request) -> LLMClient:
     return request.app.state.llm_client
 
-def get_context_store(request:Request) ->ContextStore:
+def get_context_store(request:Request) ->ConversationStore:
     return request.app.state.context_store
 
 
@@ -134,7 +134,7 @@ async def ask(
     req: AskRequest, #接收前端POST传过来的请求体，自动校验请求参数是否符合AskRequest模型
     java: JavaClient = Depends(get_java_client),#自动执行之前那个依赖函数，拿到全局的java客户端，变量名java
     llm: LLMClient = Depends(get_llm_client),#自动执行一阿里，拿到全局LLM客户端，变量名llm
-    store: ContextStore = Depends(get_context_store),
+    store: ConversationStore = Depends(get_context_store),
     retriever: Retriever = Depends(get_retriever),
 ) -> AgentResponse:#返回值类型注解，返回agentResponse对象
     """执行一轮问答。
@@ -146,16 +146,18 @@ async def ask(
     conversation_id = req.conversation_id or _new_conversation_id()
     if req.conversation_id is None:
         # 没带 cid = 新会话。这是**唯一**该走「创建」的路径。
-        ctx = AgentContext(conversation_id=conversation_id, project_id=req.project_id)
+        ctx = AgentContext(conversation_id=conversation_id, project_id=req.project_id,
+                           user_id=req.user_id)
     else:
         # 带了 cid，就去 Redis 取那份 Context。
-        ctx = await store.load_or_none(req.project_id, conversation_id)
+        ctx = await store.load_or_none(req.user_id, req.project_id, conversation_id)
         if ctx is None:
             # 带了 cid 却找不到 → **会话已过期**（TTL 2h 是既定语义，必然发生）。
             # 判据是「有没有带 cid」，不是「上下文在不在」——
             # cid 是后端发的，带了就说明这是一个**曾经存在**的会话。
             # **不静默开一个新的**：那样用户会在上文丢失的情况下收到一个看似正常的答案。
             return _session_expired(conversation_id)
+        ctx.user_id = req.user_id
     # 把请求里的focus更新到会话上下文ctx里面
     _apply_focus(ctx, req.focus)
     # 每轮都覆盖：前端清掉锁时（不传）这里必须跟着清，否则会拿上一轮的方法答题
@@ -165,7 +167,9 @@ async def ask(
     run_turn内部会调用LLM生成回答，如果LLM调用失败，会自动降级到旧版本P2模板，不会直接崩掉整个请求
     """
     response = await run_turn(ctx, req.message, java, llm, retriever)
-    await store.save(ctx)
+    persisted = await store.commit_turn(ctx, req.user_id, req.project_id)
+    if response.meta is not None:
+        response.meta.persist_failed = not persisted
     # loop 不知道 conversation_id 是新生成的还是回传的（那是路由层的事），所以在这里补上
     response.conversation_id = conversation_id
     return response
@@ -202,7 +206,7 @@ def _session_expired(conversation_id: str) -> AgentResponse:
              dependencies=[Depends(require_internal_token)])
 async def navigate(
     req: NavigateRequest,
-    store: ContextStore = Depends(get_context_store),
+    store: ConversationStore = Depends(get_context_store),
 ) -> AgentResponse:
     """导航：只动焦点，**一次 LLM 都不调**。
 
@@ -222,18 +226,23 @@ async def navigate(
     # 同 /viewport：用 load_or_none **不用 load**。
     # 同一个 `raw is None`，在 /ask 是「新会话」，在这里是「**会话已过期**」——
     # 导航针对的是一个已存在的会话（栈在它的 Context 里），不建空的。
-    ctx = await store.load_or_none(req.project_id, req.conversation_id)
+    ctx = await store.load_or_none(req.user_id, req.project_id, req.conversation_id)
     if ctx is None:
         return _session_expired(req.conversation_id)
+    ctx.user_id = req.user_id
 
     started = time.perf_counter()
+    # 导航也是一轮：它要进历史，并且落库时需要本轮的消息 delta。
+    ctx.begin_turn("")
     # steps 传空列表、started 现取：这条路没有 INTENT 步（没判意图），
     # 计时也只从这一刻算 —— 那些都是 /ask 那条路才有的东西。
     resp = apply_navigation(ctx, [], started)
 
-    # ★ 必须 save：apply_navigation 的副作用是 pop 焦点栈 + 改 ctx.focus，
+    # ★ 必须落库：apply_navigation 的副作用是 pop 焦点栈 + 改 ctx.focus，
     #   不存的话这次出栈就丢了，下次「退回去」会退到同一个地方。
-    await store.save(ctx)
+    persisted = await store.commit_turn(ctx, req.user_id, req.project_id)
+    if resp.meta is not None:
+        resp.meta.persist_failed = not persisted
     resp.conversation_id = req.conversation_id
     return resp
 
@@ -249,7 +258,7 @@ async def navigate(
 
 
 @router.post("/viewport", dependencies=[Depends(require_internal_token)])
-async def viewport(req: ViewportReport, store: ContextStore = Depends(get_context_store)) -> dict:
+async def viewport(req: ViewportReport, store: ConversationStore = Depends(get_context_store)) -> dict:
     """前端上报屏幕状态。后端**只接受比当前更大的 rev**，快照直接覆盖。
 
     **不创建会话** —— 理由见 `ViewportReport` 的类注释。
@@ -257,10 +266,11 @@ async def viewport(req: ViewportReport, store: ContextStore = Depends(get_contex
     响应里**永远回带当前 rev**：前端据此跳到最新。
     没有它，前端被拒之后只会一直重发自己那个旧 rev，永远同步不上。
     """
-    ctx = await store.load_or_none(req.project_id, req.conversation_id)
+    ctx = await store.load_or_none(req.user_id, req.project_id, req.conversation_id)
     if ctx is None:
         # 会话已过期。**不建** —— 见上面那段「同一个 raw is None」。
         return {"accepted": False, "reason": "SESSION_GONE", "rev": None}
+    ctx.user_id = req.user_id
 
     if req.rev <= ctx.viewport.rev:
         # 旧快照：乱序到达（网络重传 / 用户开了两个标签页）。
@@ -285,7 +295,8 @@ async def viewport(req: ViewportReport, store: ContextStore = Depends(get_contex
 async def get_conversation(
     conversation_id: str,
     project_id: int = Query(alias="projectId"),
-    store: ContextStore = Depends(get_context_store),
+    user_id: int = Query(alias="userId"),
+    store: ConversationStore = Depends(get_context_store),
 ) -> dict:
     """读回会话 —— **刷新页面时恢复屏幕用**。
 
@@ -300,7 +311,7 @@ async def get_conversation(
     `project_id` 走 query 参数（由 Java 注入），和 body 里那个字段同义。
     会话不存在时 `exists: false`，前端据此把那个会话窗口置灰。
     """
-    ctx = await store.load_or_none(project_id, conversation_id)
+    ctx = await store.load_or_none(user_id, project_id, conversation_id)
     if ctx is None:
         return {"exists": False, "reason": "SESSION_GONE"}
     return {
@@ -316,7 +327,7 @@ async def get_conversation(
 
 @router.post("/admin/evict", dependencies=[Depends(require_internal_token)])
 async def evict(req: EvictRequest, request: Request,
-                store: ContextStore = Depends(get_context_store)) -> dict:
+                store: ConversationStore = Depends(get_context_store)) -> dict:
     """项目删除时清掉它的全部会话 Context 与向量索引。
 
     索引清理是**尽力而为**：Qdrant 暂时不可用时只告警，不能因此让项目删不掉。

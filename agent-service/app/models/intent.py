@@ -22,6 +22,12 @@ from app.models.tool import ChainDirection
 #: 而不是某处传参顺手带进来的一个数字。
 CONFIDENCE_THRESHOLD = 0.6
 
+#: 锚点相关性门槛。LLM1 会给选中的候选打 0–3 分：
+#: 3=就是问它、2=高度相关、1=只是沾边、0=不匹配。
+#: 低于这个分数就不把候选变成锚点 —— 宁可澄清，也不要从错节点拉一张图。
+#: 注意这和 CONFIDENCE_THRESHOLD 不是一回事：那个是意图置信度，这个是锚点匹配度。
+ANCHOR_MIN_SCORE = 2
+
 
 class Intent(StrEnum):
     """V1 六个，**封闭枚举** —— LLM 只能在这六个里选。
@@ -55,6 +61,9 @@ class Slots(CamelModel):
     """
 
     entity_ref: str | None = None    # 用户指代的那个实体（类名或全限定名）
+    #: 选中 entityRef 与问题的匹配度（0–3）。用于把「必须选一个」改成「有把握才选」。
+    #: 兼容旧输出：模型不给时保持 R4 之前的行为。
+    anchor_score: int | None = None
     direction: ChainDirection | None = None   # 上游 / 下游。复用 call-chain 的枚举，不另起一个
     depth: int | None = None         # 想看几层
 

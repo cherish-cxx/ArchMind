@@ -1,0 +1,46 @@
+{
+  "generatedAt": "2026-10-31T05:11:48.849057+00:00",
+  "projectId": 2115333646535852033,
+  "ok": true,
+  "failures": [],
+  "warnings": [],
+  "info": {
+    "state": {
+      "status": "ready",
+      "rev": 1,
+      "activeRev": 1,
+      "pendingRev": null,
+      "count": 32,
+      "actual": 32,
+      "expected": 32,
+      "partial": false,
+      "describable": 32,
+      "startedAt": 1793178383,
+      "finishedAt": 1793178386,
+      "projectId": 2115333646535852033,
+      "updatedAt": 1793178386
+    },
+    "collection": {
+      "points": 136,
+      "dense": {
+        "size": 1024,
+        "distance": "Cosine"
+      },
+      "has_sparse": true,
+      "payload_schema": [
+        "projectId",
+        "rev"
+      ]
+    },
+    "counts": {
+      "project": 32,
+      "activeRev": 32
+    },
+    "descriptionSources": {
+      "LLM": 32,
+      "FALLBACK": 0
+    },
+    "collectionTotal": 136,
+    "projectPoints": 32
+  }
+}

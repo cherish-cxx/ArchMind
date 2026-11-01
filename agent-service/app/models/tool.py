@@ -128,6 +128,61 @@ class ClassPage(CamelModel):
     next_cursor: str | None = None   # null = 最后一页
 
 
+class MethodBrief(CamelModel):
+    """类卡片里的一个方法摘要（`/internal/tools/classes/cards`）。"""
+
+    name: str
+    signature: str | None = None
+    visibility: str | None = None
+    is_static: bool | None = None
+    is_constructor: bool | None = None
+
+
+class Upstream(CamelModel):
+    """谁指向这个类。三类关系分开给，语义不同（调用/依赖/继承）。"""
+
+    callers: list[str] = []
+    caller_count: int = 0
+    dependents: list[str] = []
+    dependent_count: int = 0
+    subclasses: list[str] = []
+    subclass_count: int = 0
+
+
+class Downstream(CamelModel):
+    """这个类指向谁。"""
+
+    callees: list[str] = []
+    callee_count: int = 0
+    dependencies: list[str] = []
+    dependency_count: int = 0
+    parents: list[str] = []
+    parent_count: int = 0
+
+
+class ClassCard(ClassNode):
+    """索引卡片：类基本信息 + 方法摘要 + 上下游摘要。
+
+    列表字段由 Java 侧按 cap 截断，`*_count` 是全量数量，`*_truncated` 表示是否被截断。
+    """
+
+    method_count: int = 0
+    methods: list[MethodBrief] = []
+    upstream: Upstream = Upstream()
+    downstream: Downstream = Downstream()
+    methods_truncated: bool = False
+    upstream_truncated: bool = False
+    downstream_truncated: bool = False
+
+
+class ClassCardPage(CamelModel):
+    """按 uid 游标分页的类卡片（`/internal/tools/classes/cards`）。"""
+
+    rev: int
+    items: list[ClassCard] = []
+    next_cursor: str | None = None
+
+
 class DescribeStatus(CamelModel):
     """描述覆盖情况（`/internal/describe/status`）。pending == 0 才允许建索引。"""
 

@@ -5,17 +5,20 @@
 **编排层只做分支和组装**，这样每条分支都能单独测，也让「慢在哪」能从 steps 里看出来。
 """
 
+import json
 import logging
 import time
+import uuid
 
 from app.core.explain import ExplainResult, explain
 from app.core.guard import evidence_uids, filter_ui_commands
 from app.core.graph import build_graph_patch
 from app.core.intent import classify_intent
 from app.core.llm import Completer, LLMError, LLMNotConfiguredError
+from app.core.prompt import render_candidates, render_tool_result
 from app.core.retriever import Retriever, resolve_entity_ref
-from app.models.context import AgentContext, HistoryItem
-from app.models.intent import Intent, IntentResult
+from app.models.context import AgentContext, ToolCall, ToolResult
+from app.models.intent import ANCHOR_MIN_SCORE, Intent, IntentResult
 from app.models.retrieval import Candidate, Retrieval
 from app.models.response import (
     AgentResponse,
@@ -51,7 +54,7 @@ async def run_turn(
     llm: Completer, #大模型客户端用来调用LLM生成内容
     retriever: Retriever | None = None, #语义检索；None = 不做检索（老行为）
 ) -> AgentResponse:
-    ctx.reset_turn_budget() #重置本轮对话的配额
+    ctx.begin_turn(message)   # 记下本轮起点、清空本轮产物、追加用户消息
     started = time.perf_counter() #记录当前时间戳，用来统计本轮回答一共花了多少耗时
     steps: list[Step] = [] #新建一个空列表，用来存放这一轮Agent执行的每一步记录
 
@@ -59,12 +62,19 @@ async def run_turn(
     # 放在 LLM1 **之前**：先拿到候选，LLM1 才不用凭空编类名。
     # 放在 LLM1 之后要多一次 LLM 往返（1~3s），而检索本身只要 100~300ms。
     retrieval = await _retrieve(ctx, message, retriever, steps)
+    ctx.turn.retrieval = retrieval
+    if retrieval.candidates:
+        ctx.append_retrieval(render_candidates(retrieval.candidates))
 
     # ── 1. Intent 判定 ──────────────────────────────────────────────────────
     # 调用异步函数_classify 交给大模型判断用户这句话的意图
     # intent_result（意图结果对象，包含识别出的意图类型+置信度conf）
     # degraded_intent（布尔标记，True = LLM不可用，退化成老的规则模板来判断意图
     intent_result, degraded_intent = await _classify(ctx, message, llm, retrieval.candidates)
+    ctx.turn.intent = intent_result.intent
+    ctx.turn.confidence = intent_result.confidence
+    ctx.turn.degraded = degraded_intent
+    ctx.turn.rewritten_query = intent_result.rewritten_query
     steps.append(
         Step(n=len(steps) + 1, type=StepType.INTENT,
              detail=f"{intent_result.intent.value} (conf={intent_result.confidence:.2f})"
@@ -106,6 +116,16 @@ async def run_turn(
         return _tool_down(ctx, intent_result, spec.name, steps, started)
 
     ctx.budget.tool_calls_this_turn += 1
+    ctx.turn.tool_results.append(ToolResult(spec.name, envelope))
+    ctx.append_tool_exchange(
+        call=ToolCall(
+            id=f"call_{uuid.uuid4().hex[:12]}",
+            name=spec.name,
+            arguments=_tool_args(inv),
+        ),
+        tool_name=spec.name,
+        result_text=render_tool_result(envelope),
+    )
     # 审计显示实际用的那个锚点：锁了方法时打印方法 uid，否则只看到类会误判「没生效」
     steps.append(Step(n=len(steps) + 1, type=StepType.TOOL,
                       detail=f"{spec.name}({inv.method_uid or inv.uid or '-'})",
@@ -118,15 +138,24 @@ async def run_turn(
     # ── 4.5 锁定方法的源码：本轮讲解的直接素材 ─────────────────────────────
     # 用户在大纲里锁了方法，就等于说「现在问的是这段代码」。只把它当成一个 uid 传给代
     # 词消解是不够的：讲解时手上只有类名，答「谁调用了它」给不出方法里的依据。
-    # **只进本轮 prompt，不写进 Context** —— 设计 §7：Context 存状态与引用，不存代码。
+    # **进本轮 prompt 与对话记录，但不进状态快照** —— 快照只存状态与引用，不存代码。
     envelopes = [envelope]
     if ctx.method_uid and spec.name != "method-body":
         body = await _locked_method_body(ctx, java, steps)
         if body is not None:
             envelopes.append(body)
+            ctx.turn.tool_results.append(ToolResult("method-body", body))
+            ctx.append_tool_exchange(
+                call=ToolCall(id=f"call_{uuid.uuid4().hex[:12]}", name="method-body",
+                              arguments=json.dumps({"methodUid": ctx.method_uid},
+                                                   ensure_ascii=False)),
+                tool_name="method-body",
+                result_text=render_tool_result(body),
+            )
 
     # ── 5. 讲解 + 出图命令 ──────────────────────────────────────────────────
     evidenced = evidence_uids(envelopes)
+    ctx.turn.evidence = sorted(evidenced)
     llm_started = time.perf_counter()
     explanation = await explain(
         ctx,
@@ -153,7 +182,23 @@ async def run_turn(
     # P5：把本轮 tool 的真实子图一起带回前端。命令说「看哪里」，它说「那里有什么」。
     graph = build_graph_patch(envelope)
 
-    _remember(ctx, message, explanation, intent_result)
+    # 把讲解写进对话记录（结构化附注跟着走，渲染成文本时只用 content）
+    ctx.append_answer(
+        explanation.message,
+        headline=explanation.headline,
+        sections=[s.model_dump(mode="json", by_alias=True) for s in explanation.sections],
+        citations=[c.model_dump(mode="json", by_alias=True) for c in explanation.citations],
+        degraded=explanation.degraded,
+    )
+    ctx.turn.headline = explanation.headline
+    ctx.turn.answer_message = explanation.message
+    ctx.turn.sections = explanation.sections
+    ctx.turn.citations = explanation.citations
+    ctx.turn.ui_commands = kept
+    ctx.turn.graph = graph
+    ctx.turn.steps = list(steps)
+    ctx.finish_turn("OK", _ms(started))
+
     return _response(ctx, explanation.message, explanation.headline,
                      explanation.citations, explanation.sections,
                      kept, graph, _suggestions(intent_result.intent, ctx), steps, intent_result,
@@ -256,7 +301,19 @@ def _ground_entity_ref(
 
     raw = result.slots.entity_ref
     fixed = resolve_entity_ref(raw, candidates, message)
-    if raw and fixed != raw:
+    score = result.slots.anchor_score
+    # 用户自己点名的类不适用相关性门槛 —— 那是用户明确给出的锚点，
+    # 不能因为模型打分低就被丢掉（与 resolve_entity_ref 的第 3 条规则一致）。
+    simple = fixed.partition("#")[0].rsplit(".", 1)[-1].lower() if fixed else ""
+    named_by_user = bool(simple) and simple in message.lower()
+    if fixed and score is not None and score < ANCHOR_MIN_SCORE and not named_by_user:
+        # 模型自己都只说"沾边"或"不匹配" —— 不拿它当起点，交给澄清。
+        logger.info(
+            "锚点相关性不足（anchorScore=%s < %s），本轮按无锚点处理: %r",
+            score, ANCHOR_MIN_SCORE, fixed,
+        )
+        fixed = None
+    elif raw and fixed != raw:
         logger.warning(
             "entityRef %r 不在候选里，%s", raw,
             f"已归一化为 {fixed}" if fixed else "已丢弃（本轮按无锚点处理）",
@@ -316,12 +373,16 @@ def _clarify(
     **不执行任何工具** —— 这是 A3 的核心：错的图比不回答伤害大得多。
     """
     options = _suggestions(intent_result.intent, ctx)
+    message = (
+        f"我不太确定你想问什么（把握 {intent_result.confidence:.2f}）。"
+        "你是想问下面哪个？"
+    )
+    ctx.append_event(message, outcome="CLARIFY")
+    ctx.turn.steps = list(steps)
+    ctx.finish_turn("CLARIFY", _ms(started))
     return AgentResponse(
         conversation_id=ctx.conversation_id,
-        message=(
-            f"我不太确定你想问什么（把握 {intent_result.confidence:.2f}）。"
-            "你是想问下面哪个？"
-        ),
+        message=message,
         suggestions=options,
         steps=steps,
         meta=Meta(intent=intent_result.intent.value, confidence=intent_result.confidence,
@@ -351,6 +412,10 @@ def navigate(ctx: AgentContext, steps: list[Step], started: float) -> AgentRespo
         cmd = UICmd(op=UiOp.CLEAR_VIEW, rev=ctx.viewport.rev)
         msg = "已经在最开始了，帮你清空视图。"
 
+    ctx.append_event(msg, outcome="NAVIGATE")
+    ctx.turn.steps = list(steps)
+    ctx.turn.ui_commands = [cmd]
+    ctx.finish_turn("NAVIGATE", _ms(started))
     return AgentResponse(
         conversation_id=ctx.conversation_id,
         message=msg,
@@ -365,9 +430,13 @@ def _refuse(
     ctx: AgentContext, intent_result: IntentResult, steps: list[Step], started: float
 ) -> AgentResponse:
     """OUT_OF_SCOPE：一句话拒绝 + 给两个能点的选项。**不做道德说教。**"""
+    message = "这个不在我能回答的范围内 —— 我只能讲这个项目里已有的代码结构和调用关系。"
+    ctx.append_event(message, outcome="REFUSE")
+    ctx.turn.steps = list(steps)
+    ctx.finish_turn("REFUSE", _ms(started))
     return AgentResponse(
         conversation_id=ctx.conversation_id,
-        message="这个不在我能回答的范围内 —— 我只能讲这个项目里已有的代码结构和调用关系。",
+        message=message,
         suggestions=_suggestions(None, ctx),
         steps=steps,
         meta=Meta(intent=intent_result.intent.value, confidence=intent_result.confidence,
@@ -387,8 +456,21 @@ def _need_anchor(
     """
     message = "这个问题得先有个起点 —— 请先在图上点一个类，或者直接说类名。"
     if candidates:
-        names = "、".join(f"`{c.simple_name}`" for c in candidates[:3])
-        message = f"我找到了几个可能是你问的类：{names}。请先在图上点一个，或者说一下是哪个。"
+        def brief(c: Candidate) -> str:
+            desc = (c.description or "无描述").strip().replace("\n", " ")
+            if len(desc) > 30:
+                desc = desc[:30] + "…"
+            return f"`{c.simple_name}`（{c.kind_label}：{desc}）"
+
+        top = candidates[:2]
+        if len(top) == 1:
+            message = f"我找到了一个可能的起点：{brief(top[0])}。回复类名，或先在图上点一个。"
+        else:
+            message = (f"这个问题有两个可能的起点：{brief(top[0])}；{brief(top[1])}。"
+                       f"回复类名，或先在图上点一个。")
+    ctx.append_event(message, outcome="NEED_ANCHOR")
+    ctx.turn.steps = list(steps)
+    ctx.finish_turn("NEED_ANCHOR", _ms(started))
     return AgentResponse(
         conversation_id=ctx.conversation_id,
         message=message,
@@ -406,9 +488,13 @@ def _tool_down(
     ctx: AgentContext, intent_result: IntentResult, name: str, steps: list[Step], started: float
 ) -> AgentResponse:
     """Java 连不上 —— 诚实说，不 500。"""
+    message = f"查询服务（{name}）暂时连不上，这轮没取到数据。稍后再试。"
+    ctx.append_event(message, outcome="TOOL_DOWN", tool=name)
+    ctx.turn.steps = list(steps)
+    ctx.finish_turn("TOOL_DOWN", _ms(started))
     return AgentResponse(
         conversation_id=ctx.conversation_id,
-        message=f"查询服务（{name}）暂时连不上，这轮没取到数据。稍后再试。",
+        message=message,
         steps=steps,
         meta=Meta(intent=intent_result.intent.value, confidence=intent_result.confidence,
                   graph_rev=0, latency_ms=_ms(started)),
@@ -420,9 +506,13 @@ def _tool_said_no(
     steps: list[Step], started: float,
 ) -> AgentResponse:
     """`ok:false` 是业务结果，原样转述它的原因，不猜、不美化。"""
+    message = f"这个我答不了：{env.note or '工具没有给出原因'}"
+    ctx.append_event(message, outcome="TOOL_NO")
+    ctx.turn.steps = list(steps)
+    ctx.finish_turn("TOOL_NO", _ms(started))
     return AgentResponse(
         conversation_id=ctx.conversation_id,
-        message=f"这个我答不了：{env.note or '工具没有给出原因'}",
+        message=message,
         steps=steps,
         meta=Meta(intent=intent_result.intent.value, confidence=intent_result.confidence,
                   graph_rev=env.graph_rev, latency_ms=_ms(started)),
@@ -486,34 +576,17 @@ def _suggestions(intent: Intent | None, ctx: AgentContext) -> list[Suggestion]:
     ]
 
 
-def _remember(
-    ctx: AgentContext, question: str, explanation: ExplainResult, intent_result: IntentResult
-) -> None:
-    """把这一轮压成一句摘要存起来。
-
-    **存摘要不存原文**（设计 §7 决定⑤）—— 十轮之后塞原文，Context 就爆了。
-
-    优先用 `headline`：`message` 现在是后端拼出来的 Markdown，直接截前 120 字
-    会把 `##`/`**` 和半截语法一起塞进下一轮的 prompt。
-    """
-    summary = (
-        explanation.headline
-        or next((s.body for s in explanation.sections if s.body), None)
-        or explanation.message
+def _tool_args(inv) -> str:
+    """把工具入参压成 JSON 字符串，写进 assistant(tool_calls) 消息。"""
+    return json.dumps(
+        {
+            "uid": inv.uid,
+            "methodUid": inv.method_uid,
+            "direction": inv.slots.direction.value if inv.slots.direction else None,
+            "depth": inv.slots.depth,
+        },
+        ensure_ascii=False,
     )
-    summary = summary.strip().replace("\n", " ")
-    if len(summary) > 120:
-        summary = summary[:120] + "…"
-    ctx.history.append(
-        HistoryItem(
-            turn=ctx.budget.turns + 1,
-            intent=intent_result.intent,
-            q=question,
-            a=summary,
-            focus_after=ctx.focus.uid if ctx.focus else None,
-        )
-    )
-    ctx.budget.turns += 1
 
 
 # ==================== 组装 ====================

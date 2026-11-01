@@ -113,7 +113,6 @@ public class TaskServiceImpl implements TaskService {
      * 对已有概括的项目，不创建任务，直接合成已完成的响应，直接到数据库拿
      * 对于没有概括的新项目，先进行上锁，避免多个请求，并将该项目信息以及目前分析状态入库
      * 核心：开启异步分析，并同时return task。避免同步超时
-     *
      */
     @Override
     public TaskResponse submitAnalysis(Long projectId, Long userId, boolean force) {

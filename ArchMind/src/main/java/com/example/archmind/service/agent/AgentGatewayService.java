@@ -1,5 +1,6 @@
 package com.example.archmind.service.agent;
 
+import com.example.archmind.common.exception.BusinessException;
 import com.example.archmind.common.util.CheckProjectUtil;
 import com.example.archmind.dto.AgentNodeRef;
 import com.example.archmind.dto.request.AgentAskRequest;
@@ -43,12 +44,15 @@ public class AgentGatewayService {
     /** 一轮问答。 */
     public AgentResponse ask(AgentAskRequest req) {
         checkProjectUtil.checkProject(req.getProjectId());
+        // ★ R5：身份显式注入。Python 直连 MySQL，没有 userId 就无法按用户隔离会话与记忆。
+        req.setUserId(currentUserIdOrThrow());
         return filterUiCommands(agentClient.ask(req), req.getProjectId());
     }
 
     /** 零 LLM 导航（前端点按钮）。 */
     public AgentResponse navigate(NavigateRequest req) {
         checkProjectUtil.checkProject(req.getProjectId());
+        req.setUserId(currentUserIdOrThrow());
         // 导航这条路 Python 侧**没有**过 filter_ui_commands（它的 target 来自 focus_stack
         // 而不是本轮工具结果），所以 Java 这层是它唯一的校验 —— 照样要过一遍。
         return filterUiCommands(agentClient.navigate(req), req.getProjectId());
@@ -62,6 +66,7 @@ public class AgentGatewayService {
      */
     public ViewportAck reportViewport(String conversationId, ViewportReportRequest req) {
         checkProjectUtil.checkProject(req.getProjectId());
+        req.setUserId(currentUserIdOrThrow());
         // 以路径为准，覆盖请求体里可能带的同名值 —— 免得前端用一个 id 走路径、用另一个进 body
         req.setConversationId(conversationId);
         return agentClient.reportViewport(req);
@@ -70,7 +75,21 @@ public class AgentGatewayService {
     /** 读回会话（刷新页面恢复屏幕用）。 */
     public ConversationDTO getConversation(String conversationId, Long projectId) {
         checkProjectUtil.checkProject(projectId);
-        return agentClient.getConversation(conversationId, projectId);
+        return agentClient.getConversation(conversationId, projectId, currentUserIdOrThrow());
+    }
+
+    /**
+     * 取当前登录用户 id。
+     *
+     * <p>{@code /api/**} 已经过 JWT 过滤器，理论上必有值；取不到说明鉴权链出了问题，
+     * 这里必须炸出来，而不是把 null 传给 Python（那边 userId 是必填 integer）。</p>
+     */
+    private Long currentUserIdOrThrow() {
+        Long userId = checkProjectUtil.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException("未登录或无法解析用户身份");
+        }
+        return userId;
     }
 
     // ==================== uiCommands 弱校验（设计 §3.1 决策 A）====================

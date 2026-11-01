@@ -22,6 +22,9 @@ public class ViewportReportRequest {
     /** 同 {@link AgentAskRequest#getProjectId()}，必须过租户校验。 */
     private Long projectId;
 
+    /** 当前用户 id，由网关注入（见 {@link AgentAskRequest#getUserId()}）。 */
+    private Long userId;
+
     /**
      * **由网关注入**（取自路径变量），忽略请求体里可能带的同名值 ——
      * 以路径为准，免得前端用一个 id 走路径、用另一个 id 进 body。
