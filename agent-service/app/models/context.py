@@ -30,6 +30,7 @@ from pydantic.alias_generators import to_camel
 
 from app.models.base import CamelModel
 from app.models.intent import Intent
+from app.models.memory import MemoryHit
 from app.models.response import Citation, GraphPatch, NodeRef, Section, Step, UICmd
 from app.models.retrieval import Retrieval
 from app.models.tool import RelationType, ToolEnvelope
@@ -128,6 +129,9 @@ class TurnArtifacts:
     method_uid: str | None = None
 
     retrieval: Retrieval | None = None
+    #: 本轮召回的记忆。只用于 prompt 注入和日志，**不进快照**：
+    #: 下轮要用记忆会重新召回，存下来只会让快照随会话膨胀。
+    memory_hits: list[MemoryHit] = dc_field(default_factory=list)
     tool_results: list[ToolResult] = dc_field(default_factory=list)
     evidence: list[str] = dc_field(default_factory=list)
 
@@ -237,6 +241,9 @@ class AgentContext(CamelModel):
 
     budget: Budget = Budget()
     viewport: Viewport = Viewport()
+    #: 上一轮走到哪个分支（OK / CLARIFY / NAVIGATE / …）。
+    #: 记忆触发用：上一轮澄清了，这轮先查一次记忆再问。
+    last_outcome: str | None = None
 
     @model_validator(mode="after")
     def _reject_old_version(self) -> "AgentContext":
@@ -266,6 +273,8 @@ class AgentContext(CamelModel):
         self.turn.outcome = outcome
         self.turn.latency_ms = latency_ms
         self.turn.focus_after = self.focus.uid if self.focus else None
+        # 下一轮的事件触发要看它（`after_clarify`）
+        self.last_outcome = outcome
 
     def append_message(self, message: ChatMessage) -> None:
         self.messages.append(message)

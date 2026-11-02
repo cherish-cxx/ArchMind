@@ -15,10 +15,12 @@ from app.core.guard import evidence_uids, filter_ui_commands
 from app.core.graph import build_graph_patch
 from app.core.intent import classify_intent
 from app.core.llm import Completer, LLMError, LLMNotConfiguredError
+from app.core.memory import MemoryService, explicit_draft, should_recall
 from app.core.prompt import render_candidates, render_tool_result
 from app.core.retriever import Retriever, resolve_entity_ref
 from app.models.context import AgentContext, ToolCall, ToolResult
 from app.models.intent import ANCHOR_MIN_SCORE, Intent, IntentResult
+from app.models.memory import MemoryHit
 from app.models.retrieval import Candidate, Retrieval
 from app.models.response import (
     AgentResponse,
@@ -53,6 +55,7 @@ async def run_turn(
     java: JavaClient, #依赖注入拿到的java服务客户端
     llm: Completer, #大模型客户端用来调用LLM生成内容
     retriever: Retriever | None = None, #语义检索；None = 不做检索（老行为）
+    memory: MemoryService | None = None, #长期记忆；None = 不做记忆（老行为）
 ) -> AgentResponse:
     ctx.begin_turn(message)   # 记下本轮起点、清空本轮产物、追加用户消息
     started = time.perf_counter() #记录当前时间戳，用来统计本轮回答一共花了多少耗时
@@ -64,13 +67,29 @@ async def run_turn(
     retrieval = await _retrieve(ctx, message, retriever, steps)
     ctx.turn.retrieval = retrieval
     if retrieval.candidates:
-        ctx.append_retrieval(render_candidates(retrieval.candidates))
+        # uid 进 meta：下一轮判断"指代有没有着落"要看窗口里有哪些实体
+        ctx.append_retrieval(
+            render_candidates(retrieval.candidates),
+            uids=[c.uid for c in retrieval.candidates],
+        )
+
+    # ── 0.5 记忆召回（事件触发）─────────────────────────────────────────────
+    # 放在意图判定之前：记忆里的实体要能进 slots.entityRef。
+    # 触发规则见 `should_recall`；任何一步失败都退化成"这轮没有记忆"。
+    if memory is not None and memory.enabled:
+        trigger = _memory_trigger(ctx, message, retrieval)
+        if trigger is not None:
+            ctx.turn.memory_hits = await _recall_memories(
+                ctx, message, memory, steps, trigger
+            )
 
     # ── 1. Intent 判定 ──────────────────────────────────────────────────────
     # 调用异步函数_classify 交给大模型判断用户这句话的意图
     # intent_result（意图结果对象，包含识别出的意图类型+置信度conf）
     # degraded_intent（布尔标记，True = LLM不可用，退化成老的规则模板来判断意图
-    intent_result, degraded_intent = await _classify(ctx, message, llm, retrieval.candidates)
+    intent_result, degraded_intent = await _classify(
+        ctx, message, llm, retrieval.candidates, ctx.turn.memory_hits
+    )
     ctx.turn.intent = intent_result.intent
     ctx.turn.confidence = intent_result.confidence
     ctx.turn.degraded = degraded_intent
@@ -168,10 +187,21 @@ async def run_turn(
         llm,
         rewritten=intent_result.rewritten_query,
         candidates=retrieval.candidates,
+        memories=ctx.turn.memory_hits,
     )
     steps.append(Step(n=len(steps) + 1, type=StepType.LLM,
                       detail="讲解(降级)" if explanation.degraded else "讲解",
                       ms=_ms(llm_started)))
+
+    # ── 5.5 显式记忆 ────────────────────────────────────────────────────────
+    # 用户说了"记住…"：写一条事实，并在回答末尾追加一行确认。
+    # 放在讲解之后，是因为正文兜底要用 headline；写失败不影响本轮。
+    if memory is not None and memory.enabled:
+        note = await _remember_explicit(
+            ctx, message, explanation, envelope.graph_rev, memory
+        )
+        if note:
+            explanation.message = f"{explanation.message}\n\n{note}"
 
     commands = _ui_commands(intent_result.intent, envelope, evidenced, ctx)
     kept, dropped = filter_ui_commands(commands, evidenced | _ctx_uids(ctx))
@@ -280,11 +310,106 @@ def _retrieve_detail(result: Retrieval) -> str:
     return f"retrieve({len(result.candidates)}{extra})"
 
 
+# ==================== 记忆 ====================
+
+
+async def _recall_memories(
+    ctx: AgentContext,
+    message: str,
+    memory: MemoryService,
+    steps: list[Step],
+    reason: str,
+) -> list[MemoryHit]:
+    """按触发原因召回。失败返回空列表 —— 记忆是附加路径。"""
+    started = time.perf_counter()
+    try:
+        hits = await memory.recall(ctx.user_id, ctx.project_id, message)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("记忆召回失败，本轮不注入：%s", e)
+        return []
+    steps.append(Step(n=len(steps) + 1, type=StepType.TOOL,
+                      detail=f"recall-memory({len(hits)}:{reason})", ms=_ms(started)))
+    return hits
+
+
+def _window_uids(ctx: AgentContext, k: int = 8) -> set[str]:
+    """本轮之前的工作窗口里出现过的实体。
+
+    **不含本轮**：如果把本轮刚检索出来的候选也算进来，
+    "指代没有着落"这条触发就永远不会成立 —— 检索一出结果，窗口就不空了。
+    """
+    uids: set[str] = set()
+    if ctx.focus is not None:
+        uids.add(ctx.focus.uid)
+    if ctx.method_uid:
+        uids.add(ctx.method_uid)
+    prior = ctx.messages[:ctx.turn_start]
+    for m in prior[-k:]:
+        meta = m.meta or {}
+        uids.update(meta.get("uids") or ())
+        for c in meta.get("citations") or ():
+            if isinstance(c, dict) and c.get("uid"):
+                uids.add(c["uid"])
+    return uids
+
+
+def _memory_trigger(ctx: AgentContext, message: str, retrieval: Retrieval) -> str | None:
+    return should_recall(
+        message=message,
+        turns=ctx.budget.turns,
+        last_outcome=ctx.last_outcome,
+        has_anchor=ctx.focus is not None or ctx.method_uid is not None,
+        candidate_count=len(retrieval.candidates),
+        window_entities=_window_uids(ctx),
+    )
+
+
+def _memory_uids(memories: list[MemoryHit] | None) -> tuple[str, ...]:
+    return tuple(uid for m in (memories or ()) for uid in m.subject_uids)
+
+
+async def _remember_explicit(
+    ctx: AgentContext,
+    message: str,
+    explanation: ExplainResult,
+    graph_rev: int,
+    memory: MemoryService,
+) -> str | None:
+    """显式记忆 → 落库 + 索引，返回要追加到回答末尾的确认行。
+
+    **不满足就静默跳过**：没有触发词、没有 evidence、挑不出 subject，
+    都不写。写失败也只记日志 —— 用户问的是代码，不是记忆。
+    """
+    draft = explicit_draft(
+        message=message,
+        evidence_uids=sorted(ctx.turn.evidence),
+        focus_uid=ctx.focus.uid if ctx.focus else None,
+        graph_rev=graph_rev,
+        conversation_id=ctx.conversation_id,
+        turn_no=ctx.budget.turns + 1,
+        headline=explanation.headline,
+    )
+    if draft is None:
+        return None
+    try:
+        result = await memory.remember(ctx.user_id, ctx.project_id, draft)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("记忆写入失败，本轮照常返回：%s", e)
+        return None
+    if result is None:
+        return None
+    _, action = result
+    if action == "ignored":
+        return None
+    return f"（已记住：{draft.text}）"
+
+
 def _ground_entity_ref(
     ctx: AgentContext,
     result: IntentResult,
     candidates: list[Candidate] | None,
     message: str,
+    memory_uids: tuple[str, ...] = (),
 ) -> IntentResult:
     """把 LLM 填的 entityRef 落到候选上，并让它真的成为本轮锚点。
 
@@ -300,7 +425,7 @@ def _ground_entity_ref(
         return result
 
     raw = result.slots.entity_ref
-    fixed = resolve_entity_ref(raw, candidates, message)
+    fixed = resolve_entity_ref(raw, candidates, message, extra_uids=memory_uids)
     score = result.slots.anchor_score
     # 用户自己点名的类不适用相关性门槛 —— 那是用户明确给出的锚点，
     # 不能因为模型打分低就被丢掉（与 resolve_entity_ref 的第 3 条规则一致）。
@@ -333,6 +458,7 @@ async def _classify(
     message: str,
     llm: Completer,
     candidates: list[Candidate] | None = None,
+    memories: list[MemoryHit] | None = None,
 ) -> tuple[IntentResult, bool]:
     """判 Intent。LLM 挂了就**回落到 P2 的规则**（有 focus 就当问流程）。
 
@@ -341,8 +467,10 @@ async def _classify(
     不是新写的一条没人验证过的路径。
     """
     try:
-        result = await classify_intent(ctx, message, llm, candidates)
-        return _ground_entity_ref(ctx, result, candidates, message), False
+        result = await classify_intent(ctx, message, llm, candidates, memories)
+        return _ground_entity_ref(
+            ctx, result, candidates, message, _memory_uids(memories)
+        ), False
     except LLMNotConfiguredError: #配置缺失，不走降级直接异常
         raise
     except LLMError as e: #凡LLM运行时临时报错，超时，服务挂了，进入降级逻辑

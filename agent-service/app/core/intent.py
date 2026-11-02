@@ -24,6 +24,7 @@ from app.core.llm import Completer
 from app.core.prompt import intent_messages
 from app.models.context import AgentContext
 from app.models.intent import Intent, IntentResult
+from app.models.memory import MemoryHit
 from app.models.retrieval import Candidate
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,7 @@ async def classify_intent(
     message: str,
     llm: Completer,
     candidates: list[Candidate] | None = None,
+    memories: list[MemoryHit] | None = None,
 ) -> IntentResult:
     """判定一轮问答的意图。
 
@@ -90,7 +92,9 @@ async def classify_intent(
     # intent_message拼好给LLM的提示词（系统prompt+用户消息+上下文信息）
     # json_mode = true 强制大模型返回标记JSON字符串，方便后面解析意图
     started = time.perf_counter()
-    raw = await llm.complete(intent_messages(ctx, message, candidates), json_mode=True)
+    raw = await llm.complete(
+        intent_messages(ctx, message, candidates, memories), json_mode=True
+    )
     ctx.turn.llm_calls.append({
         "purpose": "intent",
         "model": settings.llm_model,

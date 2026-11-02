@@ -18,7 +18,7 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import and_, delete, func, select, text, update
 
 from app.config import settings
 from app.models.context import AgentContext, ChatMessage, MessageRole
@@ -95,6 +95,70 @@ class ConversationRepo:
         for chunk in reversed(rows):
             messages.extend(chunk or [])
         return messages
+
+    # ==================== 记忆蒸馏（R5 阶段 3）====================
+
+    async def idle_conversations_for_distill(
+        self, idle_minutes: int, limit: int = 10, max_age_days: int = 7
+    ) -> list[tuple[str, int, int]]:
+        """找"已经空闲、且还有未蒸馏回合"的会话。
+
+        空闲判定在 **SQL 里**用 `NOW()` 做：`created_at` 由 MySQL 服务器时钟写入，
+        在 Python 里算截止时间会遇到时区差（本机 UTC vs 服务器本地时间）。
+
+        `max_age_days` 是**下限**：首次打开开关时，不该把几个月前的历史全部蒸一遍，
+        那会在一夜之间烧掉大量 LLM 调用。
+        """
+        cutoff = func.date_sub(
+            func.now(3), text(f"INTERVAL {int(idle_minutes)} MINUTE")
+        )
+        floor = func.date_sub(
+            func.now(3), text(f"INTERVAL {int(max_age_days)} DAY")
+        )
+        async with self._db.session() as s:
+            rows = (await s.execute(
+                select(Turn.conversation_id, Turn.user_id, Turn.project_id)
+                .where(Turn.memory_distilled_at.is_(None), Turn.status == "ACTIVE")
+                .group_by(Turn.conversation_id, Turn.user_id, Turn.project_id)
+                .having(and_(
+                    func.max(Turn.created_at) < cutoff,
+                    func.max(Turn.created_at) > floor,
+                ))
+                .order_by(func.max(Turn.created_at))
+                .limit(limit)
+            )).all()
+        return [(r[0], int(r[1]), int(r[2])) for r in rows]
+
+    async def load_undistilled_turns(
+        self, user_id: int, project_id: int, conversation_id: str, limit: int = 30
+    ) -> list[Turn]:
+        async with self._db.session() as s:
+            rows = (await s.execute(
+                select(Turn)
+                .where(
+                    Turn.conversation_id == conversation_id,
+                    Turn.user_id == user_id,
+                    Turn.project_id == project_id,
+                    Turn.memory_distilled_at.is_(None),
+                    Turn.status == "ACTIVE",
+                )
+                .order_by(Turn.turn_no)
+                .limit(limit)
+            )).scalars().all()
+        return list(rows)
+
+    async def mark_turns_distilled(self, ids: list[int]) -> int:
+        """标记已蒸过。**只在这一轮处理完之后调用** —— 失败不标，下次重试。"""
+        if not ids:
+            return 0
+        async with self._db.session() as s:
+            async with s.begin():
+                n = (await s.execute(
+                    update(Turn)
+                    .where(Turn.id.in_(ids))
+                    .values(memory_distilled_at=func.now(3))
+                )).rowcount
+        return int(n or 0)
 
     # ==================== 写 ====================
 

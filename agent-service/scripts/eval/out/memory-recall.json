@@ -1,0 +1,633 @@
+{
+  "generatedAt": "2026-11-02T07:00:43.738579+00:00",
+  "projectId": 999900095,
+  "userId": 9001,
+  "topK": 3,
+  "summary": {
+    "cases": 18,
+    "hitAt1": 0.9444444444444444,
+    "hitAt3": 1.0,
+    "forbiddenHits": 8,
+    "forbiddenAt1": 0,
+    "revCases": 2,
+    "revPassed": 2
+  },
+  "results": [
+    {
+      "id": "M01",
+      "question": "上次那个支付回调是从哪进来的",
+      "expected": "pay_entry",
+      "recalled": [
+        "pay_entry",
+        "pay_retry",
+        "pay_gap"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [],
+      "hits": [
+        {
+          "key": "pay_entry",
+          "score": 1.0,
+          "text": "支付回调入口是 PayNotifyController.notify，之后进入 PayService"
+        },
+        {
+          "key": "pay_retry",
+          "score": 0.6667,
+          "text": "支付回调失败会重试 3 次，间隔按 1/5/15 分钟退避"
+        },
+        {
+          "key": "pay_gap",
+          "score": 0.4167,
+          "text": "支付链路在 OrderClient 处跨服务，本图没有下游"
+        }
+      ]
+    },
+    {
+      "id": "M02",
+      "question": "你说的那个跨服务的断点落在哪一节",
+      "expected": "pay_gap",
+      "recalled": [
+        "pay_gap",
+        "order_entry",
+        "gateway_route"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [],
+      "hits": [
+        {
+          "key": "pay_gap",
+          "score": 1.0,
+          "text": "支付链路在 OrderClient 处跨服务，本图没有下游"
+        },
+        {
+          "key": "order_entry",
+          "score": 0.3833,
+          "text": "下单入口是 OrderController.createOrder，先校验库存再创建订单"
+        },
+        {
+          "key": "gateway_route",
+          "score": 0.3667,
+          "text": "网关统一入口是 GatewayApplication，路由配置在 gateway-routes.yml"
+        }
+      ]
+    },
+    {
+      "id": "M03",
+      "question": "下单的时候先做了什么校验",
+      "expected": "order_entry",
+      "recalled": [
+        "order_entry",
+        "auth_filter",
+        "order_status"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [
+        "order_status"
+      ],
+      "hits": [
+        {
+          "key": "order_entry",
+          "score": 1.0,
+          "text": "下单入口是 OrderController.createOrder，先校验库存再创建订单"
+        },
+        {
+          "key": "auth_filter",
+          "score": 0.6667,
+          "text": "登录态由 AuthFilter 校验，token 从 Authorization 头取"
+        },
+        {
+          "key": "order_status",
+          "score": 0.375,
+          "text": "订单状态流转在 OrderStateMachine.transit，超时关单由定时任务触发"
+        }
+      ]
+    },
+    {
+      "id": "M04",
+      "question": "库存是怎么扣的，扣不动会怎样",
+      "expected": "stock_deduct",
+      "recalled": [
+        "stock_deduct",
+        "inventory_lock",
+        "order_entry"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [],
+      "hits": [
+        {
+          "key": "stock_deduct",
+          "score": 1.0,
+          "text": "库存扣减在 StockServiceImpl.deduct，失败会抛库存不足异常"
+        },
+        {
+          "key": "inventory_lock",
+          "score": 0.5,
+          "text": "库存预占使用 Redis 锁，key 前缀是 stock:lock:"
+        },
+        {
+          "key": "order_entry",
+          "score": 0.5,
+          "text": "下单入口是 OrderController.createOrder，先校验库存再创建订单"
+        }
+      ]
+    },
+    {
+      "id": "M05",
+      "question": "登录态是在哪里校验的",
+      "expected": "auth_filter",
+      "recalled": [
+        "auth_filter",
+        "user_login_log",
+        "cart_merge"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [],
+      "hits": [
+        {
+          "key": "auth_filter",
+          "score": 1.0,
+          "text": "登录态由 AuthFilter 校验，token 从 Authorization 头取"
+        },
+        {
+          "key": "user_login_log",
+          "score": 0.5333,
+          "text": "登录记录写入 LoginLogService，写失败不影响登录结果"
+        },
+        {
+          "key": "cart_merge",
+          "score": 0.5,
+          "text": "登录后购物车会合并，合并逻辑在 CartMergeService.merge"
+        }
+      ]
+    },
+    {
+      "id": "M06",
+      "question": "订单创建完购物车会被清掉吗",
+      "expected": "cart_clear",
+      "recalled": [
+        "cart_clear",
+        "order_timeout",
+        "order_entry"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [],
+      "hits": [
+        {
+          "key": "cart_clear",
+          "score": 1.0,
+          "text": "订单创建成功后会调用 CartClient.clear 清空购物车"
+        },
+        {
+          "key": "order_timeout",
+          "score": 0.5333,
+          "text": "订单 15 分钟未支付自动关闭，由 OrderTimeoutJob 扫描"
+        },
+        {
+          "key": "order_entry",
+          "score": 0.5333,
+          "text": "下单入口是 OrderController.createOrder，先校验库存再创建订单"
+        }
+      ]
+    },
+    {
+      "id": "M07",
+      "question": "用户信息缓存没命中会查哪里",
+      "expected": "user_cache",
+      "recalled": [
+        "user_cache",
+        "pay_retry",
+        "cart_merge"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [],
+      "hits": [
+        {
+          "key": "user_cache",
+          "score": 1.0,
+          "text": "用户信息先查 UserCache，缓存未命中才回源 UserServiceImpl"
+        },
+        {
+          "key": "pay_retry",
+          "score": 0.45,
+          "text": "支付回调失败会重试 3 次，间隔按 1/5/15 分钟退避"
+        },
+        {
+          "key": "cart_merge",
+          "score": 0.4167,
+          "text": "登录后购物车会合并，合并逻辑在 CartMergeService.merge"
+        }
+      ]
+    },
+    {
+      "id": "M08",
+      "question": "满减和折扣能一起用吗",
+      "expected": "coupon_calc",
+      "recalled": [
+        "coupon_calc",
+        "stock_deduct",
+        "coupon_limit"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [
+        "coupon_limit"
+      ],
+      "hits": [
+        {
+          "key": "coupon_calc",
+          "score": 1.0,
+          "text": "优惠券计算在 CouponCalculator.calc，满减和折扣不能叠加"
+        },
+        {
+          "key": "stock_deduct",
+          "score": 0.5333,
+          "text": "库存扣减在 StockServiceImpl.deduct，失败会抛库存不足异常"
+        },
+        {
+          "key": "coupon_limit",
+          "score": 0.4242,
+          "text": "优惠券每人限领 2 张，超限在 CouponLimitChecker 被拒绝"
+        }
+      ]
+    },
+    {
+      "id": "M09",
+      "question": "退款之后是怎么通知下游的",
+      "expected": "refund_flow",
+      "recalled": [
+        "refund_flow",
+        "pay_retry",
+        "pay_gap"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [],
+      "hits": [
+        {
+          "key": "refund_flow",
+          "score": 1.0,
+          "text": "退款流程从 RefundController 进，调用 RefundService 后发 MQ 通知下游"
+        },
+        {
+          "key": "pay_retry",
+          "score": 0.5833,
+          "text": "支付回调失败会重试 3 次，间隔按 1/5/15 分钟退避"
+        },
+        {
+          "key": "pay_gap",
+          "score": 0.5,
+          "text": "支付链路在 OrderClient 处跨服务，本图没有下游"
+        }
+      ]
+    },
+    {
+      "id": "M10",
+      "question": "商品搜索的数据多久同步一次",
+      "expected": "search_index",
+      "recalled": [
+        "search_index",
+        "search_analyzer",
+        "order_timeout"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [
+        "search_analyzer"
+      ],
+      "hits": [
+        {
+          "key": "search_index",
+          "score": 1.0,
+          "text": "商品搜索索引由 SearchSyncJob 定时同步，延迟约 5 分钟"
+        },
+        {
+          "key": "search_analyzer",
+          "score": 0.4444,
+          "text": "搜索使用 IK 分词器，自定义词典在 ik_custom.dic"
+        },
+        {
+          "key": "order_timeout",
+          "score": 0.3409,
+          "text": "订单 15 分钟未支付自动关闭，由 OrderTimeoutJob 扫描"
+        }
+      ]
+    },
+    {
+      "id": "M11",
+      "question": "库存预占用的是什么锁",
+      "expected": "inventory_lock",
+      "recalled": [
+        "inventory_lock",
+        "stock_deduct",
+        "order_entry"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [
+        "stock_deduct"
+      ],
+      "hits": [
+        {
+          "key": "inventory_lock",
+          "score": 1.0,
+          "text": "库存预占使用 Redis 锁，key 前缀是 stock:lock:"
+        },
+        {
+          "key": "stock_deduct",
+          "score": 0.5,
+          "text": "库存扣减在 StockServiceImpl.deduct，失败会抛库存不足异常"
+        },
+        {
+          "key": "order_entry",
+          "score": 0.5,
+          "text": "下单入口是 OrderController.createOrder，先校验库存再创建订单"
+        }
+      ]
+    },
+    {
+      "id": "M12",
+      "question": "库存扣减失败会抛什么异常",
+      "expected": "stock_deduct",
+      "recalled": [
+        "stock_deduct",
+        "inventory_lock",
+        "pay_retry"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [
+        "inventory_lock"
+      ],
+      "hits": [
+        {
+          "key": "stock_deduct",
+          "score": 1.0,
+          "text": "库存扣减在 StockServiceImpl.deduct，失败会抛库存不足异常"
+        },
+        {
+          "key": "inventory_lock",
+          "score": 0.5,
+          "text": "库存预占使用 Redis 锁，key 前缀是 stock:lock:"
+        },
+        {
+          "key": "pay_retry",
+          "score": 0.5,
+          "text": "支付回调失败会重试 3 次，间隔按 1/5/15 分钟退避"
+        }
+      ]
+    },
+    {
+      "id": "M13",
+      "question": "支付超时多久",
+      "expected": "pay_timeout",
+      "recalled": [
+        "pay_timeout",
+        "order_timeout",
+        "order_status"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [],
+      "hits": [
+        {
+          "key": "pay_timeout",
+          "score": 1.0,
+          "text": "支付超时时间是 30 分钟，配置在 PaymentProperties.timeout"
+        },
+        {
+          "key": "order_timeout",
+          "score": 0.5833,
+          "text": "订单 15 分钟未支付自动关闭，由 OrderTimeoutJob 扫描"
+        },
+        {
+          "key": "order_status",
+          "score": 0.5333,
+          "text": "订单状态流转在 OrderStateMachine.transit，超时关单由定时任务触发"
+        }
+      ]
+    },
+    {
+      "id": "M14",
+      "question": "支付回调失败会怎么重试",
+      "expected": "pay_retry",
+      "recalled": [
+        "pay_retry",
+        "pay_entry",
+        "order_timeout"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [
+        "pay_entry"
+      ],
+      "hits": [
+        {
+          "key": "pay_retry",
+          "score": 1.0,
+          "text": "支付回调失败会重试 3 次，间隔按 1/5/15 分钟退避"
+        },
+        {
+          "key": "pay_entry",
+          "score": 0.6667,
+          "text": "支付回调入口是 PayNotifyController.notify，之后进入 PayService"
+        },
+        {
+          "key": "order_timeout",
+          "score": 0.5,
+          "text": "订单 15 分钟未支付自动关闭，由 OrderTimeoutJob 扫描"
+        }
+      ]
+    },
+    {
+      "id": "M15",
+      "question": "订单超时没支付会怎样",
+      "expected": "order_timeout",
+      "recalled": [
+        "pay_timeout",
+        "order_timeout",
+        "order_status"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [
+        "order_status"
+      ],
+      "hits": [
+        {
+          "key": "pay_timeout",
+          "score": 0.8333,
+          "text": "支付超时时间是 30 分钟，配置在 PaymentProperties.timeout"
+        },
+        {
+          "key": "order_timeout",
+          "score": 0.8333,
+          "text": "订单 15 分钟未支付自动关闭，由 OrderTimeoutJob 扫描"
+        },
+        {
+          "key": "order_status",
+          "score": 0.5,
+          "text": "订单状态流转在 OrderStateMachine.transit，超时关单由定时任务触发"
+        }
+      ]
+    },
+    {
+      "id": "M16",
+      "question": "刚才那个支付的东西是从哪进来的",
+      "expected": "pay_entry",
+      "recalled": [
+        "order_timeout",
+        "pay_gap",
+        "pay_entry"
+      ],
+      "hitAt1": false,
+      "tiedAt1": false,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [],
+      "hits": [
+        {
+          "key": "order_timeout",
+          "score": 0.75,
+          "text": "订单 15 分钟未支付自动关闭，由 OrderTimeoutJob 扫描"
+        },
+        {
+          "key": "pay_gap",
+          "score": 0.6667,
+          "text": "支付链路在 OrderClient 处跨服务，本图没有下游"
+        },
+        {
+          "key": "pay_entry",
+          "score": 0.5333,
+          "text": "支付回调入口是 PayNotifyController.notify，之后进入 PayService"
+        }
+      ]
+    },
+    {
+      "id": "M17",
+      "question": "那个扣库存的地方失败了怎么办",
+      "expected": "stock_deduct",
+      "recalled": [
+        "stock_deduct",
+        "order_entry",
+        "pay_retry"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [],
+      "hits": [
+        {
+          "key": "stock_deduct",
+          "score": 1.0,
+          "text": "库存扣减在 StockServiceImpl.deduct，失败会抛库存不足异常"
+        },
+        {
+          "key": "order_entry",
+          "score": 0.5333,
+          "text": "下单入口是 OrderController.createOrder，先校验库存再创建订单"
+        },
+        {
+          "key": "pay_retry",
+          "score": 0.5,
+          "text": "支付回调失败会重试 3 次，间隔按 1/5/15 分钟退避"
+        }
+      ]
+    },
+    {
+      "id": "M18",
+      "question": "登录相关的东西失败会影响主流程吗",
+      "expected": "user_login_log",
+      "recalled": [
+        "user_login_log",
+        "pay_retry",
+        "auth_filter"
+      ],
+      "hitAt1": true,
+      "tiedAt1": true,
+      "hitAt3": true,
+      "forbiddenAt1": false,
+      "forbiddenHits": [
+        "auth_filter"
+      ],
+      "hits": [
+        {
+          "key": "user_login_log",
+          "score": 1.0,
+          "text": "登录记录写入 LoginLogService，写失败不影响登录结果"
+        },
+        {
+          "key": "pay_retry",
+          "score": 0.6667,
+          "text": "支付回调失败会重试 3 次，间隔按 1/5/15 分钟退避"
+        },
+        {
+          "key": "auth_filter",
+          "score": 0.5,
+          "text": "登录态由 AuthFilter 校验，token 从 Authorization 头取"
+        }
+      ]
+    }
+  ],
+  "revResults": [
+    {
+      "id": "R01",
+      "seedKey": "pay_entry",
+      "notRecalledWhileStale": true,
+      "staleRecalled": [],
+      "reviveAction": "revived",
+      "revivedAndRecalled": true,
+      "revivedRecalled": [
+        "pay_entry"
+      ]
+    },
+    {
+      "id": "R02",
+      "seedKey": "order_entry",
+      "notRecalledWhileStale": true,
+      "staleRecalled": [],
+      "reviveAction": "revived",
+      "revivedAndRecalled": true,
+      "revivedRecalled": [
+        "order_entry"
+      ]
+    }
+  ]
+}

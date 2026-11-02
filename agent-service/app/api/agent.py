@@ -19,6 +19,7 @@ from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.core.llm import LLMClient
 from app.core.loop import navigate as apply_navigation
 from app.core.loop import run_turn
+from app.core.memory import MemoryService
 from app.core.retriever import Retriever
 from app.models.context import AgentContext, Viewport
 from app.models.protocol import (
@@ -67,6 +68,11 @@ def get_context_store(request:Request) ->ConversationStore:
 def get_retriever(request: Request) -> Retriever:
     """语义检索。是依赖不是模块级单例，测试里才能塞一个"永远返回空候选"的替身。"""
     return request.app.state.retriever
+
+
+def get_memory_service(request: Request) -> MemoryService:
+    """长期记忆。未启用时它自己 no-op，路由层不需要知道开关在哪。"""
+    return request.app.state.memory_service
 
 
 # ==================== 会话 Context（P4.1：已搬进 Redis db1）====================
@@ -136,6 +142,7 @@ async def ask(
     llm: LLMClient = Depends(get_llm_client),#自动执行一阿里，拿到全局LLM客户端，变量名llm
     store: ConversationStore = Depends(get_context_store),
     retriever: Retriever = Depends(get_retriever),
+    memory: MemoryService = Depends(get_memory_service),
 ) -> AgentResponse:#返回值类型注解，返回agentResponse对象
     """执行一轮问答。
 
@@ -166,7 +173,7 @@ async def ask(
     执行一轮Agent回答，把上下文，用户消息，java客户端，llm客户端传给run_turn函数
     run_turn内部会调用LLM生成回答，如果LLM调用失败，会自动降级到旧版本P2模板，不会直接崩掉整个请求
     """
-    response = await run_turn(ctx, req.message, java, llm, retriever)
+    response = await run_turn(ctx, req.message, java, llm, retriever, memory)
     persisted = await store.commit_turn(ctx, req.user_id, req.project_id)
     if response.meta is not None:
         response.meta.persist_failed = not persisted
@@ -338,4 +345,11 @@ async def evict(req: EvictRequest, request: Request,
         await request.app.state.indexer.delete_project(req.project_id)
     except Exception:
         logger.warning("清理向量索引失败 projectId=%s", req.project_id, exc_info=True)
+    # R5：记忆随项目一起清。先删索引点再删行 —— 行删了点还在的话，
+    # 过滤条件再怎么错也查不到已删项目的记忆。
+    try:
+        await request.app.state.memory_store.delete_project(req.project_id)
+        await request.app.state.memory_repo.purge_project(req.project_id)
+    except Exception:
+        logger.warning("清理记忆失败 projectId=%s", req.project_id, exc_info=True)
     return {"ok": True, "note": f"已清理 {n} 个会话 Context"}

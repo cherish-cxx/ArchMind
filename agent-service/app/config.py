@@ -94,6 +94,30 @@ class Settings(BaseSettings):
     # 检索是附加路径，**绝不能拖住主链路**：embed 挂住时不能用 index_timeout=120
     retrieve_timeout: float = 8.0
 
+    # ── 记忆（R5）──────────────────────────────────────────────────────────
+    # 总开关：关掉时既不写也不读，已有记忆保留。默认关，灰度用。
+    memory_enabled: bool = False
+    # 记忆用**独立集合**：和类索引共用时，重新分析按 rev 清理会把记忆一起删掉
+    qdrant_memory_collection: str = "archmind_memories"
+    memory_top_k: int = 3
+    # 比类检索的 8s 更短：记忆挂了应该像没做记忆一样，不能拖住这一轮
+    memory_recall_timeout: float = 3.0
+    # 会话结算：空闲多久才认为"这段对话结束了"
+    memory_settle_idle_minutes: int = 30
+    # 少于这个轮数的会话不结算（一轮的会话没有"结论"可留）
+    memory_settle_min_turns: int = 2
+    # 一次结算最多读多少轮，防止超长会话把 prompt 撑爆
+    memory_distill_max_turns: int = 30
+    # 只结算最近 N 天结束的会话：首次打开开关时，不该把几个月的历史全部蒸一遍
+    memory_distill_max_age_days: int = 7
+    # 扫描间隔
+    memory_scan_interval_seconds: int = 300
+    # 单会话蒸馏锁 TTL：要大于一次 LLM 调用 + 写入的时间
+    memory_distill_lock_ttl: int = 600
+    # 容量上限（方案 §1.1 D13）
+    memory_fact_cap: int = 200
+    memory_open_cap: int = 20
+
 
 settings = Settings()
 

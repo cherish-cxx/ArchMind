@@ -12,8 +12,10 @@
 
 import json
 
+from app.core.memory import render_memories
 from app.models.context import AgentContext
 from app.models.intent import Intent
+from app.models.memory import MemoryHit
 from app.models.retrieval import Candidate
 from app.models.tool import (
     CallChain,
@@ -113,7 +115,10 @@ def render_candidates(candidates: list[Candidate] | None) -> str:
 
 
 def intent_messages(
-    ctx: AgentContext, message: str, candidates: list[Candidate] | None = None
+    ctx: AgentContext,
+    message: str,
+    candidates: list[Candidate] | None = None,
+    memories: list[MemoryHit] | None = None,
 ) -> list[dict[str, str]]:
     """Intent 判定（LLM #1）的输入。
 
@@ -155,17 +160,32 @@ def intent_messages(
         entity_rule = ("- slots.entityRef 从上面候选里选一个（见候选使用规则），"
                        "并填 slots.anchorScore；没有把握就留 null。")
 
+    # 记忆块：只在真的有命中时出现。没有命中时拼出来是空串，
+    # prompt 与 R5 之前逐字相同 —— 这条"没记忆就完全不变"的基线要一直保住。
+    memory_section = ""
+    memory_rule = ""
+    if memories:
+        lines = ["\n过去会话里与此相关的结论（可帮助消解指代，但不等于本轮已查证）："]
+        for m in memories[:3]:
+            subject = f"（实体：{m.subject_uids[0]}）" if m.subject_uids else ""
+            lines.append(f"- {m.text}{subject}")
+        memory_section = "\n".join(lines)
+        memory_rule = (
+            "\n- 如果用户这句话在指代上面记忆里的实体，slots.entityRef 填记忆给出的完整 uid；"
+            "记忆只是线索，拿不准仍然留 null。"
+        )
+
     system = f"""\
 你是代码图谱问答系统的意图分类器。用户会问关于一个 Java 项目的问题，你要判断他到底想干什么。
 
 可选的 intent（只能是这六个之一，不要发明新的）：
 {intents}
-{candidate_section}
+{candidate_section}{memory_section}
 {_PRONOUN_RULES}
 判定要求：
 - confidence 是你对自己判断的把握，0~1。**拿不准就给低分**，不要硬凑高分 ——
   系统会在低分时改问用户一句，那比拉出一张错误的图好得多。
-{entity_rule}
+{entity_rule}{memory_rule}
 - slots.direction 只在明确问上下游时填 "DOWN" 或 "UP"。
 - rewrittenQuery 是把代词消解掉之后的完整问句。
 
@@ -356,6 +376,7 @@ def explain_messages(
     ctx: AgentContext,
     rewritten: str | None = None,
     candidates: list[Candidate] | None = None,
+    memories: list[MemoryHit] | None = None,
 ) -> list[dict[str, str]]:
     """讲解（LLM #2）的输入。
 
@@ -378,6 +399,17 @@ def explain_messages(
 12. 「检索参考」**不是证据**：它只说明检索觉得像哪个类，这些类**没有**被查过图。
     你可以在正文里提「同批候选里还有 X」这类信息，但**绝不能**把它们写进 citedUids，
     也不能声称它们有什么调用关系或实现细节 —— 那部分只能来自下面的证据。
+"""
+
+    # 记忆同理，但理由不同：检索参考是"同轮的猜测"，记忆是"上一轮的结论"。
+    # 后者过期的方式是图变了，所以措辞里要带"可能基于旧版本"。
+    memory_block = render_memories(memories)
+    memory_rule = ""
+    if memory_block:
+        rule_no = 13 if reference_block else 12
+        memory_rule = f"""
+{rule_no}. 「记忆参考」来自过去的会话，可能基于旧版本的图。它只能帮你理解用户在延续什么，
+    不能当作本轮证据：其中的类名与结论**不能**写进 citedUids，也不能声称图里一定还有它。
 """
 
     system = f"""\
@@ -409,7 +441,7 @@ def explain_messages(
     本轮可引用的只有下面那张列表，越界的引用会被后端剔除。
 11. 用户这句话如果是承接上文（「它」「刚才那个」「继续说」），先用历史把指代解开再回答；
     但如果历史和本题无关，**不要强行扯上关系**，更不要为了显得有记忆而复述历史。
-{reference_rule}
+{reference_rule}{memory_rule}
 只输出一个 json 对象，不要任何解释、不要 markdown 代码块。字段：
 {{"headline": "一句话结论（不超过 40 字）",
  "sections": [{{"title": "这一段的标题", "body": "Markdown 正文", "citedUids": ["全限定名"]}}]}}
@@ -430,6 +462,7 @@ def explain_messages(
     state_block = "\n".join(state_lines)
     # 为空时连空行都不留，保证「没检索」的 prompt 与老版本一致
     reference_section = f"{reference_block}\n\n" if reference_block else ""
+    memory_section = f"{memory_block}\n\n" if memory_block else ""
 
     user = f"""\
 === 当前会话状态 ===
@@ -438,7 +471,7 @@ def explain_messages(
 === 对话与工具记录（历史与工具返回是背景，不是本轮证据）===
 {conversation}
 
-{reference_section}=== 图上的凭据 ===
+{reference_section}{memory_section}=== 图上的凭据 ===
 {evidence_block}
 
 === 可引用 uid（citedUids 只能从这里挑）===

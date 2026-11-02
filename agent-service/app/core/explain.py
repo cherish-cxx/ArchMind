@@ -28,6 +28,7 @@ from app.core.llm import Completer, LLMError, LLMNotConfiguredError
 from app.core.prompt import explain_messages
 from app.models.context import AgentContext
 from app.models.intent import Intent
+from app.models.memory import MemoryHit
 from app.models.response import Citation, NodeRefType, Section
 from app.models.retrieval import Candidate
 from app.models.tool import CallChain, GapReason, ProjectOverview, ToolEnvelope
@@ -62,6 +63,7 @@ async def explain(
     *,
     rewritten: str | None = None,
     candidates: list[Candidate] | None = None,
+    memories: list[MemoryHit] | None = None,
 ) -> ExplainResult:
     """讲解这一轮的查询结果。
 
@@ -78,7 +80,8 @@ async def explain(
         started = time.perf_counter()
         raw = await llm.complete(
             explain_messages(intent, envelopes, question, ctx,
-                             rewritten=rewritten, candidates=candidates),
+                             rewritten=rewritten, candidates=candidates,
+                             memories=memories),
             json_mode=True,
         )
         ctx.turn.llm_calls.append({

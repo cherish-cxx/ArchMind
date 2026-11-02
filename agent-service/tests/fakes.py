@@ -265,6 +265,28 @@ class FakeContextStore:
         return self._data.get((project_id, conversation_id))
 
 
+class FakeMemory:
+    """记忆服务替身：召回固定命中、记录写入。
+
+    真的 `MemoryService` 在 `memory_enabled=False` 时自己 no-op，
+    所以替身只在显式传进 `run_turn` 时生效 —— 测试不依赖那个开关。
+    """
+
+    def __init__(self, hits: list | None = None) -> None:
+        self.hits = list(hits or [])
+        self.enabled = True
+        self.recall_calls: list[tuple[int, int, str]] = []
+        self.remembered: list = []
+
+    async def recall(self, user_id: int, project_id: int, query: str, *, k=None) -> list:
+        self.recall_calls.append((user_id, project_id, query))
+        return list(self.hits)
+
+    async def remember(self, user_id: int, project_id: int, draft) -> tuple[None, str]:
+        self.remembered.append(draft)
+        return (None, "inserted")
+
+
 class FakeRetriever:
     """检索替身。
 

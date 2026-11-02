@@ -129,20 +129,27 @@ def to_candidate(point) -> Candidate | None:
 
 
 def resolve_entity_ref(
-    entity_ref: str | None, candidates: list[Candidate], message: str
+    entity_ref: str | None,
+    candidates: list[Candidate],
+    message: str,
+    *,
+    extra_uids: tuple[str, ...] = (),
 ) -> str | None:
     """校验 LLM1 填的 entityRef。
 
     prompt 里已经写了"只能从候选里选"，但那是**约束**不是**保证** ——
-    和 UICommand 一样，模型有权说，代码负责核对。三条规则：
+    和 UICommand 一样，模型有权说，代码负责核对。规则：
 
       1. 候选里精确命中 → 接受
-      2. 简单名在候选里**唯一**命中 → 换算成全限定名（模型常只写短名）
-      3. 不在候选里、但简单名在**用户原话**里出现过 → 接受
+      2. 记忆里的实体精确命中 → 接受（它来自上一次会话，不是本轮向量检索）
+      3. 简单名在候选里**唯一**命中 → 换算成全限定名（模型常只写短名）
+      4. 简单名在记忆里**唯一**命中 → 同样换算
+      5. 不在候选里、但简单名在**用户原话**里出现过 → 接受
          （用户自己点名的类，不能因为检索没排进前五就丢掉）
-      4. 其余 → 丢弃
+      6. 其余 → 丢弃
 
     候选为空时**不做约束** —— 那是"没检索"，行为必须和 R4 之前完全一致。
+    记忆只在"检索给出了别的候选"时才参与核对，避免把无检索的场景变严。
     """
     if not entity_ref:
         return None
@@ -154,6 +161,8 @@ def resolve_entity_ref(
         return None
     if ref in {c.uid for c in candidates}:
         return ref
+    if ref in extra_uids:
+        return ref
 
     simple = ref.partition("#")[0].rsplit(".", 1)[-1].lower()
     if not simple:
@@ -164,6 +173,15 @@ def resolve_entity_ref(
         return hits[0].uid
     if len(hits) > 1:
         # 同名类在候选里不止一个，指代不明时不猜 —— 交给澄清
+        return None
+
+    memory_hits = [
+        uid for uid in extra_uids
+        if uid.partition("#")[0].rsplit(".", 1)[-1].lower() == simple
+    ]
+    if len(memory_hits) == 1:
+        return memory_hits[0]
+    if len(memory_hits) > 1:
         return None
 
     if simple in message.lower():

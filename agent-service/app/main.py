@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -7,16 +9,20 @@ from fastapi import FastAPI
 from app.api.agent import router as agent_router
 from app.api.index import router as index_router
 from app.config import settings
+from app.core.distiller import MemoryDistiller
 from app.core.indexer import Indexer
 from app.core.llm import LLMClient
+from app.core.memory import MemoryService
 from app.core.retriever import Retriever
 from app.store.context_store import ContextStore
 from app.store.conversation_repo import ConversationRepo
 from app.store.conversation_store import ConversationStore
 from app.store.db import Database
 from app.store.index_store import IndexStore
+from app.store.memory_repo import MemoryRepo
 from app.tools.embed_client import EmbedClient
 from app.tools.java_client import JavaClient
+from app.tools.memory_store import MemoryStore
 from app.tools.qdrant_store import QdrantStore
 
 
@@ -56,15 +62,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retriever = Retriever(
         app.state.embed_client, app.state.qdrant, app.state.index_store,
     )
+    # R5：记忆。独立集合 + 同一次 embed 出来的向量 —— 模型共用，集合隔离。
+    # 和 indexer 一样，构造时不联网；MySQL 不可达时记忆路径退化为"没有记忆"。
+    app.state.memory_repo = MemoryRepo(app.state.database)
+    app.state.memory_store = MemoryStore()
+    app.state.memory_service = MemoryService(
+        app.state.memory_repo, app.state.memory_store, app.state.embed_client
+    )
+    # R5：会话结算蒸馏。未启用记忆时 `run_forever` 立刻返回，不留后台循环。
+    app.state.memory_distiller = MemoryDistiller(
+        app.state.conversation_repo, app.state.memory_service, app.state.llm_client
+    )
+    app.state.distill_task = asyncio.create_task(
+        app.state.memory_distiller.run_forever()
+    )
     # 把控制权交给FastAPI，服务正式上线，开始监听端口，接收HTTP请求
     yield
     # 清理代码：先停索引任务，再释放各客户端
+    app.state.distill_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await app.state.distill_task
+    await app.state.memory_distiller.aclose()
     await app.state.indexer.aclose()
     await app.state.java_client.aclose()
     await app.state.llm_client.aclose()
     await app.state.context_store.aclose()
     await app.state.embed_client.aclose()
     await app.state.qdrant.aclose()
+    # memory_repo 和 conversation_repo 共用 Database，不重复 dispose
+    await app.state.memory_store.aclose()
     await app.state.index_store.aclose()
 
 
@@ -96,6 +122,7 @@ async def health() -> dict:
         "llmConfigured": bool(settings.deepseek_api_key),
         "embedUrl": settings.embed_url,
         "qdrantUrl": settings.qdrant_url,
+        "memoryEnabled": settings.memory_enabled,
     }
 
 

@@ -1,0 +1,247 @@
+{
+  "version": 2,
+  "description": "R5 跨会话记忆召回评测集。种子记忆代表上一段会话留下的结论；问题只换说法、不出现类名，考的是语义召回，不是关键词匹配。v2 增加近似 subject、中文歧义与跨 rev 三类难例。",
+  "seed": [
+    {
+      "key": "pay_entry",
+      "type": "FACT",
+      "text": "支付回调入口是 PayNotifyController.notify，之后进入 PayService",
+      "subjectUids": ["com.hmall.pay.controller.PayNotifyController"]
+    },
+    {
+      "key": "pay_gap",
+      "type": "FACT",
+      "text": "支付链路在 OrderClient 处跨服务，本图没有下游",
+      "subjectUids": ["com.hmall.pay.client.OrderClient"]
+    },
+    {
+      "key": "order_entry",
+      "type": "FACT",
+      "text": "下单入口是 OrderController.createOrder，先校验库存再创建订单",
+      "subjectUids": ["com.hmall.trade.controller.OrderController"]
+    },
+    {
+      "key": "stock_deduct",
+      "type": "FACT",
+      "text": "库存扣减在 StockServiceImpl.deduct，失败会抛库存不足异常",
+      "subjectUids": ["com.hmall.stock.service.impl.StockServiceImpl"]
+    },
+    {
+      "key": "auth_filter",
+      "type": "FACT",
+      "text": "登录态由 AuthFilter 校验，token 从 Authorization 头取",
+      "subjectUids": ["com.hmall.auth.AuthFilter"]
+    },
+    {
+      "key": "cart_clear",
+      "type": "FACT",
+      "text": "订单创建成功后会调用 CartClient.clear 清空购物车",
+      "subjectUids": ["com.hmall.trade.client.CartClient"]
+    },
+    {
+      "key": "user_cache",
+      "type": "FACT",
+      "text": "用户信息先查 UserCache，缓存未命中才回源 UserServiceImpl",
+      "subjectUids": ["com.hmall.user.cache.UserCache"]
+    },
+    {
+      "key": "coupon_calc",
+      "type": "FACT",
+      "text": "优惠券计算在 CouponCalculator.calc，满减和折扣不能叠加",
+      "subjectUids": ["com.hmall.marketing.CouponCalculator"]
+    },
+    {
+      "key": "refund_flow",
+      "type": "FACT",
+      "text": "退款流程从 RefundController 进，调用 RefundService 后发 MQ 通知下游",
+      "subjectUids": ["com.hmall.pay.controller.RefundController"]
+    },
+    {
+      "key": "search_index",
+      "type": "FACT",
+      "text": "商品搜索索引由 SearchSyncJob 定时同步，延迟约 5 分钟",
+      "subjectUids": ["com.hmall.search.job.SearchSyncJob"]
+    },
+    {
+      "key": "order_status",
+      "type": "FACT",
+      "text": "订单状态流转在 OrderStateMachine.transit，超时关单由定时任务触发",
+      "subjectUids": ["com.hmall.trade.state.OrderStateMachine"]
+    },
+    {
+      "key": "pay_timeout",
+      "type": "FACT",
+      "text": "支付超时时间是 30 分钟，配置在 PaymentProperties.timeout",
+      "subjectUids": ["com.hmall.pay.config.PaymentProperties"]
+    },
+    {
+      "key": "inventory_lock",
+      "type": "FACT",
+      "text": "库存预占使用 Redis 锁，key 前缀是 stock:lock:",
+      "subjectUids": ["com.hmall.stock.lock.StockLock"]
+    },
+    {
+      "key": "gateway_route",
+      "type": "FACT",
+      "text": "网关统一入口是 GatewayApplication，路由配置在 gateway-routes.yml",
+      "subjectUids": ["com.hmall.gateway.GatewayApplication"]
+    },
+    {
+      "key": "pay_retry",
+      "type": "FACT",
+      "text": "支付回调失败会重试 3 次，间隔按 1/5/15 分钟退避",
+      "subjectUids": ["com.hmall.pay.service.PayNotifyRetry"]
+    },
+    {
+      "key": "user_login_log",
+      "type": "FACT",
+      "text": "登录记录写入 LoginLogService，写失败不影响登录结果",
+      "subjectUids": ["com.hmall.user.service.LoginLogService"]
+    },
+    {
+      "key": "coupon_limit",
+      "type": "FACT",
+      "text": "优惠券每人限领 2 张，超限在 CouponLimitChecker 被拒绝",
+      "subjectUids": ["com.hmall.marketing.CouponLimitChecker"]
+    },
+    {
+      "key": "search_analyzer",
+      "type": "FACT",
+      "text": "搜索使用 IK 分词器，自定义词典在 ik_custom.dic",
+      "subjectUids": ["com.hmall.search.config.IkAnalyzerConfig"]
+    },
+    {
+      "key": "order_timeout",
+      "type": "FACT",
+      "text": "订单 15 分钟未支付自动关闭，由 OrderTimeoutJob 扫描",
+      "subjectUids": ["com.hmall.trade.job.OrderTimeoutJob"]
+    },
+    {
+      "key": "cart_merge",
+      "type": "FACT",
+      "text": "登录后购物车会合并，合并逻辑在 CartMergeService.merge",
+      "subjectUids": ["com.hmall.cart.service.CartMergeService"]
+    }
+  ],
+  "cases": [
+    {
+      "id": "M01",
+      "question": "上次那个支付回调是从哪进来的",
+      "expectKey": "pay_entry",
+      "mustNotRecall": ["refund_flow"]
+    },
+    {
+      "id": "M02",
+      "question": "你说的那个跨服务的断点落在哪一节",
+      "expectKey": "pay_gap"
+    },
+    {
+      "id": "M03",
+      "question": "下单的时候先做了什么校验",
+      "expectKey": "order_entry",
+      "mustNotRecall": ["order_status"]
+    },
+    {
+      "id": "M04",
+      "question": "库存是怎么扣的，扣不动会怎样",
+      "expectKey": "stock_deduct"
+    },
+    {
+      "id": "M05",
+      "question": "登录态是在哪里校验的",
+      "expectKey": "auth_filter"
+    },
+    {
+      "id": "M06",
+      "question": "订单创建完购物车会被清掉吗",
+      "expectKey": "cart_clear",
+      "mustNotRecall": ["cart_merge"]
+    },
+    {
+      "id": "M07",
+      "question": "用户信息缓存没命中会查哪里",
+      "expectKey": "user_cache"
+    },
+    {
+      "id": "M08",
+      "question": "满减和折扣能一起用吗",
+      "expectKey": "coupon_calc",
+      "mustNotRecall": ["coupon_limit"]
+    },
+    {
+      "id": "M09",
+      "question": "退款之后是怎么通知下游的",
+      "expectKey": "refund_flow"
+    },
+    {
+      "id": "M10",
+      "question": "商品搜索的数据多久同步一次",
+      "expectKey": "search_index",
+      "mustNotRecall": ["search_analyzer"]
+    },
+    {
+      "id": "M11",
+      "question": "库存预占用的是什么锁",
+      "expectKey": "inventory_lock",
+      "mustNotRecall": ["stock_deduct"]
+    },
+    {
+      "id": "M12",
+      "question": "库存扣减失败会抛什么异常",
+      "expectKey": "stock_deduct",
+      "mustNotRecall": ["inventory_lock"]
+    },
+    {
+      "id": "M13",
+      "question": "支付超时多久",
+      "expectKey": "pay_timeout",
+      "mustNotRecall": ["pay_entry"]
+    },
+    {
+      "id": "M14",
+      "question": "支付回调失败会怎么重试",
+      "expectKey": "pay_retry",
+      "mustNotRecall": ["pay_entry", "pay_timeout"]
+    },
+    {
+      "id": "M15",
+      "question": "订单超时没支付会怎样",
+      "expectKey": "order_timeout",
+      "mustNotRecall": ["order_status"]
+    },
+    {
+      "id": "M16",
+      "question": "刚才那个支付的东西是从哪进来的",
+      "expectKey": "pay_entry",
+      "mustNotRecall": ["pay_timeout", "pay_retry"]
+    },
+    {
+      "id": "M17",
+      "question": "那个扣库存的地方失败了怎么办",
+      "expectKey": "stock_deduct",
+      "mustNotRecall": ["inventory_lock"]
+    },
+    {
+      "id": "M18",
+      "question": "登录相关的东西失败会影响主流程吗",
+      "expectKey": "user_login_log",
+      "mustNotRecall": ["auth_filter"]
+    }
+  ],
+  "revCases": [
+    {
+      "id": "R01",
+      "seedKey": "pay_entry",
+      "staleRev": 8,
+      "reviveRev": 9,
+      "question": "上次那个支付回调是从哪进来的"
+    },
+    {
+      "id": "R02",
+      "seedKey": "order_entry",
+      "staleRev": 8,
+      "reviveRev": 9,
+      "question": "下单的时候先做了什么校验"
+    }
+  ]
+}
