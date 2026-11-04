@@ -120,7 +120,6 @@ async def health() -> dict:
         "mysql": "ok" if mysql_ok else "down",
         "agentMysqlHost": f"{settings.agent_mysql_host}:{settings.agent_mysql_port}",
         "llmConfigured": bool(settings.deepseek_api_key),
-        "agentMode": settings.agent_mode,
         "embedUrl": settings.embed_url,
         "qdrantUrl": settings.qdrant_url,
         "memoryEnabled": settings.memory_enabled,

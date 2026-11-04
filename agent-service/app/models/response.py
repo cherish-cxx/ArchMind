@@ -15,7 +15,6 @@ from typing import Any
 from pydantic import Field
 
 from app.models.base import CamelModel
-from app.models.intent import Intent
 from app.models.tool import GapReason, NodeKind, RelationType
 
 # ==================== 实体引用 ====================
@@ -144,14 +143,13 @@ class GraphPatch(CamelModel):
 class Suggestion(CamelModel):
     """「下一步可以问什么」。闭环的发动机 —— 没有它，对话转不动。
 
-    `intent` 可以为 None：多步循环里 `clarify` 的选项是**自由文本**，没有意图可填。
-    前端点一下只是把 `label` 当下一句话发回来（`AgentPanel` 只读 label），
-    所以这个字段对点击行为没有影响 —— 保留它是为了老数据和 `_suggestions`。
+    R6 第三步：`intent` 换成 `message`。点一下就是把 `message` 当下一句话发回来，
+    不再需要前端把 label 翻译成意图 —— 分发已经归模型了。
+    `message` 缺省时前端回落到 `label`；老数据不会因此变空。
     """
 
     label: str
-    intent: Intent | None = None
-    slots: dict[str, Any] = {}
+    message: str | None = None
 
 
 class StepType(StrEnum):
@@ -172,9 +170,13 @@ class Step(CamelModel):
 
 
 class Meta(CamelModel):
-    """这一轮的元信息。`graphRev` 让上层能发现「我讲的是旧图」。"""
+    """这一轮的元信息。`graphRev` 让上层能发现「我讲的是旧图」。
 
-    intent: str
+    `intent` 在六选一删除后**不再由模型判定**：多步循环写 null，
+    导航/过期这类路由层状态仍可写一个可读标签（`NAVIGATE` / `SESSION_GONE`）。
+    """
+
+    intent: str | None = None
     confidence: float
     graph_rev: int
     latency_ms: int

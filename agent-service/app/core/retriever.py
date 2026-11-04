@@ -1,11 +1,12 @@
 """语义检索 —— 用户的一句话 → 若干候选类。
 
-**它在整条链路里的位置**：`run_turn` 里「LLM1 判意图」之前，且只在这一轮
+**它在整条链路里的位置**：每一轮的第一次模型调用之前，且只在这一轮
 没有锚点时跑。有 focus 时用户的指代本来就有明确对象，检索纯属浪费。
+命中的候选会以 retrieval 消息进入上下文，同时成为模型下一次工具调用的可选起点。
 
-**为什么是独立模块而不是塞进 loop**：检索有两件事和编排无关 ——
+**为什么是独立模块而不是塞进循环**：检索有两件事和编排无关 ——
 「这一轮能不能查」（索引状态）和「payload 怎么变成领域对象」。把它们放在这里，
-`loop` 只需要决定"要不要调"，测试也能脱离 Redis/Qdrant 单独跑。
+循环只需要决定"要不要调"，测试也能脱离 Redis/Qdrant 单独跑。
 
 **失败一律返回空候选，绝不抛到主链路**：检索是让问答更好的附加路径，
 embed 或 Qdrant 挂掉时应该退化成"和没做检索一样"，而不是让整轮 500。
@@ -126,64 +127,3 @@ def to_candidate(point) -> Candidate | None:
         score=float(getattr(point, "score", 0.0) or 0.0),
         methods=method_names,
     )
-
-
-def resolve_entity_ref(
-    entity_ref: str | None,
-    candidates: list[Candidate],
-    message: str,
-    *,
-    extra_uids: tuple[str, ...] = (),
-) -> str | None:
-    """校验 LLM1 填的 entityRef。
-
-    prompt 里已经写了"只能从候选里选"，但那是**约束**不是**保证** ——
-    和 UICommand 一样，模型有权说，代码负责核对。规则：
-
-      1. 候选里精确命中 → 接受
-      2. 记忆里的实体精确命中 → 接受（它来自上一次会话，不是本轮向量检索）
-      3. 简单名在候选里**唯一**命中 → 换算成全限定名（模型常只写短名）
-      4. 简单名在记忆里**唯一**命中 → 同样换算
-      5. 不在候选里、但简单名在**用户原话**里出现过 → 接受
-         （用户自己点名的类，不能因为检索没排进前五就丢掉）
-      6. 其余 → 丢弃
-
-    候选为空时**不做约束** —— 那是"没检索"，行为必须和 R4 之前完全一致。
-    记忆只在"检索给出了别的候选"时才参与核对，避免把无检索的场景变严。
-    """
-    if not entity_ref:
-        return None
-    if not candidates:
-        return entity_ref
-
-    ref = entity_ref.strip()
-    if not ref:
-        return None
-    if ref in {c.uid for c in candidates}:
-        return ref
-    if ref in extra_uids:
-        return ref
-
-    simple = ref.partition("#")[0].rsplit(".", 1)[-1].lower()
-    if not simple:
-        return None
-
-    hits = [c for c in candidates if c.simple_name.lower() == simple]
-    if len(hits) == 1:
-        return hits[0].uid
-    if len(hits) > 1:
-        # 同名类在候选里不止一个，指代不明时不猜 —— 交给澄清
-        return None
-
-    memory_hits = [
-        uid for uid in extra_uids
-        if uid.partition("#")[0].rsplit(".", 1)[-1].lower() == simple
-    ]
-    if len(memory_hits) == 1:
-        return memory_hits[0]
-    if len(memory_hits) > 1:
-        return None
-
-    if simple in message.lower():
-        return ref
-    return None

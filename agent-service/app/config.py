@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Literal
 from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,17 +29,9 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     llm_model: str = "deepseek-chat"
-    # 25s：设计 §8-C1 要求整轮 <60s。一轮最多两次 LLM 调用（Intent + 讲解），
-    # 各 25s 仍留余量，且单次挂死也不会把整轮拖过网关那道 60s。
+    # 25s：单次模型调用的上限。多步循环最多 6 次调用，整轮仍要留在网关 60s 以内 ——
+    # 预算见 `Budget`，这里只是防止单次挂死。完整证据（R6 第二步）见路线图。
     llm_timeout: float = 25.0
-
-    # ── 一轮问答走哪条链路（R6）──────────────────────────────────────────────
-    # legacy = 六选一查表（默认）；tools = 函数调用多步循环。
-    #
-    # 用 `Literal` 而不是 `str`：拼错一个字母就在**启动时**炸，
-    # 而不是静默落回默认值 —— 那样 A/B 跑出来的两份数据其实是同一条链路，白跑。
-    # 开关做在 env 而不是请求上，是因为对比的粒度是「同一批问题跑两遍、重启切一次」。
-    agent_mode: Literal["legacy", "tools"] = "legacy"
 
     #     ——————————Redis db1：context——————————————
     redis_url:str = "redis://localhost:6379"

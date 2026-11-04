@@ -1,4 +1,4 @@
-"""R4 检索：候选映射、状态闸门、失败降级、entityRef 校验、prompt 注入。
+"""R4 检索：候选映射、状态闸门、失败降级。
 
 全部用替身，不连 Redis / Qdrant / embed —— 真实排序要等索引可用的环境再验。
 """
@@ -8,12 +8,8 @@ from types import SimpleNamespace
 import pytest
 
 from app.config import settings
-from app.core.retriever import Retriever, resolve_entity_ref, to_candidate
-from app.core.prompt import explain_messages, intent_messages
-from app.models.context import AgentContext
-from app.models.intent import Intent
+from app.core.retriever import Retriever, to_candidate
 from app.models.retrieval import Candidate
-from fakes import candidate
 
 
 def _point(uid: str, *, score: float = 0.03, **payload) -> SimpleNamespace:
@@ -180,92 +176,3 @@ def test_to_candidate_reads_method_names():
     ]))
     assert c is not None
     assert c.methods == ("run", "stop")
-
-
-# ==================== entityRef 校验 ====================
-
-
-def _cands():
-    return [
-        candidate("com.moviesys.order.OrderServiceImpl", desc="订单创建"),
-        candidate("com.moviesys.inventory.InventoryServiceImpl", desc="库存扣减"),
-    ]
-
-
-def test_entity_ref_exact_uid_accepted():
-    ref = "com.moviesys.order.OrderServiceImpl"
-    assert resolve_entity_ref(ref, _cands(), "随便问") == ref
-
-
-def test_entity_ref_simple_name_mapped_to_uid():
-    assert resolve_entity_ref("OrderServiceImpl", _cands(), "随便问") == \
-        "com.moviesys.order.OrderServiceImpl"
-
-
-def test_entity_ref_outside_candidates_but_named_by_user_accepted():
-    ref = "com.other.PaymentService"
-    assert resolve_entity_ref(ref, _cands(), "PaymentService 的调用链") == ref
-
-
-def test_entity_ref_invented_is_dropped():
-    assert resolve_entity_ref("com.ghost.Fake", _cands(), "下单扣库存") is None
-
-
-def test_entity_ref_unconstrained_when_no_candidates():
-    assert resolve_entity_ref("com.x.Any", [], "问题") == "com.x.Any"
-
-
-def test_entity_ref_ambiguous_simple_name_dropped():
-    cands = [
-        Candidate("a.A", "A", "a", "CLASS", None, 1, 0.1),
-        Candidate("b.A", "A", "b", "CLASS", None, 1, 0.1),
-    ]
-    assert resolve_entity_ref("A", cands, "问 A") is None
-
-
-# ==================== prompt 注入 ====================
-
-
-def _ctx() -> AgentContext:
-    return AgentContext(conversation_id="c1", project_id=1)
-
-
-def test_intent_prompt_has_candidates_when_present():
-    msgs = intent_messages(_ctx(), "下单扣库存怎么实现的", _cands())
-    system = msgs[0]["content"]
-    assert "com.moviesys.order.OrderServiceImpl" in system
-    assert "候选使用规则" in system
-    # 有候选时 entityRef 的语义是"本轮起点"，不能再说成"用户指代的类"
-    assert "这轮查图的" in system and "起点" in system
-    # 按问题类型选，而不是一律选 Controller/Service；并要给出相关性分数
-    assert "anchorScore" in system
-    assert "配置类优先" in system
-    assert "不要一律选 Controller/Service" in system
-
-
-def test_intent_prompt_unchanged_without_candidates():
-    """没检索时 prompt 必须与 R4 之前逐字相同 —— 这是回归基准。"""
-    assert intent_messages(_ctx(), "问题") == intent_messages(_ctx(), "问题", [])
-    assert "候选" not in intent_messages(_ctx(), "问题")[0]["content"]
-
-
-def test_intent_prompt_includes_candidate_methods():
-    """方法名是区分「查关系」和「解析关系」的关键信号，必须进候选块。"""
-    cands = [candidate("com.x.CodeGraphQueryServiceImpl", desc="查询图的类与关系",
-                       methods=("classRelations", "callRelations"))]
-    system = intent_messages(_ctx(), "怎么查一个类的关系", cands)[0]["content"]
-    assert "方法：" in system
-    assert "classRelations" in system
-
-
-def test_explain_prompt_marks_candidates_as_unverified():
-    msgs = explain_messages(Intent.EXPLORE_FLOW, [], "订单流程", _ctx(), candidates=_cands())
-    user = msgs[1]["content"]
-    assert "未查证" in user
-    assert "同批候选还有" in user
-    assert "不是证据" in msgs[0]["content"]
-
-
-def test_explain_prompt_unchanged_without_candidates():
-    assert explain_messages(Intent.EXPLORE_FLOW, [], "订单流程", _ctx()) == \
-        explain_messages(Intent.EXPLORE_FLOW, [], "订单流程", _ctx(), candidates=[])

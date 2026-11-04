@@ -48,9 +48,6 @@ services:
       - MEMORY_ENABLED=${MEMORY_ENABLED:-false}
       # 只结算最近 N 天结束的会话；首次上线设 0，避免把历史会话一次蒸完
       - MEMORY_DISTILL_MAX_AGE_DAYS=${MEMORY_DISTILL_MAX_AGE_DAYS:-7}
-      # R6：legacy（六选一）| tools（多步循环）。**必须在这里显式列出来**，
-      # 否则只在 deploy/.env 里写不起作用 —— 和上面 MEMORY_ENABLED 是同一个坑。
-      - AGENT_MODE=${AGENT_MODE:-legacy}
     depends_on:
       migrate:
         condition: service_completed_successfully

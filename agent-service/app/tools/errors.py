@@ -17,7 +17,6 @@ class ErrorReason(StrEnum):
 
     UNKNOWN_TOOL = "unknown_tool"
     INVALID_ARGUMENTS = "invalid_arguments"
-    MISSING_ANCHOR = "missing_anchor"
     TRANSPORT = "transport"
 
 
@@ -42,14 +41,6 @@ class ToolError(Exception):
             ErrorReason.UNKNOWN_TOOL,
             f"没有名为 {name} 的工具；可用工具：{', '.join(available)}",
             field="tool",
-        )
-
-    @classmethod
-    def missing_anchor(cls, tool: str) -> "ToolError":
-        return cls(
-            ErrorReason.MISSING_ANCHOR,
-            f"{tool} 需要一个类或方法作为起点，请先选择目标或换用不需要锚点的工具",
-            field="uid",
         )
 
     def to_payload(self) -> dict[str, str | bool]:

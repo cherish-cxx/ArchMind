@@ -40,7 +40,7 @@ def test_malformed_output_is_empty():
 # ==================== 取原始引用 ====================
 
 
-def test_tools_mode_reads_answer_arguments():
+def test_reads_answer_arguments():
     calls = [{
         "purpose": "agent",
         "rawResponse": "",
@@ -50,23 +50,14 @@ def test_tools_mode_reads_answer_arguments():
              "arguments": '{"sections":[{"body":"b","citedUids":["x.Y"]}]}'},
         ],
     }]
-    assert ab._offered_citations("tools", turn(calls)) == ["x.Y"]
+    assert ab._offered_citations(turn(calls)) == ["x.Y"]
 
 
-def test_tools_mode_returns_empty_without_answer():
+def test_returns_empty_without_answer():
     calls = [{"purpose": "agent", "toolCalls": [
         {"name": "overview", "arguments": "{}"},
     ]}]
-    assert ab._offered_citations("tools", turn(calls)) == []
-
-
-def test_legacy_mode_reads_explain_response():
-    calls = [
-        {"purpose": "intent", "rawResponse": '{"intent":"EXPLORE_FLOW"}'},
-        {"purpose": "explain",
-         "rawResponse": '{"sections":[{"body":"b","citedUids":["a.A"]}]}'},
-    ]
-    assert ab._offered_citations("legacy", turn(calls)) == ["a.A"]
+    assert ab._offered_citations(turn(calls)) == []
 
 
 # ==================== 指标 ====================
@@ -95,7 +86,7 @@ def test_metrics_counts_only_what_backend_actually_dropped():
         citations=[], ui_commands=[], message="正文",
     )
 
-    metrics = ab._metrics("tools", {"id": "q"}, ctx, resp)
+    metrics = ab._metrics({"id": "q"}, ctx, resp)
 
     assert metrics["citationsOffered"] == 2
     assert metrics["citationsUngrounded"] == 1
@@ -111,5 +102,5 @@ def test_gap_disclosure_is_only_measured_when_required():
         sections=[], citations=[], ui_commands=[], message="这里有个断点，跨服务调用",
     )
 
-    assert ab._metrics("tools", {"id": "q"}, ctx, resp)["disclosedGap"] is None
-    assert ab._metrics("tools", {"id": "q", "mustDiscloseGap": True}, ctx, resp)["disclosedGap"] is True
+    assert ab._metrics({"id": "q"}, ctx, resp)["disclosedGap"] is None
+    assert ab._metrics({"id": "q", "mustDiscloseGap": True}, ctx, resp)["disclosedGap"] is True

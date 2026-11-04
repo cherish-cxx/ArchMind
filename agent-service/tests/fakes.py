@@ -320,7 +320,7 @@ class FakeMemory:
     """记忆服务替身：召回固定命中、记录写入。
 
     真的 `MemoryService` 在 `memory_enabled=False` 时自己 no-op，
-    所以替身只在显式传进 `run_turn` 时生效 —— 测试不依赖那个开关。
+    所以替身只在显式传进 `run_agent_turn` 时生效 —— 测试不依赖那个开关。
     """
 
     def __init__(self, hits: list | None = None) -> None:

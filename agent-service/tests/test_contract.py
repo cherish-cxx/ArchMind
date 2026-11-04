@@ -14,7 +14,9 @@ from fastapi.testclient import TestClient
 
 from app.api.agent import get_context_store, get_llm_client, get_retriever
 from app.config import INTERNAL_TOKEN_HEADER, settings
+from app.core.llm import LLMResult
 from app.main import app
+from app.models.context import ToolCall
 from app.tools.java_client import JavaClient
 from fakes import FakeContextStore, FakeLLM, FakeRetriever
 
@@ -205,20 +207,23 @@ def test_6_hallucinated_citation_and_uicmd_are_filtered(
     现在看的是「我们硬塞了一个不在 evidence 里的，它被丢掉了」，验证的是**拦截本身**。
     """
     ghost = "com.hallucinated.GhostService"
-    # LLM #1 判意图；LLM #2 故意在第一段 citedUids 里混进一个不存在的类
-    fake = FakeLLM(
-        [
-            json.dumps({"intent": "EXPLORE_FLOW", "confidence": 0.95}),
-            json.dumps({
+    # 循环第一轮先查调用链；第二轮 answer 故意在第一段 citedUids 里混进一个不存在的类
+    fake = FakeLLM([
+        LLMResult(content=None, tool_calls=(
+            ToolCall(id="c1", name="call-chain",
+                     arguments=json.dumps({"uid": chain_start})),
+        )),
+        LLMResult(content=None, tool_calls=(
+            ToolCall(id="a1", name="answer", arguments=json.dumps({
                 "headline": "顺着调用链往下看。",
                 "sections": [
                     {"title": "调用路径", "body": "顺着调用链往下看。",
                      "citedUids": [ghost, chain_start]},
                     {"title": "边界", "body": "图里到这里为止。", "citedUids": []},
                 ],
-            }),
-        ]
-    )
+            }, ensure_ascii=False)),
+        )),
+    ])
 
     app.dependency_overrides[get_llm_client] = lambda: fake
     # Context 也换成内存版：否则 TestClient 跑 lifespan 会建真 ContextStore 去连 Redis，

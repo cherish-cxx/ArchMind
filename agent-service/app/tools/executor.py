@@ -2,15 +2,15 @@
 
 一次工具调用只走这里：
 
-    normalize_args -> 锚点检查 -> ToolSpec.execute -> ToolEnvelope
+    normalize_args -> 起点检查 -> ToolSpec.execute -> ToolEnvelope
 
-它不认识 `Intent`，也不认识 LLM —— 只认识工具名和已声明的参数。
-legacy 分发与未来的 `agent_loop` 共用同一条执行路径，区别只在参数从哪来。
+它不认识 LLM —— 只认识工具名和已声明的参数。派发已经归模型，
+执行层只负责「这次调用协议上是否成立」。
 
 失败策略：
 
-- 参数/锚点错误抛 `ToolError`（结构化，可被循环回喂）；
-- `ToolTransportError` 原样向上抛 —— legacy 循环靠它决定降级，现在不能改；
+- 参数/起点错误抛 `ToolError`（结构化，可被循环回喂）；
+- `ToolTransportError` 原样向上抛 —— 循环把它变成一条 tool 消息；
 - `InternalAuthError` 原样向上抛 —— 配置错误必须炸。
 """
 
@@ -39,21 +39,14 @@ async def execute_tool(
 
 
 def _check_anchor(spec: ToolSpec, ctx: ToolContext, args: dict[str, object]) -> None:
-    """锚点不满足时抛出 —— 错误信息要能让模型自己改对。
+    """起点不满足时抛出 —— 错误信息要能让模型自己改对。
 
-    两种语义二选一，见 `ToolContext` 的注释：
-      - 有 `known_uids`（循环）：参数里的 uid 必须在里面，否则告诉它有哪些可选；
-      - 没有（legacy）：沿用「用户点过类没有」。
+    参数里的 uid 必须在本轮已见过的实体里，否则告诉它有哪些可选。
     """
     if not spec.needs_anchor:
         return
 
-    known = ctx.known_uids
-    if known is None:
-        if not ctx.has_anchor:
-            raise ToolError.missing_anchor(spec.name)
-        return
-
+    known = ctx.known_uids or frozenset()
     uid = args.get("uid")
     if isinstance(uid, str) and uid in known:
         return

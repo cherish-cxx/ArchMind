@@ -3,8 +3,8 @@
 Python **不是**给前端直接调的 —— 它是 Java 后面的内部服务。
 所以这里和 Java 的 `/internal/**` 一样：只认共享密钥，不认用户 JWT。
 
-**路由层有意保持很薄**：取 Context → 交给 `core/loop.run_turn` → 返回。
-所有分支都不在这里 —— 编排在 loop，判定在 core/intent，讲解在 core/explain。
+**路由层有意保持很薄**：取 Context → 交给 `core/agent_loop.run_agent_turn` → 返回。
+所有分支都不在这里 —— 编排在循环，讲解在 core/explain。
 路由里如果出现 `if`，多半是编排漏到了这一层。
 """
 
@@ -18,9 +18,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.core.agent_loop import run_agent_turn
 from app.core.llm import LLMClient
-from app.core.loop import navigate as apply_navigation
-from app.core.loop import run_turn
 from app.core.memory import MemoryService
+from app.core.navigation import navigate as apply_navigation
 from app.core.retriever import Retriever
 from app.models.context import AgentContext, Viewport
 from app.models.protocol import (
@@ -87,7 +86,7 @@ def get_memory_service(request: Request) -> MemoryService:
 #
 # ⚠️ 这里**不再有** `_CONTEXTS` / `_load_context`：存取全走 store，
 # 路由层只多 `await store.load(...)` / `await store.save(...)` 两行，
-# **run_turn 与 Context 模型一行都没改**。
+# **executor 与 Context 模型一行都没改**。
 
 
 def _new_conversation_id() -> str:
@@ -147,12 +146,8 @@ async def ask(
 ) -> AgentResponse:#返回值类型注解，返回agentResponse对象
     """执行一轮问答。
 
-    P3 起 `message` 由 LLM 生成（不再是 P2 的模板桩），
-    但**讲解不可用时会自动退化成 P2 那套模板**（设计 §8-C2），不会整轮失败。
-
-    R6：`agent_mode` 决定走哪条链路 —— `legacy` 是六选一查表，`tools` 是函数调用循环。
-    **分派放在路由而不是 `run_turn` 内部**：两条路的入参不同（循环还没接记忆），
-    拆开才能让各自保持完整，也才能分别测。
+    R6 第三步起**只有多步循环这一条链路**：模型自己选工具，
+    预算耗尽或模型不可用时退回模板（设计 §8-C2），不会整轮失败。
     """
     #看请求里有没有传conversation_id,如果传了，就用传过来的id，否则（or）就调用new，生成全新会话id
     conversation_id = req.conversation_id or _new_conversation_id()
@@ -175,17 +170,14 @@ async def ask(
     # 每轮都覆盖：前端清掉锁时（不传）这里必须跟着清，否则会拿上一轮的方法答题
     ctx.method_uid = req.method_uid
     """
-    执行一轮Agent回答，把上下文，用户消息，java客户端，llm客户端传给run_turn函数
-    run_turn内部会调用LLM生成回答，如果LLM调用失败，会自动降级到旧版本P2模板，不会直接崩掉整个请求
+    执行一轮 Agent 回答：模型自己选工具、多次取数，最后用 answer 收口。
+    LLM 不可用或预算耗尽时退回模板，不会直接崩掉整个请求。
     """
-    if settings.agent_mode == "tools":
-        response = await run_agent_turn(ctx, req.message, java, llm, retriever, memory)
-    else:
-        response = await run_turn(ctx, req.message, java, llm, retriever, memory)
+    response = await run_agent_turn(ctx, req.message, java, llm, retriever, memory)
     persisted = await store.commit_turn(ctx, req.user_id, req.project_id)
     if response.meta is not None:
         response.meta.persist_failed = not persisted
-    # loop 不知道 conversation_id 是新生成的还是回传的（那是路由层的事），所以在这里补上
+    # 循环不知道 conversation_id 是新生成的还是回传的（那是路由层的事），所以在这里补上
     response.conversation_id = conversation_id
     return response
 
@@ -212,9 +204,8 @@ def _session_expired(conversation_id: str) -> AgentResponse:
 # 这条路是「前端**点按钮**，直接声明意图」—— 设计 §3.3 的决策，
 # 目的只有一个：**点击变成零 token**（E2：用户点一下展开就烧一次 token 是要避免的）。
 #
-# ⚠️ `/ask` 那条路的 NAVIGATE 判定**保留**（loop.py 的 `run_turn` 里那个分支不动）——
-#    用户完全可能在输入框里**打字**说「退回去」，那就还是得靠 LLM #1 判出来。
-#    两条路殊途同归到 `loop.navigate` 这一个函数。
+# ⚠️ 用户完全可能在输入框里**打字**说「退回去」—— 那条走的是循环里的 `navigate` 工具。
+#    两条路最终都改同一份 `ctx.focus` / `focus_stack`。
 
 
 @router.post("/navigate", response_model=AgentResponse,
@@ -229,7 +220,7 @@ async def navigate(
     参数里没有 llm，就没有误调的可能。测「零 LLM」时也就不需要注入假 LLM。
     """
     if req.op is not NavigateOp.BACK:
-        # EXPAND 的语义在 loop 里**从来不存在**（navigate() 只做出栈/清空）。
+        # EXPAND 的语义一直不存在（navigate() 只做出栈/清空）。
         # 如实回一句「还没做」，**不静默当成 BACK 执行** —— 那会让用户以为展开成功了。
         return AgentResponse(
             conversation_id=req.conversation_id,

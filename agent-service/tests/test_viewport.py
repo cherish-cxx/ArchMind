@@ -15,7 +15,8 @@ from fastapi.testclient import TestClient
 from app.api.agent import get_context_store, get_llm_client, get_retriever
 from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.main import app
-from app.models.context import VIEWPORT_MAX_ITEMS, Viewport
+from app.core.llm import LLMResult
+from app.models.context import VIEWPORT_MAX_ITEMS, ToolCall, Viewport
 from app.models.response import NodeRef, NodeRefType
 from fakes import FakeContextStore, FakeLLM, FakeRetriever
 
@@ -220,9 +221,12 @@ def test_ask_expired_session_says_expired_not_new(client, store):
 
 def test_ask_without_cid_creates_new(client, store):
     """没带 cid = 新会话 —— **唯一**该走「创建」的路径，且不查 Redis（照旧）。"""
-    # 用 OUT_OF_SCOPE 让 run_turn 走「不查图、不调工具」的分支，
-    # 这样这条测试不依赖 Java，也只需要一次 LLM 调用。
-    fake = FakeLLM([json.dumps({"intent": "OUT_OF_SCOPE", "confidence": 0.95})])
+    # 模型直接调 answer：不查图，也不需要 Java —— 只验会话创建这条路由语义。
+    fake = FakeLLM([LLMResult(content=None, tool_calls=(
+        ToolCall(id="a1", name="answer", arguments=json.dumps({
+            "sections": [{"title": "结论", "body": "这个不在范围内。"}],
+        }, ensure_ascii=False)),
+    ))])
     app.dependency_overrides[get_llm_client] = lambda: fake
 
     body = client.post(

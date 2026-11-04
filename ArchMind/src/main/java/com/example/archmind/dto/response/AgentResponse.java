@@ -98,12 +98,15 @@ public class AgentResponse {
         private Integer rev;
     }
 
-    /** 「下一步可以问什么」。前端点一个建议就是发一轮 {@code /ask}。 */
+    /**
+     * 「下一步可以问什么」。前端点一个建议就是把 {@code message} 当下一句话发回来。
+     * R6 第三步：意图分发归模型，建议不再携带 {@code intent}。
+     */
     @Data
     public static class Suggestion {
         private String label;
-        private String intent;
-        private Map<String, Object> slots = new HashMap<>();
+        /** 点击后作为用户消息发回的文本；为空时前端回落到 label。 */
+        private String message;
     }
 
     /** 一轮里的一步。{@code ms} 让「慢在哪」一眼可见。 */

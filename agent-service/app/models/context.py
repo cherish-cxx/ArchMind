@@ -29,7 +29,6 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.models.base import CamelModel
-from app.models.intent import Intent
 from app.models.memory import MemoryHit
 from app.models.response import Citation, GraphPatch, NodeRef, Section, Step, UICmd
 from app.models.retrieval import Retrieval
@@ -86,7 +85,7 @@ class ToolCall(CamelModel):
 class ChatMessage(CamelModel):
     """对话记录里的一条。
 
-    `meta` 放结构化附注（intent / confidence / citations / uids），
+    `meta` 放结构化附注（citations / uids / outcome），
     渲染成文本时不参与，但落库时随 transcript 一起保存。
     """
 
@@ -119,7 +118,7 @@ class TurnArtifacts:
     `agent_turn` 的各个列。冷加载后为空 —— 这是有意的，避免快照被工具结果撑大。
     """
 
-    intent: Intent | None = None
+    intent: str | None = None
     confidence: float | None = None
     degraded: bool = False
     outcome: str = "OK"

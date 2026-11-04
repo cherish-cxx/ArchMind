@@ -87,7 +87,7 @@ async def test_answer_without_any_tool():
     assert llm.call_count == 1
     assert resp.headline == ANSWER_ARGS["headline"]
     assert [s.title for s in resp.sections] == ["路径"]
-    assert resp.meta.intent == "AGENT"
+    assert resp.meta.intent is None, "分发归模型后不再有意图标签"
     # 第一轮就把工具清单交出去了
     assert llm.calls[0]["tools"] is not None
 

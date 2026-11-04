@@ -1,8 +1,8 @@
-"""R6 第二步 A/B：同一批问题，legacy（六选一）vs tools（多步循环）。
+"""R6 多步循环评测：同一批问题跑 `/ask` 现在唯一的链路（tools）。
 
-**两条链路在一个进程里依次跑**，不用重启、不用改 `AGENT_MODE` ——
-问题集合、Java、检索、模型都是同一份，唯一的变量就是链路本身。
-改成两次部署去比，环境抖动会混进来，结论就不可信了。
+R6 第二步的 A/B 已经在 2026-11-04 跑完（结论见 `tests/` 与记忆）：
+legacy 腿随六选一删除，这里只保留 tools 的度量。
+保留这个脚本是因为**20 题 golden question 的验收口径**还要继续用。
 
 比四个数（路线图 §R6 的验收口径）：
   - **工具调用次数**：多步到底多查了几次
@@ -38,7 +38,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.config import settings  # noqa: E402
 from app.core.agent_loop import run_agent_turn  # noqa: E402
-from app.core.loop import run_turn  # noqa: E402
 from app.core.llm import LLMClient  # noqa: E402
 from app.core.memory import MemoryService  # noqa: E402
 from app.core.retriever import Retriever  # noqa: E402
@@ -51,7 +50,7 @@ from app.tools.java_client import JavaClient  # noqa: E402
 from app.tools.memory_store import MemoryStore  # noqa: E402
 from app.tools.qdrant_store import QdrantStore  # noqa: E402
 
-MODES = ("legacy", "tools")
+MODES = ("tools",)
 
 #: 断点披露的判据。和 prompt 里要求模型用的措辞对齐 —— 它在讲边界时
 #: 必须说「没解析到 / 跨服务」，而不是讲成「到此结束」。
@@ -59,7 +58,7 @@ GAP_WORDS = ("断点", "没解析", "没有解析", "未解析", "跨服务", "�
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="R6 legacy vs tools A/B")
+    p = argparse.ArgumentParser(description="R6 多步循环评测")
     p.add_argument("--project-id", type=int, required=True)
     p.add_argument("--dataset", type=Path,
                    default=Path("tests/golden_questions.json"))
@@ -105,18 +104,12 @@ def _cited_uids(text: str) -> list[str]:
     return [uid for uid in (obj.get("citedUids") or []) if isinstance(uid, str)]
 
 
-def _offered_citations(mode: str, turn) -> list[str]:
+def _offered_citations(turn) -> list[str]:
     """取**模型原始输出**里的引用，而不是落库的 `resp.citations`。
 
     落库那份已经被 `split_citations` 过滤过，越界的都删了 —— 数它永远是 0。
     """
     calls = turn.llm_calls
-    if mode == "legacy":
-        for call in reversed(calls):
-            if call.get("purpose") == "explain" and call.get("rawResponse"):
-                return _cited_uids(call["rawResponse"])
-        return []
-
     for call in reversed(calls):
         for tool_call in call.get("toolCalls") or []:
             if tool_call.get("name") == "answer":
@@ -124,11 +117,11 @@ def _offered_citations(mode: str, turn) -> list[str]:
     return []
 
 
-def _metrics(mode: str, question: dict, ctx: AgentContext, resp) -> dict:
+def _metrics(question: dict, ctx: AgentContext, resp) -> dict:
     # 「越界」= 模型提出、但**后端真的丢掉了**的引用。
     # 不能拿原始引用去和 `ctx.turn.evidence` 比 —— 循环的白名单已经放宽到
     # 「图上证据 ∪ 源码里出现过的类」，那样比会把留下来的也数成越界。
-    offered = set(_offered_citations(mode, ctx.turn))
+    offered = set(_offered_citations(ctx.turn))
     kept = {uid for section in resp.sections for uid in section.cited_uids}
     ungrounded = sorted(offered - kept)
 
@@ -171,13 +164,10 @@ async def run_mode(
         user_id=args.user_id,
     )
     try:
-        if mode == "legacy":
-            resp = await run_turn(ctx, question["question"], java, llm, retriever, memory)
-        else:
-            resp = await run_agent_turn(ctx, question["question"], java, llm, retriever, memory)
+        resp = await run_agent_turn(ctx, question["question"], java, llm, retriever, memory)
     except Exception as e:  # noqa: BLE001 —— 一题失败不该终止整轮评测
         return {"error": f"{type(e).__name__}: {e}"}
-    return _metrics(mode, question, ctx, resp)
+    return _metrics(question, ctx, resp)
 
 
 # ==================== 汇总 ====================
@@ -270,27 +260,13 @@ async def main() -> int:
         await qdrant.aclose()
         await rds.aclose()
 
-    legacy = summarize(rows, "legacy")
     tools = summarize(rows, "tools")
     report = {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "projectId": args.project_id,
         "dataset": str(args.dataset),
         "memoryEnabled": bool(args.with_memory),
-        "summary": {
-            "legacy": legacy,
-            "tools": tools,
-            "delta": {
-                "latencyMs": _delta(legacy["meanLatencyMs"], tools["meanLatencyMs"]),
-                "toolCalls": _delta(legacy["meanToolCalls"], tools["meanToolCalls"]),
-                "tokens": _delta(
-                    legacy["totalTokensIn"] + legacy["totalTokensOut"],
-                    tools["totalTokensIn"] + tools["totalTokensOut"],
-                ),
-                "ungrounded": tools["citationsUngrounded"] - legacy["citationsUngrounded"],
-                "answers": tools["answers"] - legacy["answers"],
-            },
-        },
+        "summary": {"tools": tools},
         "perQuestion": rows,
     }
 
@@ -298,20 +274,13 @@ async def main() -> int:
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print()
-    print(f"legacy: {legacy}")
-    print(f"tools : {tools}")
+    print(f"tools: {tools}")
     print(f"[OK] 结果已写入 {args.out}")
     return 0
 
 
 def _build_memory(embed: EmbedClient) -> MemoryService:
     return MemoryService(MemoryRepo(Database()), MemoryStore(), embed)
-
-
-def _delta(before, after):
-    if before is None or after is None:
-        return None
-    return round(after - before, 1)
 
 
 if __name__ == "__main__":

@@ -1,79 +1,33 @@
-"""工具注册表 —— 把「意图 → 调哪个工具、怎么调」变成**数据**而不是 if/else。
+"""工具注册表 —— 工具契约本身（名字、用途、参数 schema、执行体）。
 
-P2 里这一步是硬编码的：`if focus: call_chain else overview`。
-P3 换成查表之后，`core/loop.py` 的循环体**不需要知道世界上有哪 5 个工具** ——
-加第 6 个工具是往下面那张表里加一行，不是改循环。
+R6 第三步删掉了「意图 → 工具」查表：派发已经归模型，这里只剩**工具是什么**。
+循环与执行入口都从 `TOOLS` 取清单，加一个工具仍然是往表里加一项。
 
-⚠️ **P3 的边界（重要）**：这里做的是**确定性分发** —— 一个 intent 固定对应一个工具。
-  设计 §6 的 ReAct 循环里还有一步 `plan_tool`（让 LLM 决定下一步调什么、要不要继续调），
-  那是**多步探索**，本片没做。
-  理由：先把「判定 → 取数 → 讲解 → 出图」这条主干跑通并测透，
-  再换掉分发那一环 —— 那时预算计数与去重才真正有意义。
-  接缝已经留好了：循环里那一句 `spec.execute(client, ctx, args)` 换成
-  「先问 LLM 要一个计划，再执行」即可，其余不动。
+⚠️ `needs_anchor` 不是装饰性字段 —— 它决定「参数里的起点必须已知」这条校验
+要不要做。判断由 `tools/executor.py` 执行，注册表只声明。
 """
 
-import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from app.models.context import AgentContext
-from app.models.intent import Intent, Slots
-from app.models.tool import (
-    ChainDirection,
-    RelationDirection,
-    ToolEnvelope,
-)
+from app.models.tool import ChainDirection, RelationDirection, ToolEnvelope
 from app.tools.schemas import TOOL_SCHEMAS
-from app.tools.java_client import (
-    DEFAULT_LIMIT,
-    DEFAULT_CHAIN_DEPTH,
-    DEFAULT_MAX_LINES,
-    DEFAULT_MAX_METHODS,
-    DEFAULT_MAX_NODES,
-    DEFAULT_METHOD_MAX_LINES,
-    JavaClient,
-)
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class ToolInvocation:
-    """一次工具调用的全部输入。
-
-    `uid` **已经消解过**（`slots.entityRef` 优先，回落到 `ctx.focus`）——
-    消解只做一次，放在这里，工具本身不必各自再判一遍「该用 slots 还是 focus」。
-    """
-
-    project_id: int
-    uid: str | None
-    slots: Slots
-    #: 源码大纲里锁定的方法 uid（`owner#signature`）。目前只有 method-body 消费。
-    method_uid: str | None = None
+from app.tools.java_client import JavaClient
 
 
 @dataclass(frozen=True)
 class ToolContext:
     """一次工具调用的执行上下文。
 
-    `has_anchor` 由调用方判定并显式传入 —— 执行层不再猜“当前有没有焦点”。
-    后续加 `retriever` 等依赖时，只扩展这里，不改五个执行体的签名。
-
-    ## `known_uids` 与 `has_anchor` 并存（R6 第二步，临时）
-
-    `has_anchor` 回答的是「用户点过类没有」—— 单步循环够用，多步循环不够：
-    模型第一次 `classes` / `search` 拿到的类，第二次要拿它当起点，而用户并没有点它。
-    所以循环传 `known_uids`（本轮**已经见过**的实体），执行层检查的参数语义变成
+    `known_uids` 是**本轮已经见过**的实体（用户选中的类、锁定的方法、
+    检索候选、前面工具返回的类）。执行层检查的参数语义是
     「你给的 uid 在不在本轮见过的东西里」—— 这样「先查再查」才成立。
 
-    `has_anchor` 保留是因为 legacy 那条路还没有 known 集合；第三步删六选一时
-    两者一起删。**不要**让调用方同时用两种语义。
+    后续加 `retriever` 等依赖时，只扩展这里，不改五个执行体的签名。
     """
 
     project_id: int
-    has_anchor: bool = False
     known_uids: frozenset[str] | None = None
 
 
@@ -217,118 +171,6 @@ TOOLS: dict[str, ToolSpec] = {
     ),
 }
 
-#: intent → 工具名。**NAVIGATE / OUT_OF_SCOPE 不在表里** —— 它们不查图，
-#: 由循环单独短路处理。查不到就是「这个 intent 不该调工具」，不是漏配。用来匹配目前的五个方法名
-INTENT_TOOL: dict[Intent, str] = {
-    Intent.EXPLORE_OVERVIEW: "overview",
-    Intent.EXPLORE_FLOW: "call-chain",
-    Intent.EXPLORE_RELATION: "class-relations",
-    Intent.EXPLORE_CODE: "method-body",
-}
-
-
 def owner_of(uid: str) -> str:
     """方法 uid 是 `owner#signature`；任何类级工具要的都是 `#` 左边那半。"""
     return uid.split("#", 1)[0]
-
-
-def invocation_args(name: str, inv: ToolInvocation) -> dict[str, Any]:
-    """legacy 的 `ToolInvocation` → 统一执行入口需要的 camelCase 参数。
-
-    第一阶段 `plan()` 仍按意图选工具、拼 `ToolInvocation`，执行层只认识 schema
-    定义的 args；两者之间的翻译只此一处，保证新旧路径走同一个执行体。
-    """
-    if name == "overview":
-        return {}
-    if name == "classes":
-        return {"limit": DEFAULT_LIMIT}
-    if name == "class-relations":
-        direction = {
-            ChainDirection.UP: "UP",
-            ChainDirection.DOWN: "DOWN",
-            None: "BOTH",
-        }[inv.slots.direction]
-        return {"uid": inv.uid, "direction": direction, "limit": DEFAULT_LIMIT}
-    if name == "call-chain":
-        args: dict[str, Any] = {
-            "uid": inv.uid,
-            "direction": (inv.slots.direction or ChainDirection.DOWN).value,
-            "maxDepth": inv.slots.depth or DEFAULT_CHAIN_DEPTH,
-            "maxNodes": DEFAULT_MAX_NODES,
-        }
-        if inv.method_uid:
-            args["methodUid"] = inv.method_uid
-        return args
-    if name == "method-body":
-        common = {
-            "maxMethods": DEFAULT_MAX_METHODS,
-            "maxLines": (
-                DEFAULT_METHOD_MAX_LINES if inv.method_uid else DEFAULT_MAX_LINES
-            ),
-        }
-        if inv.method_uid:
-            return {"methodUid": inv.method_uid, **common}
-        return {"uid": inv.uid, **common}
-    raise ValueError(f"未知工具：{name}")
-
-
-def resolve_uid(ctx: AgentContext, slots: Slots) -> str | None:
-    """决定这次调用以哪个类为锚点。
-
-    `slots.entityRef` 优先 —— LLM 明确指了某个类时听它的；
-    没指（比如用户说「它」）就回落到 `ctx.focus`，这正是代词消解规则表里
-    「它 → focus.uid」那条的代码落点。
-
-    两种来源都可能是方法 uid：锁了方法时 prompt 会把 `owner#signature` 交给
-    LLM，「它」很容易被填成方法 uid。类级工具拿它去查必然「类不存在」，
-    所以出口统一收敛到 owner。
-    """
-    raw = slots.entity_ref or (ctx.focus.uid if ctx.focus else None)
-    return owner_of(raw) if raw else None
-
-
-def plan(intent: Intent, ctx: AgentContext) -> ToolSpec | None:
-    """给一个 intent，决定调哪个工具。返回 None 表示「不该调工具」。
-
-    三种返回 None 的情况，含义不同但处置相同（都走澄清/兜底）：
-      - NAVIGATE / OUT_OF_SCOPE：设计如此，根本不查图
-      - 工具需要锚点但当前没有：调下去必然 `ok:false`，不如提前拦住并告诉用户「先点个类」
-    """
-    # 匹配方法名：overview等
-    name = INTENT_TOOL.get(intent)
-    if name is None:
-        logger.debug("intent=%s 不产生工具调用（设计如此）", intent)
-        return None
-    # anchor翻译：锚点
-    spec = TOOLS[name]
-    # 锚点有两种：画布上选中的类，或源码大纲里锁定的方法（仅 EXPLORE_CODE 用得上）
-    has_anchor = ctx.focus is not None or (intent is Intent.EXPLORE_CODE and ctx.method_uid)
-    if spec.needs_anchor and not has_anchor:
-        logger.info("intent=%s 需要锚点但当前无 focus —— 提前拦住，不空跑一次工具", intent)
-        return None
-    return spec
-
-# 上下文中获取项目id，被定的类的uid，
-def build_invocation(ctx: AgentContext, slots: Slots) -> ToolInvocation:
-    return ToolInvocation(
-        project_id=ctx.project_id,
-        uid=resolve_uid(ctx, slots),
-        slots=slots,
-        method_uid=_resolve_method_uid(ctx, slots),
-    )
-
-
-def _resolve_method_uid(ctx: AgentContext, slots: Slots) -> str | None:
-    """方法锁只在「用户没改口径」时生效。
-
-    用户显式点名了另一个类（`entityRef` 存在且不是这个方法的 owner），
-    说明锁已经过期 —— 这时按类走，绝不能用旧方法答题。
-    """
-    if not ctx.method_uid:
-        return None
-    owner = owner_of(ctx.method_uid)
-    # entityRef 可能就是这个方法 uid 本身（「谁调用了它」），按 owner 比较才不会误判成换了口径
-    if slots.entity_ref and owner_of(slots.entity_ref) != owner:
-        logger.info("方法锁 %s 与用户点名的 %s 不一致，本轮按类走", ctx.method_uid, slots.entity_ref)
-        return None
-    return ctx.method_uid

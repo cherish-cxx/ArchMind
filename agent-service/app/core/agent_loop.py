@@ -1,8 +1,7 @@
-"""多步 Agent 循环（R6 第二步）—— 与 legacy 的「六选一」并存。
+"""多步 Agent 循环 —— `/ask` 唯一的执行链路（R6 第三步起）。
 
-`core/loop.py` 是单步：判意图 → 查表 → 调**一个**工具 → 讲解。
-这里是多步：把工具清单交给模型，它决定调哪个、调几次，最后用 `answer` 收口。
-两条路共用 `execute_tool` / `render_tool_result` / `guard`，区别只在「谁决定调什么」。
+把工具清单交给模型，它决定调哪个、调几次，最后用 `answer` 收口。
+单步的「判意图 → 查表 → 调一个工具 → 讲解」已随六选一删除。
 
 循环体只有四步：发消息 → 收 `tool_calls` → 执行并回填 → 看要不要继续。
 
@@ -37,13 +36,12 @@ from app.core.llm import (
     LLMNotConfiguredError,
     LLMResult,
 )
-# legacy 里的这几段与六选一无耦合，直接复用；改名留给第三步删六选一时一并做。
-from app.core.loop import (
-    _memory_trigger,
-    _recall_memories,
-    _remember_explicit,
-    _retrieve,
-    _suggestions,
+from app.core.turn_support import (
+    memory_trigger,
+    recall_memories,
+    remember_explicit,
+    retrieve,
+    suggestions,
     ui_commands_for,
 )
 from app.core.memory import MemoryService
@@ -218,19 +216,17 @@ async def run_agent_turn(
 ) -> AgentResponse:
     """跑一轮多步调查。
 
-    `retriever` 只用来做**初始提示**（和 legacy 一样，在第一次 LLM 之前），
+    `retriever` 只用来做**初始提示**（在第一次 LLM 之前），
     模型仍然可以自己再 `classes` 一次 —— 预检索是省一次往返，不是唯一入口。
 
-    记忆和 legacy 走**同一套触发规则**（`should_recall`）与同一条写入路径
-    （`explicit_draft` → `MemoryService.remember`）—— 两侧各写一份，
-    迟早会出现「同一个问题在两种模式下记的东西不一样」。
-    会话结算蒸馏不在这里：那是后台任务扫 MySQL，与本轮走哪条链路无关。
+    记忆触发规则在 `memory.should_recall`，写入走 `explicit_draft` →
+    `MemoryService.remember`。会话结算蒸馏不在这里：那是后台任务扫 MySQL。
     """
     ctx.begin_turn(message)
     started = time.perf_counter()
     steps: list[Step] = []
 
-    retrieval = await _retrieve(ctx, message, retriever, steps)
+    retrieval = await retrieve(ctx, message, retriever, steps)
     ctx.turn.retrieval = retrieval
     if retrieval.candidates:
         ctx.append_retrieval(
@@ -240,9 +236,9 @@ async def run_agent_turn(
 
     memory_hits: list[MemoryHit] = []
     if memory is not None and memory.enabled:
-        trigger = _memory_trigger(ctx, message, retrieval)
+        trigger = memory_trigger(ctx, message, retrieval)
         if trigger is not None:
-            memory_hits = await _recall_memories(ctx, message, memory, steps, trigger)
+            memory_hits = await recall_memories(ctx, message, memory, steps, trigger)
     ctx.turn.memory_hits = memory_hits
 
     known = _seed_known(ctx, retrieval)
@@ -469,7 +465,7 @@ async def _prefetch_locked_method(
 ) -> None:
     """用户锁了方法：循环开始前先把这段源码取回来，放进对话。
 
-    legacy 里这是硬编码的第二步。循环里的模型**本来可以**自己调 `method-body`，
+    单步时代这是硬编码的第二步。循环里的模型**本来可以**自己调 `method-body`，
     但没有任何东西保证它会调 —— 而"锁了方法"等于用户说「现在问的是这段代码」，
     回答里没有那段代码的依据就是明显退步。所以这里替它取一次。
 
@@ -631,7 +627,7 @@ def _respond_clarify(
 ) -> AgentResponse:
     """反问并结束。
 
-    **不返回图**（和 legacy 的 `_clarify` 一致）：这一轮的意思是「我还不确定」，
+    **不返回图**：这一轮的意思是「我还不确定」，
     这时候再画一张图只会引导用户往错的方向看。
 
     `append_event` 是必须的 —— 窗口收缩会把 `tool_calls` 摘掉，
@@ -645,9 +641,9 @@ def _respond_clarify(
     return AgentResponse(
         conversation_id=ctx.conversation_id,
         message=question,
-        suggestions=[Suggestion(label=o) for o in options],
+        suggestions=[Suggestion(label=o, message=o) for o in options],
         steps=steps,
-        meta=Meta(intent="AGENT", confidence=1.0,
+        meta=Meta(intent=None, confidence=1.0,
                   graph_rev=_graph_rev(envelopes), latency_ms=_ms(started)),
     )
 
@@ -814,9 +810,9 @@ async def _template_response(
         citations=citations,
         ui_commands=kept,
         graph=graph,
-        suggestions=_suggestions(None, ctx),
+        suggestions=suggestions(ctx),
         steps=steps,
-        meta=Meta(intent="AGENT", confidence=1.0,
+        meta=Meta(intent=None, confidence=1.0,
                   graph_rev=_graph_rev(envelopes), latency_ms=_ms(started)),
     )
 
@@ -831,7 +827,7 @@ async def _write_memory(
     """显式记忆的写入。记忆是附加路径：没开、没触发词、写失败，一律返回 None。"""
     if memory is None or not memory.enabled:
         return None
-    return await _remember_explicit(ctx, message, explanation, graph_rev, memory)
+    return await remember_explicit(ctx, message, explanation, graph_rev, memory)
 
 
 def _record_answer(
@@ -882,11 +878,11 @@ def _response(
         citations=citations,
         ui_commands=commands,
         graph=graph,
-        suggestions=_suggestions(None, ctx),
+        suggestions=suggestions(ctx),
         steps=steps,
         # 六选一还在，意图这一栏对本轮没有意义 —— 写一个可识别的标签，
         # 而不是硬塞一个假的 EXPLORE_xxx。第三步会把它换成 None。
-        meta=Meta(intent="AGENT", confidence=1.0,
+        meta=Meta(intent=None, confidence=1.0,
                   graph_rev=_graph_rev(envelopes), latency_ms=_ms(started)),
     )
 

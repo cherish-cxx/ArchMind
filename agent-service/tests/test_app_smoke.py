@@ -4,7 +4,7 @@
 叫 `redis`，遮住了 `redis` 模块，于是 `redis.asyncio.from_url` 取到的是那个参数（None）
 → 每次 `ContextStore()` 都抛 AttributeError，**服务根本起不来**。
 
-而当时 43 个测试**全绿**：离线那批（guard/intent/loop）压根不碰 app；
+而当时 43 个测试**全绿**：离线那批（guard/explain/工具层）压根不碰 app；
 `test_contract` 在 `require_java` 那步就 skip 了，`TestClient(app)` 从没进去过，
 lifespan 也就从没跑过。
 

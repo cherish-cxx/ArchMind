@@ -1,32 +1,18 @@
 """讲解结构化输出（R2）—— 解析、逐段校验、message 拼装。
 
 不碰网络：`_parse_and_ground` 是纯函数，和 guard 一样能测到最细。
+R6 第三步起它同时是 `answer` 工具参数的校验入口（别名 `parse_answer`）。
 """
 
 import json
 
 import pytest
 
-from app.core.explain import ExplainParseError, _parse_and_ground, explain
-from app.core.prompt import explain_messages
-from app.models.context import AgentContext, ChatMessage, MessageRole
-from app.models.intent import Intent
-from app.models.response import NodeRef, NodeRefType
-from fakes import FakeLLM, ok_chain
+from app.core.explain import ExplainParseError, _parse_and_ground
 
 A = "com.demo.A"
 B = "com.demo.B"
 GHOST = "com.demo.Ghost"
-
-
-def _ctx(prior: list[tuple[str, str]] | None = None,
-         focus_uid: str | None = None) -> AgentContext:
-    focus = NodeRef(type=NodeRefType.CLASS, uid=focus_uid) if focus_uid else None
-    ctx = AgentContext(conversation_id="c_test", project_id=1, focus=focus)
-    for q, a in (prior or []):
-        ctx.messages.append(ChatMessage(role=MessageRole.USER, content=q))
-        ctx.messages.append(ChatMessage(role=MessageRole.ASSISTANT, content=a))
-    return ctx
 
 
 def _payload(**overrides) -> str:
@@ -108,66 +94,3 @@ def test_legacy_shape_still_parses():
 def test_unusable_output_raises(text):
     with pytest.raises(ExplainParseError):
         _parse_and_ground(text, set())
-
-
-async def test_garbage_falls_back_to_template():
-    """LLM 吐垃圾 → 模板降级，sections 为空（前端据此回落到 message）。"""
-    r = await explain(_ctx(), Intent.EXPLORE_FLOW, [ok_chain()], {A, B}, "问", FakeLLM(["oops"]))
-
-    assert r.degraded is True
-    assert r.sections == []
-    assert r.message, "降级也必须给出一句人话"
-
-
-def test_prompt_carries_the_new_contract():
-    system = explain_messages(Intent.EXPLORE_FLOW, [], "问", _ctx())[0]["content"]
-
-    for token in ("headline", "sections", "citedUids", "json"):
-        assert token in system
-
-    assert "不要输出 markdown 标题" not in system, "旧规则会与 Markdown 正文冲突"
-    assert "反引号" in system, "List<String> 不包反引号会被前端当 HTML 标签吞掉"
-    # 受众与结构：R2 的核心约束，删掉就会退回「罗列类名」的旧形态
-    assert "刚接手这个项目" in system
-    assert "先结论，再路径" in system
-    assert "禁止只罗列类名" in system
-
-
-# ==================== 会话记忆进入 LLM #2 ====================
-
-
-def test_explain_prompt_carries_all_prior_messages_and_current_focus():
-    """全部历史都要进 prompt —— 只给最近三轮等于每三轮重新认识一次用户。"""
-    ctx = _ctx(prior=[(f"第{i}问", f"第{i}答") for i in range(1, 6)], focus_uid=A)
-    ctx.messages.append(ChatMessage(role=MessageRole.USER, content="它呢"))
-
-    user = explain_messages(Intent.EXPLORE_FLOW, [], "它呢", ctx)[1]["content"]
-
-    for i in range(1, 6):
-        assert f"第{i}问" in user, f"第 {i} 轮被截断了"
-        assert f"第{i}答" in user
-    assert f"当前锚点 focus = {A}" in user
-    assert "[用户] 它呢" in user
-
-
-def test_explain_prompt_says_first_turn_when_history_empty():
-    user = explain_messages(Intent.EXPLORE_FLOW, [], "问", _ctx())[1]["content"]
-    assert "这是本会话的第一轮" in user
-
-
-def test_explain_prompt_marks_rewritten_as_interpretation():
-    """原话与改写同时出现，改写过的话必须标明是「系统理解」，不能冒充用户原话。"""
-    ctx = _ctx(focus_uid=A)
-    ctx.messages.append(ChatMessage(role=MessageRole.USER, content="它呢"))
-    user = explain_messages(
-        Intent.EXPLORE_FLOW, [], "它呢", ctx, rewritten=f"{A} 的调用方是谁",
-    )[1]["content"]
-
-    assert "[用户] 它呢" in user
-    assert f"系统对这句话的理解：{A} 的调用方是谁" in user
-
-
-def test_history_is_background_not_evidence():
-    system = explain_messages(Intent.EXPLORE_FLOW, [], "问", _ctx())[0]["content"]
-    assert "背景，不是证据" in system
-    assert "citedUids" in system

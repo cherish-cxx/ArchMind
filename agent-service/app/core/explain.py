@@ -1,4 +1,8 @@
-"""讲解（LLM #2）+ **降级到模板**。
+"""讲解输出的解析、逐段 grounding，以及**降级到模板**。
+
+R6 第三步：单步讲解的 LLM 调用（`explain()`）与 `explain_messages` 已随六选一删除。
+多步循环把 `answer` 工具的参数交给同一套 `_parse_and_ground`（别名 `parse_answer`），
+预算耗尽或模型不可用时退回 `template_answer` —— **grounding 只有这一处实现**。
 
 ## 为什么 P2 的模板函数没有随桩一起删
 P2 在 `api/agent.py` 里写的 `_explain_chain` / `_explain_overview` 是「用工具结果拼人话」，
@@ -18,19 +22,11 @@ P2 的写法是**先选 citations，再用 citations 拼 message** —— 结构
 
 import json
 import logging
-import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.config import settings
 from app.core.guard import split_citations
-from app.core.llm import Completer, LLMError, LLMNotConfiguredError
-from app.core.prompt import explain_messages
-from app.models.context import AgentContext
-from app.models.intent import Intent
-from app.models.memory import MemoryHit
 from app.models.response import Citation, NodeRefType, Section
-from app.models.retrieval import Candidate
 from app.models.tool import CallChain, GapReason, ProjectOverview, ToolEnvelope
 
 logger = logging.getLogger(__name__)
@@ -51,69 +47,6 @@ def _simple(uid: str) -> str:
 
 
 # ==================== 主入口 ====================
-
-
-async def explain(
-    ctx: AgentContext,
-    intent: Intent,
-    envelopes: list[ToolEnvelope],
-    evidenced: set[str],
-    question: str,
-    llm: Completer,
-    *,
-    rewritten: str | None = None,
-    candidates: list[Candidate] | None = None,
-    memories: list[MemoryHit] | None = None,
-) -> ExplainResult:
-    """讲解这一轮的查询结果。
-
-    `ctx` 只用于组装**会话记忆**（完整 history + 当前锚点），不参与 evidence 判定 ——
-    citedUids 的真相仍然只有本轮工具返回的 evidence。
-
-    `question` 是用户原话；`rewritten` 是 LLM #1 消解代词后的版本，作为提示附带。
-
-    ⚠️ `LLMNotConfiguredError` **原样抛**：没配 key 是配置错误（该 500），
-    不是「LLM 抖了一下」—— 把它降级成模板，就等于让一个配置问题伪装成正常运行。
-    这个区分和 P2 里 java_client 对 401 的处理是同一条原则。
-    """
-    try:
-        started = time.perf_counter()
-        raw = await llm.complete(
-            explain_messages(intent, envelopes, question, ctx,
-                             rewritten=rewritten, candidates=candidates,
-                             memories=memories),
-            json_mode=True,
-        )
-        ctx.turn.llm_calls.append({
-            "purpose": "explain",
-            "model": settings.llm_model,
-            "rawResponse": raw.text,
-            "tokensIn": raw.tokens_in,
-            "tokensOut": raw.tokens_out,
-            "latencyMs": int((time.perf_counter() - started) * 1000),
-        })
-        return _parse_and_ground(raw.text, evidenced)
-    except LLMNotConfiguredError:
-        raise
-    except LLMError as e:
-        logger.warning("LLM 讲解不可用，退化为模板输出（C2 降级）：%s", e)
-        ctx.turn.llm_calls.append({
-            "purpose": "explain", "model": settings.llm_model, "degraded": True,
-            "error": f"{type(e).__name__}: {e}",
-        })
-    except ExplainParseError as e:
-        logger.warning("LLM 讲解输出不可解析，退化为模板输出：%s", e)
-        ctx.turn.llm_calls.append({
-            "purpose": "explain", "model": settings.llm_model, "degraded": True,
-            "error": f"ExplainParseError: {e}",
-        })
-
-    citations, body = template_answer(envelopes, evidenced)
-    return ExplainResult(
-        message=f"（讲解服务暂不可用，以下是原始查询结果）{body}",
-        citations=citations,
-        degraded=True,
-    )
 
 
 class ExplainParseError(Exception):

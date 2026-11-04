@@ -238,7 +238,7 @@ class LLMClient:
     ) -> LLMResult:
         """跑一次补全。
 
-        `temperature=0.0` 是默认：Intent 判定要的是**可复现**，不是创造力。
+        `temperature=0.0` 是默认：工具规划要的是**可复现**，不是创造力。
         讲解环节想要一点措辞变化的话，调用方显式传。
 
         `tools` 给了就是 function calling：模型可以返回 `tool_calls` 而不说话，

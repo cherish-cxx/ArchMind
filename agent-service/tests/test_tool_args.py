@@ -199,12 +199,6 @@ def test_error_renders_structured_json_for_the_model():
     }
 
 
-def test_missing_anchor_has_its_own_reason():
-    err = ToolError.missing_anchor("call-chain")
-    assert err.reason == ErrorReason.MISSING_ANCHOR
-    assert err.field == "uid"
-
-
 def test_normalization_is_pure_and_repeatable():
     first = normalize_args("class-relations", {"uid": "a.B#run()"})
     second = normalize_args("class-relations", {"uid": "a.B#run()"})

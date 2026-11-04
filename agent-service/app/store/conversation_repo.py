@@ -1,6 +1,6 @@
 """MySQL 侧的会话仓库 —— 发号、事务、级联删除（R5）。
 
-**这里只做数据库的事**：不调 LLM、不碰 Redis、不知道 Intent 是什么。
+**这里只做数据库的事**：不调 LLM、不碰 Redis、不知道意图是什么。
 上层 `ConversationStore` 负责"MySQL 成功之后才写 Redis"。
 
 ## 发号
@@ -299,7 +299,8 @@ def build_turn_payload(
         "rewritten_query": turn.rewritten_query,
         "focus_before": turn.focus_before,
         "method_uid": turn.method_uid,
-        "intent": turn.intent.value if turn.intent else None,
+        # 六选一已删除，新行不再有意图；列保留给历史数据。
+        "intent": None,
         "confidence": turn.confidence,
         "degraded": turn.degraded,
         "outcome": turn.outcome,
