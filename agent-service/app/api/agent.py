@@ -16,6 +16,7 @@ import uuid
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 
 from app.config import INTERNAL_TOKEN_HEADER, settings
+from app.core.agent_loop import run_agent_turn
 from app.core.llm import LLMClient
 from app.core.loop import navigate as apply_navigation
 from app.core.loop import run_turn
@@ -148,6 +149,10 @@ async def ask(
 
     P3 起 `message` 由 LLM 生成（不再是 P2 的模板桩），
     但**讲解不可用时会自动退化成 P2 那套模板**（设计 §8-C2），不会整轮失败。
+
+    R6：`agent_mode` 决定走哪条链路 —— `legacy` 是六选一查表，`tools` 是函数调用循环。
+    **分派放在路由而不是 `run_turn` 内部**：两条路的入参不同（循环还没接记忆），
+    拆开才能让各自保持完整，也才能分别测。
     """
     #看请求里有没有传conversation_id,如果传了，就用传过来的id，否则（or）就调用new，生成全新会话id
     conversation_id = req.conversation_id or _new_conversation_id()
@@ -173,7 +178,10 @@ async def ask(
     执行一轮Agent回答，把上下文，用户消息，java客户端，llm客户端传给run_turn函数
     run_turn内部会调用LLM生成回答，如果LLM调用失败，会自动降级到旧版本P2模板，不会直接崩掉整个请求
     """
-    response = await run_turn(ctx, req.message, java, llm, retriever, memory)
+    if settings.agent_mode == "tools":
+        response = await run_agent_turn(ctx, req.message, java, llm, retriever, memory)
+    else:
+        response = await run_turn(ctx, req.message, java, llm, retriever, memory)
     persisted = await store.commit_turn(ctx, req.user_id, req.project_id)
     if response.meta is not None:
         response.meta.persist_failed = not persisted

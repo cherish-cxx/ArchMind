@@ -75,7 +75,7 @@ def _from_call_chain(env: ToolEnvelope) -> GraphPatch:
     ]
     gaps = [GraphGap(at=g.at, reason=g.reason) for g in data.gaps]
 
-    return _cap(GraphPatch(
+    return cap_patch(GraphPatch(
         nodes=nodes,
         edges=edges,
         gaps=gaps,
@@ -114,7 +114,7 @@ def _from_class_relations(env: ToolEnvelope) -> GraphPatch:
             for related in group or []:
                 add(related, upstream=False)
 
-    return _cap(GraphPatch(
+    return cap_patch(GraphPatch(
         nodes=list(nodes.values()),
         edges=edges,
         truncated=bool(env.truncated),
@@ -136,13 +136,13 @@ def _from_method_body(env: ToolEnvelope) -> GraphPatch | None:
     if not nodes:
         return None
     # 方法体没有边：它只是告诉前端「FOCUS_NODE 的 target 确实在图上」。
-    return _cap(GraphPatch(nodes=list(nodes.values()), truncated=bool(env.truncated)))
+    return cap_patch(GraphPatch(nodes=list(nodes.values()), truncated=bool(env.truncated)))
 
 
 # ==================== 去重 + 截断 ====================
 
 
-def _cap(patch: GraphPatch) -> GraphPatch:
+def cap_patch(patch: GraphPatch) -> GraphPatch:
     """按 uid 去重、按上限截断；边只保留两端都还在的。
 
     顺序是先节点后边：节点被截掉时，指向它的边必须一起丢，否则前端会画出悬空边。

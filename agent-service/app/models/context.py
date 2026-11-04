@@ -49,8 +49,10 @@ class Budget(CamelModel):
     turns: int = 0                    # 这个会话总共聊了几轮（由落库后的 turn_no 回填）
     steps_used: int = 0               # **本轮**已用步数 —— 每轮开头清零
     tool_calls_this_turn: int = 0     # **本轮**已打 Java 次数 —— 每轮开头清零
-    tool_calls_limit: int = 6
-    steps_limit: int = 4
+    llm_calls_this_turn: int = 0      # **本轮**已调模型次数 —— 每轮开头清零
+    tool_calls_limit: int = 8
+    llm_calls_limit: int = 6
+    steps_limit: int = 12
 
 
 # ==================== 消息 ====================
@@ -266,6 +268,7 @@ class AgentContext(CamelModel):
         )
         self.budget.steps_used = 0
         self.budget.tool_calls_this_turn = 0
+        self.budget.llm_calls_this_turn = 0
         if question:
             self.messages.append(ChatMessage(role=MessageRole.USER, content=question))
 
@@ -380,6 +383,13 @@ class AgentContext(CamelModel):
             m for m in self.messages
             if m.role not in (MessageRole.RETRIEVAL, MessageRole.TOOL)
         ]
+        # ★ 工具消息一走，assistant 上的 tool_calls 就没有配对项了。
+        # 多步循环把 `messages` 原样发给模型，这种半截交换会被接口直接 400。
+        # 降级成普通 assistant 消息 —— 窗口本来就允许丢细节，完整转录在 agent_turn。
+        for m in self.messages:
+            if m.role is MessageRole.ASSISTANT and m.tool_calls:
+                m.tool_calls = None
+                m.content = m.content or "（上一轮查过图，工具结果已归档）"
         if len(self.messages) <= max_messages and self._chars() <= max_chars:
             return
 

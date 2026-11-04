@@ -10,6 +10,8 @@
 命名用 fake 不用 mock：这些是**有真实行为的手写替身**，不是「记录调用参数」的桩。
 """
 
+from typing import Any
+
 from app.core.llm import LLMResult
 from app.models.context import AgentContext
 from app.models.retrieval import Candidate, Retrieval
@@ -24,8 +26,9 @@ class FakeLLM:
         await classify_intent(ctx, "订单流程是什么", llm)
         assert llm.call_count == 1
 
-    剧本的元素可以是**字符串**（正常返回）或**异常实例**（这一次调用抛它）——
-    后者用来测降级：比如
+    剧本的元素可以是**字符串**（正常返回）、**异常实例**（这一次调用抛它）
+    或 **`LLMResult`**（原样返回，用来排 tool_calls）—— 后者用来测降级：
+    比如
         FakeLLM([LLMTransportError("超时"), '{"message": "..."}'])
     表示「第一次调用挂了、第二次正常」，一轮里两层降级都能覆盖到。
 
@@ -34,7 +37,7 @@ class FakeLLM:
     剧本耗尽却静默继续，会把「多调了一次」这个 bug 伪装成正常。
     """
 
-    def __init__(self, replies: list[str | Exception]) -> None:
+    def __init__(self, replies: list[str | Exception | LLMResult]) -> None:
         self._replies = list(replies)
         self.calls: list[dict[str, object]] = []
 
@@ -44,12 +47,20 @@ class FakeLLM:
 
     async def complete(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         json_mode: bool = False,
         temperature: float = 0.0,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> LLMResult:
-        self.calls.append({"messages": messages, "json_mode": json_mode, "temperature": temperature})
+        self.calls.append({
+            "messages": messages,
+            "json_mode": json_mode,
+            "temperature": temperature,
+            "tools": tools,
+            "tool_choice": tool_choice,
+        })
 
         if not self._replies:
             raise AssertionError(
@@ -58,7 +69,9 @@ class FakeLLM:
         item = self._replies.pop(0)
         if isinstance(item, Exception):
             raise item
-        return LLMResult(text=item, tokens_in=11, tokens_out=22)
+        if isinstance(item, LLMResult):
+            return item
+        return LLMResult(content=item, tokens_in=11, tokens_out=22)
 
 
 class FakeJava:
@@ -162,6 +175,44 @@ def ok_chain() -> ToolEnvelope:
         ),
         evidence=[Evidence(kind=EvidenceKind.EDGE, from_=ORDER_CONTROLLER,
                            to=ORDER_SERVICE, rel=RelationType.CALLS, count=1)],
+        truncated=False,
+        graph_rev=1,
+    )
+
+
+def ok_classes() -> ToolEnvelope:
+    """类清单信封：**没有 evidence** —— 多步循环必须能从 data 里捞出 uid，
+    否则「先列清单、再查清单里的类」这条路永远走不通。"""
+    from app.models.tool import ClassNode, NodeKind
+
+    def node(uid: str, package: str, simple: str) -> ClassNode:
+        return ClassNode(qualified_name=uid, simple_name=simple,
+                         package_name=package, kind=NodeKind.CLASS)
+
+    return ToolEnvelope(
+        ok=True,
+        data=[
+            node(ORDER_CONTROLLER, "com.hmall.trade.controller", "OrderController"),
+            node(ORDER_SERVICE, "com.hmall.trade.service.impl", "OrderServiceImpl"),
+        ],
+        evidence=[],
+        truncated=False,
+        graph_rev=1,
+    )
+
+
+def classes_with(*uids: str) -> ToolEnvelope:
+    """任意类清单。用来验「源码提到的类能不能靠项目花名册落实」。"""
+    from app.models.tool import ClassNode, NodeKind
+
+    return ToolEnvelope(
+        ok=True,
+        data=[
+            ClassNode(qualified_name=uid, simple_name=uid.rsplit(".", 1)[-1],
+                      package_name=uid.rsplit(".", 1)[0], kind=NodeKind.CLASS)
+            for uid in uids
+        ],
+        evidence=[],
         truncated=False,
         graph_rev=1,
     )

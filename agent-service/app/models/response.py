@@ -144,13 +144,13 @@ class GraphPatch(CamelModel):
 class Suggestion(CamelModel):
     """「下一步可以问什么」。闭环的发动机 —— 没有它，对话转不动。
 
-    `intent` 在 P2 是裸 `str`（那时枚举还没定义），P3 收紧成 `Intent`：
-    前端点一个建议就是发一轮 `ask`，这个字段最终会变成下一轮的 Intent ——
-    让它现在就是个枚举，错值在模型校验层就被拒，不用等前端点下去才发现。
+    `intent` 可以为 None：多步循环里 `clarify` 的选项是**自由文本**，没有意图可填。
+    前端点一下只是把 `label` 当下一句话发回来（`AgentPanel` 只读 label），
+    所以这个字段对点击行为没有影响 —— 保留它是为了老数据和 `_suggestions`。
     """
 
     label: str
-    intent: Intent
+    intent: Intent | None = None
     slots: dict[str, Any] = {}
 
 

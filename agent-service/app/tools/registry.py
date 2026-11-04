@@ -9,7 +9,7 @@ P3 换成查表之后，`core/loop.py` 的循环体**不需要知道世界上有
   那是**多步探索**，本片没做。
   理由：先把「判定 → 取数 → 讲解 → 出图」这条主干跑通并测透，
   再换掉分发那一环 —— 那时预算计数与去重才真正有意义。
-  接缝已经留好了：循环里那一句 `spec.handler(client, inv)` 换成
+  接缝已经留好了：循环里那一句 `spec.execute(client, ctx, args)` 换成
   「先问 LLM 要一个计划，再执行」即可，其余不动。
 """
 
@@ -25,9 +25,12 @@ from app.models.tool import (
     RelationDirection,
     ToolEnvelope,
 )
+from app.tools.schemas import TOOL_SCHEMAS
 from app.tools.java_client import (
     DEFAULT_LIMIT,
     DEFAULT_CHAIN_DEPTH,
+    DEFAULT_MAX_LINES,
+    DEFAULT_MAX_METHODS,
     DEFAULT_MAX_NODES,
     DEFAULT_METHOD_MAX_LINES,
     JavaClient,
@@ -50,17 +53,33 @@ class ToolInvocation:
     #: 源码大纲里锁定的方法 uid（`owner#signature`）。目前只有 method-body 消费。
     method_uid: str | None = None
 
-""" 
-这里是python类型别名，不是业务执行代码，制作类型标注，运行时不会执行任何逻辑，用来描述一类异步函数长什么样
-ToolHandler给这个函数起个名字，后面代码直接复用这个名字
-Callable[参数列表，返回类型]:Python typing库表示可调用对象
-"[JavaClient", ToolInvocation]：代表这个函数必须接收 2 个参数
-参数 1：JavaClient 对象
-参数 2：ToolInvocation 对象
-Awaitable[...]：代表这是async 异步函数，调用它必须加await；
-Awaitable[ToolEnvelope[Any]]：await之后拿到的返回值，必须是ToolEnvelope对象，里面可以装任意业务数据Any。
-"""
-ToolHandler = Callable[["JavaClient", ToolInvocation], Awaitable[ToolEnvelope[Any]]]
+
+@dataclass(frozen=True)
+class ToolContext:
+    """一次工具调用的执行上下文。
+
+    `has_anchor` 由调用方判定并显式传入 —— 执行层不再猜“当前有没有焦点”。
+    后续加 `retriever` 等依赖时，只扩展这里，不改五个执行体的签名。
+
+    ## `known_uids` 与 `has_anchor` 并存（R6 第二步，临时）
+
+    `has_anchor` 回答的是「用户点过类没有」—— 单步循环够用，多步循环不够：
+    模型第一次 `classes` / `search` 拿到的类，第二次要拿它当起点，而用户并没有点它。
+    所以循环传 `known_uids`（本轮**已经见过**的实体），执行层检查的参数语义变成
+    「你给的 uid 在不在本轮见过的东西里」—— 这样「先查再查」才成立。
+
+    `has_anchor` 保留是因为 legacy 那条路还没有 known 集合；第三步删六选一时
+    两者一起删。**不要**让调用方同时用两种语义。
+    """
+
+    project_id: int
+    has_anchor: bool = False
+    known_uids: frozenset[str] | None = None
+
+
+ToolExecutor = Callable[
+    ["JavaClient", ToolContext, dict[str, Any]], Awaitable[ToolEnvelope[Any]]
+]
 
 
 @dataclass(frozen=True)
@@ -73,68 +92,129 @@ class ToolSpec:
     """
 
     name: str
-    handler: ToolHandler
+    #: 唯一执行体：接收已校验的 camelCase 参数，返回信封。
+    execute: ToolExecutor
     # 是否需要锚点true/false
     needs_anchor: bool
-    summary: str
+    #: 给模型看的用途说明：什么时候用、什么时候不用、和相邻工具怎么区分。
+    description: str
+    #: 参数的 JSON Schema，同时是 `args.normalize_args` 的唯一依据。
+    input_schema: dict[str, Any]
 
 
-# ==================== 五个 handler ====================
+# ==================== 五个执行体 ====================
 
 
-async def _overview(client: JavaClient, inv: ToolInvocation) -> ToolEnvelope[Any]:
-    return await client.overview(inv.project_id)
+async def _overview(
+    client: JavaClient, ctx: ToolContext, args: dict[str, Any]
+) -> ToolEnvelope[Any]:
+    return await client.overview(ctx.project_id)
 
 
-async def _classes(client: JavaClient, inv: ToolInvocation) -> ToolEnvelope[Any]:
-    return await client.classes(inv.project_id, limit=DEFAULT_LIMIT)
+async def _classes(
+    client: JavaClient, ctx: ToolContext, args: dict[str, Any]
+) -> ToolEnvelope[Any]:
+    return await client.classes(ctx.project_id, limit=args["limit"])
 
 
-async def _class_relations(client: JavaClient, inv: ToolInvocation) -> ToolEnvelope[Any]:
-    assert inv.uid is not None  # needs_anchor=True 保证的
-    # ⚠️ 枚举是**另一个**：class-relations 有 BOTH（call-chain 没有）。
-    # 没指明方向时给 BOTH —— 「点类看关联」的默认语义就是上下都看。
-    direction = {
-        ChainDirection.UP: RelationDirection.UP,
-        ChainDirection.DOWN: RelationDirection.DOWN,
-        None: RelationDirection.BOTH,
-    }[inv.slots.direction]
-    return await client.class_relations(inv.project_id, inv.uid, direction=direction, limit=DEFAULT_LIMIT)
-
-
-async def _call_chain(client: JavaClient, inv: ToolInvocation) -> ToolEnvelope[Any]:
-    assert inv.uid is not None
-    return await client.call_chain(
-        inv.project_id,
-        inv.uid,
-        direction=inv.slots.direction or ChainDirection.DOWN,
-        # 锁了方法就只查这一个方法的上下游 —— 否则「谁调用了它」会退化成整个类
-        method_uid=inv.method_uid,
-        # 预算由这边显式传，Java 不会替 Agent 拦（见 java_client 顶部的约束 ③）
-        max_depth=inv.slots.depth or DEFAULT_CHAIN_DEPTH,
-        max_nodes=DEFAULT_MAX_NODES,
+async def _class_relations(
+    client: JavaClient, ctx: ToolContext, args: dict[str, Any]
+) -> ToolEnvelope[Any]:
+    # schema 已把 direction 归一成 canonical 字符串；这里只做枚举转换。
+    return await client.class_relations(
+        ctx.project_id,
+        args["uid"],
+        direction=RelationDirection(args["direction"]),
+        limit=args["limit"],
     )
 
 
-async def _method_body(client: JavaClient, inv: ToolInvocation) -> ToolEnvelope[Any]:
-    # 锁定方法时只切这一个；方法级只切 1 个方法，行数预算可以放宽
-    if inv.method_uid:
+async def _call_chain(
+    client: JavaClient, ctx: ToolContext, args: dict[str, Any]
+) -> ToolEnvelope[Any]:
+    return await client.call_chain(
+        ctx.project_id,
+        args["uid"],
+        direction=ChainDirection(args["direction"]),
+        # 锁了方法就只查这一个方法的上下游 —— 否则「谁调用了它」会退化成整个类
+        method_uid=args.get("methodUid"),
+        # 预算由这边显式传，Java 不会替 Agent 拦（见 java_client 顶部的约束 ③）
+        max_depth=args["maxDepth"],
+        max_nodes=args["maxNodes"],
+    )
+
+
+async def _method_body(
+    client: JavaClient, ctx: ToolContext, args: dict[str, Any]
+) -> ToolEnvelope[Any]:
+    # 方法锁定时只切这一个；行数预算由调用方（adapter 或模型）显式给出。
+    if args.get("methodUid"):
         return await client.method_body(
-            inv.project_id, method_uid=inv.method_uid, max_lines=DEFAULT_METHOD_MAX_LINES
+            ctx.project_id,
+            method_uid=args["methodUid"],
+            max_methods=args["maxMethods"],
+            max_lines=args["maxLines"],
         )
-    assert inv.uid is not None
-    return await client.method_body(inv.project_id, uid=inv.uid)
+    return await client.method_body(
+        ctx.project_id,
+        uid=args["uid"],
+        max_methods=args["maxMethods"],
+        max_lines=args["maxLines"],
+    )
 
 
 # ==================== 两张表 ====================
 
 
 TOOLS: dict[str, ToolSpec] = {
-    "overview": ToolSpec("overview", _overview, needs_anchor=False, summary="项目概况"),
-    "classes": ToolSpec("classes", _classes, needs_anchor=False, summary="类清单（兜底）"),
-    "class-relations": ToolSpec("class-relations", _class_relations, needs_anchor=True, summary="类的上下游关系"),
-    "call-chain": ToolSpec("call-chain", _call_chain, needs_anchor=True, summary="调用链"),
-    "method-body": ToolSpec("method-body", _method_body, needs_anchor=True, summary="方法源码切片"),
+    "overview": ToolSpec(
+        "overview", _overview, needs_anchor=False,
+        description=(
+            "查看项目的整体概况：项目类型、摘要、技术栈、架构分层和模块划分。"
+            "不需要锚点。用户问“这个项目是做什么的”时使用；"
+            "问具体流程或某个类时不要用。"
+        ),
+        input_schema=TOOL_SCHEMAS["overview"],
+    ),
+    "classes": ToolSpec(
+        "classes", _classes, needs_anchor=False,
+        description=(
+            "列出项目中的类清单，用于在不知道类名时从候选里挑选。不需要锚点。"
+            "只在没有明确目标类时使用；已经知道起点、要看调用关系时改用 call-chain，"
+            "要看实现时改用 method-body。"
+        ),
+        input_schema=TOOL_SCHEMAS["classes"],
+    ),
+    "class-relations": ToolSpec(
+        "class-relations", _class_relations, needs_anchor=True,
+        description=(
+            "查看某个类的上下游关系：谁调用/依赖/继承它，以及它调用/依赖/继承谁。"
+            "需要类 uid 作为锚点。direction 可选 UP/DOWN/BOTH，默认 BOTH；"
+            "limit 是每个关系列表各自的上限。想沿业务流程逐层往下看时改用 call-chain。"
+        ),
+        input_schema=TOOL_SCHEMAS["class-relations"],
+    ),
+    "call-chain": ToolSpec(
+        "call-chain", _call_chain, needs_anchor=True,
+        description=(
+            "从一个类或方法出发追踪调用链，返回节点、边和断点（gap），"
+            "是回答“流程怎么走”的主工具。需要锚点。"
+            "direction 只有 UP/DOWN（没有 BOTH），默认 DOWN；"
+            "maxDepth 控制往下几层，maxNodes 控制返回节点数。"
+            "只想看某段代码实现时改用 method-body。"
+        ),
+        input_schema=TOOL_SCHEMAS["call-chain"],
+    ),
+    "method-body": ToolSpec(
+        "method-body", _method_body, needs_anchor=True,
+        description=(
+            "读取方法的源码切片，是讲解实现细节的唯一来源。"
+            "需要类 uid 或方法 uid 作为锚点，二者至少给一个；"
+            "给接口方法 uid 时会自动落到实现类。"
+            "只想知道谁调用谁时不要用，改用 call-chain。"
+        ),
+        input_schema=TOOL_SCHEMAS["method-body"],
+    ),
 }
 
 #: intent → 工具名。**NAVIGATE / OUT_OF_SCOPE 不在表里** —— 它们不查图，
@@ -150,6 +230,46 @@ INTENT_TOOL: dict[Intent, str] = {
 def owner_of(uid: str) -> str:
     """方法 uid 是 `owner#signature`；任何类级工具要的都是 `#` 左边那半。"""
     return uid.split("#", 1)[0]
+
+
+def invocation_args(name: str, inv: ToolInvocation) -> dict[str, Any]:
+    """legacy 的 `ToolInvocation` → 统一执行入口需要的 camelCase 参数。
+
+    第一阶段 `plan()` 仍按意图选工具、拼 `ToolInvocation`，执行层只认识 schema
+    定义的 args；两者之间的翻译只此一处，保证新旧路径走同一个执行体。
+    """
+    if name == "overview":
+        return {}
+    if name == "classes":
+        return {"limit": DEFAULT_LIMIT}
+    if name == "class-relations":
+        direction = {
+            ChainDirection.UP: "UP",
+            ChainDirection.DOWN: "DOWN",
+            None: "BOTH",
+        }[inv.slots.direction]
+        return {"uid": inv.uid, "direction": direction, "limit": DEFAULT_LIMIT}
+    if name == "call-chain":
+        args: dict[str, Any] = {
+            "uid": inv.uid,
+            "direction": (inv.slots.direction or ChainDirection.DOWN).value,
+            "maxDepth": inv.slots.depth or DEFAULT_CHAIN_DEPTH,
+            "maxNodes": DEFAULT_MAX_NODES,
+        }
+        if inv.method_uid:
+            args["methodUid"] = inv.method_uid
+        return args
+    if name == "method-body":
+        common = {
+            "maxMethods": DEFAULT_MAX_METHODS,
+            "maxLines": (
+                DEFAULT_METHOD_MAX_LINES if inv.method_uid else DEFAULT_MAX_LINES
+            ),
+        }
+        if inv.method_uid:
+            return {"methodUid": inv.method_uid, **common}
+        return {"uid": inv.uid, **common}
+    raise ValueError(f"未知工具：{name}")
 
 
 def resolve_uid(ctx: AgentContext, slots: Slots) -> str | None:

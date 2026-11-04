@@ -133,6 +133,30 @@ def test_prune_window_keeps_origin_under_size_pressure():
     assert len(ctx.messages) <= 5
 
 
+def test_prune_window_does_not_leave_dangling_tool_calls():
+    """工具消息被移出后，assistant 上的 tool_calls 必须一起清掉。
+
+    多步循环把 `messages` **原样**发给模型；留下没有配对结果的 `tool_call`
+    会被接口直接 400 —— 而这个损坏发生在上一轮结束之后，很难追。
+    """
+    ctx = _ctx()
+    ctx.begin_turn("查一下")
+    ctx.append_tool_exchange(
+        call=ToolCall(id="c1", name="call-chain", arguments='{"uid":"a.B"}'),
+        tool_name="call-chain",
+        result_text="链路",
+    )
+    ctx.append_answer("答案")
+
+    ctx.prune_window(max_messages=40, max_chars=48000)
+
+    assert all(m.role is not MessageRole.TOOL for m in ctx.messages)
+    assert all(m.tool_calls is None for m in ctx.messages
+               if m.role is MessageRole.ASSISTANT)
+    # 发给模型的那份形状同样不能带孤儿 tool_calls
+    assert all("tool_calls" not in m for m in ctx.to_llm_messages())
+
+
 def test_old_context_version_is_rejected():
     with pytest.raises(Exception):
         AgentContext(conversation_id="c", project_id=1, version=1)

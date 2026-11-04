@@ -38,6 +38,7 @@ from app.models.response import (
 )
 from app.models.tool import ToolEnvelope
 from app.tools import registry
+from app.tools.executor import execute_tool
 from app.tools.java_client import InternalAuthError, JavaClient, ToolTransportError
 
 logger = logging.getLogger(__name__)
@@ -118,13 +119,22 @@ async def run_turn(
         return _need_anchor(ctx, intent_result, steps, started, retrieval.candidates)
 
     # ── 4. 取数 ────────────────────────────────────────────────────────────
-    # **组装一次工具调用的完整入参对象 `ToolInvocation`**，把会话上下文、LLM 提取的槽位，加工成工具 handler 统一接收的入参结构体。
+    # **组装一次工具调用的入参对象 `ToolInvocation`**，随后经 `invocation_args`
+    # 翻译成执行层认识的 camelCase 参数 —— 翻译只此一处，执行体统一接收 args。
     inv = registry.build_invocation(ctx, intent_result.slots)
     # 记录准备调用工具的这一刻时间点，后面用来算这个工具花了多少毫秒
     tool_started = time.perf_counter()
     # 真正调用选中的工具，把准备好的客户端的参数传进去等待工具返回结果，结果存到envelope
     try:
-        envelope = await spec.handler(java, inv)
+        envelope = await execute_tool(
+            spec.name,
+            java,
+            registry.ToolContext(
+                project_id=ctx.project_id,
+                has_anchor=ctx.focus is not None or ctx.method_uid is not None,
+            ),
+            registry.invocation_args(spec.name, inv),
+        )
     except InternalAuthError:
         # 配置错误（两边 token 不一致）—— 必须炸成 500，绝不降级
         raise
@@ -203,7 +213,7 @@ async def run_turn(
         if note:
             explanation.message = f"{explanation.message}\n\n{note}"
 
-    commands = _ui_commands(intent_result.intent, envelope, evidenced, ctx)
+    commands = ui_commands_for(envelope, ctx)
     kept, dropped = filter_ui_commands(commands, evidenced | _ctx_uids(ctx))
     if dropped:
         logger.warning("丢弃了 %d 条指向不存在节点的 UICommand：%s",
@@ -249,10 +259,14 @@ async def _locked_method_body(
     assert ctx.method_uid is not None
     started = time.perf_counter()
     try:
-        env = await java.method_body(
-            ctx.project_id,
-            method_uid=ctx.method_uid,
-            max_lines=registry.DEFAULT_METHOD_MAX_LINES,
+        env = await execute_tool(
+            "method-body",
+            java,
+            registry.ToolContext(project_id=ctx.project_id, has_anchor=True),
+            {
+                "methodUid": ctx.method_uid,
+                "maxLines": registry.DEFAULT_METHOD_MAX_LINES,
+            },
         )
     except InternalAuthError:
         raise
@@ -650,9 +664,7 @@ def _tool_said_no(
 # ==================== 出图命令 ====================
 
 
-def _ui_commands(
-    intent: Intent, env: ToolEnvelope, evidenced: set[str], ctx: AgentContext
-) -> list[UICmd]:
+def ui_commands_for(env: ToolEnvelope, ctx: AgentContext) -> list[UICmd]:
     """从工具结果**确定性推导**出图命令。
 
     ⚠️ **与设计 §6 的差异**：设计里 uiCommands 由 LLM 生成、再由 Java 侧校验。
@@ -661,6 +673,9 @@ def _ui_commands(
     是**先制造幻觉再拦截**；推导则是根本不产生幻觉。
     等出现了真正需要 LLM 判断的 op（如「重点看哪条边」），再把它交给 LLM 不迟 ——
     那时 `guard.filter_ui_commands` 才是必需品，现在它是安全网。
+
+    R6 第二步：去掉两个从来没被用过的参数（`intent` / `evidenced`）——
+    多步循环要按信封逐个推导，带着两个假参数只会让人以为它们有作用。
     """
     data = env.data
     if getattr(data, "start", None) is not None:                 # call-chain

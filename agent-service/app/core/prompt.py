@@ -321,15 +321,35 @@ def _render_envelope(env: ToolEnvelope) -> str:
 
 
 def render_tool_result(env: ToolEnvelope) -> str:
-    """把工具结果渲染成一段文本 —— 供 `core/loop.py` 写进 tool 消息。"""
+    """把工具结果渲染成一段文本 —— 供循环写进 `tool` 消息。
+
+    ⚠️ `ok:false` 必须**原样讲清原因**：Java 的业务失败是「200 + ok:false」，
+    这时 `data` 是 None —— 只渲染 data 的话模型收到的是字面量 `null`，
+    既不知道失败了、也不知道为什么，于是会拿同样的调用再试一遍。
+    2026-11 的 A/B 实测就撞上了：`method-body` 连续三次读不到文件，
+    模型每次都只拿到 `null`，八次工具预算全烧在这里。
+    """
+    if not env.ok:
+        return json.dumps(
+            {"ok": False, "note": env.note or "工具没有给出原因"},
+            ensure_ascii=False,
+        )
     return _render_envelope(env)
 
 
 def json_dumps(obj) -> str:
-    """兜底渲染。单独拆成函数是为了让上面那段读起来不被序列化细节打断。"""
-    if hasattr(obj, "model_dump"):
-        obj = obj.model_dump(by_alias=True)
-    return json.dumps(obj, ensure_ascii=False, indent=2)
+    """兜底渲染。单独拆成函数是为了让上面那段读起来不被序列化细节打断。
+
+    用 `default=` 而不是只处理顶层对象：`classes` 的 data 是 **list[ClassNode]**，
+    顶层是 list（没有 `model_dump`），每个元素才有 —— 只转顶层会直接抛
+    `not JSON serializable`。legacy 从没调过 `classes`，这条路一直没被走到过。
+    """
+    def fallback(value: object) -> object:
+        if hasattr(value, "model_dump"):
+            return value.model_dump(by_alias=True)
+        raise TypeError(f"{type(value).__name__} 不是可序列化的工具结果")
+
+    return json.dumps(obj, ensure_ascii=False, indent=2, default=fallback)
 
 
 def _render_evidence(envelopes: list[ToolEnvelope]) -> tuple[str, list[str]]:
@@ -482,3 +502,58 @@ def explain_messages(
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
+
+
+# ==================== 多步循环（R6 第二步）====================
+
+
+def agent_system(
+    ctx: AgentContext, memories: list[MemoryHit] | None = None
+) -> str:
+    """循环的系统提示。**工具清单不在这里** —— 它在请求的 `tools` 参数里。
+
+    只放「怎么干」和「什么算错」：工具的用途写在各自的 `description` 里，
+    这里再抄一遍就是两处定义，改一处必漏一处。
+
+    记忆块与 `explain_messages` 同一套：**没有命中时逐字不变**，
+    这条基线要一直保住。
+    """
+    state = "\n".join(x for x in (_focus_line(ctx), _screen_line(ctx)) if x)
+    memory_block = render_memories(memories)
+    memory_section = ""
+    if memory_block:
+        memory_section = f"""
+{memory_block}
+上面这些是**过去的结论，可能基于旧版本的图**：它只能帮你理解用户在延续什么，
+里面的类名与结论不能写进 citedUids，也不能声称图里一定还有它。
+"""
+    return f"""\
+你在协助一个刚接手这个 Java 项目的同学理解代码。你可以调用工具查图，最后用 `answer` 收口。
+
+工作方式：
+- 一次只查一件事：先确定起点（`classes` 或用户已选中的类），再 `call-chain` 看流程，
+  需要实现细节再 `method-body`。
+- 工具结果里有断点（gap）时，你可以继续往下查，也可以如实说明「这里是边界」。
+- 证据够了就调 `answer`，不要为了显得勤快而重复查同一个东西。
+- 问题含糊、缺少起点，或者超出这个项目能回答的范围时，用 `clarify` 反问一句并结束 ——
+  不要硬猜。
+- 想让画布跟着你走时用 `navigate`（focus / back / clear）。**查图本身不会改用户画布。**
+- 工具的 uid 参数**只能用在工具结果里见过的全限定名**，不要自己拼包名。没见过就先 `classes`。
+- 方法 uid 必须带完整签名（`owner#方法名(参数类型)`）。**不要用「类名 + 方法名」自己拼** ——
+  检索候选里列的方法名只是提示，不是 uid。只想读源码时，直接给 `method-body` 传类的 uid，
+  让它自己挑方法。
+
+回答的硬性规则（违反任何一条，这条回答就是错的）：
+1. 只能使用工具结果里的事实，绝不用常识补齐 —— 图里没有的调用关系就是没有。
+2. 断点必须如实说「这些地方没解析到」，不能讲成「到此结束」。
+3. 结果标了截断就必须点破「以上不是全部」。
+4. 每段的 citedUids 只能从工具结果出现过的 uid 里挑，**一个都不能编** —— 后端会逐条校验，
+   编的会被丢掉。这一段在讲图的边界时留空数组，不要为了填满而硬塞。
+5. 顺序固定：先结论，再路径，再证据。
+6. 禁止只罗列类名 —— 每提到一个类或方法，说清它在这里干了什么、为什么是它。
+7. 新人不懂这个项目的术语：模块名、业务词第一次出现时解释一句。
+8. 正文用 Markdown；类名、方法名、泛型、代码片段一律用反引号包起来。
+9. 不要自己写 # 标题，标题走 section 的 title 字段。
+
+当前状态：
+{state}{memory_section}"""

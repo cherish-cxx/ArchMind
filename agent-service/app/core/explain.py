@@ -108,13 +108,16 @@ async def explain(
             "error": f"ExplainParseError: {e}",
         })
 
-    citations, message = _template(intent, envelopes, evidenced)
-    return ExplainResult(message=message, citations=citations, degraded=True)
+    citations, body = template_answer(envelopes, evidenced)
+    return ExplainResult(
+        message=f"（讲解服务暂不可用，以下是原始查询结果）{body}",
+        citations=citations,
+        degraded=True,
+    )
 
 
 class ExplainParseError(Exception):
     """讲解输出既不是 {headline, sections} 也不是旧的 {message, citedUids}。"""
-
 
 def _parse_and_ground(text: str, evidenced: set[str]) -> ExplainResult:
     """解析讲解输出，并**逐段**做 evidence 校验。
@@ -179,6 +182,11 @@ def _parse_and_ground(text: str, evidenced: set[str]) -> ExplainResult:
     )
 
 
+#: 多步循环的 `answer` 工具参数走同一个校验。
+#: 用别名而不是复制一份 —— citedUids 的 grounding 只能有一处实现，两份必然漂移。
+parse_answer = _parse_and_ground
+
+
 def _read_sections(raw: dict[str, Any]) -> tuple[str | None, list[dict[str, Any]]]:
     """取出 headline 与段落列表，顺带兼容旧的 `{message, citedUids}`。
 
@@ -222,10 +230,14 @@ def _assemble_message(headline: str | None, sections: list[Section]) -> str:
 # ==================== 降级模板（P2 搬过来，逻辑未改）====================
 
 
-def _template(
-    intent: Intent, envelopes: list[ToolEnvelope], evidenced: set[str]
+def template_answer(
+    envelopes: list[ToolEnvelope], evidenced: set[str]
 ) -> tuple[list[Citation], str]:
-    """没有 LLM 时，用工具结果拼一段干巴巴但**句句有出处**的话。"""
+    """没有 LLM 时，用工具结果拼一段干巴巴但**句句有出处**的话。
+
+    R6 第二步：前缀（「讲解服务暂不可用…」）改由调用方加 —— 预算耗尽时也走这条，
+    但那时模型是好的，写「服务不可用」就是在撒谎。
+    """
     parts: list[str] = []
     citations: list[Citation] = []
     cited: set[str] = set()
@@ -248,7 +260,7 @@ def _template(
                 citations.append(c)
 
     body = " ".join(p for p in parts if p) or "这轮没有取到数据。"
-    return citations, f"（讲解服务暂不可用，以下是原始查询结果）{body}"
+    return citations, body
 
 
 def _template_chain(

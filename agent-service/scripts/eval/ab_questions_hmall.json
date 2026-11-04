@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "name": "A/B 用问题集：hmall（本地上传）",
+  "projectId": 2117859147238891521,
+  "description": "R6 legacy vs tools 的对照题。不锁期望锚点 —— A/B 比的是两条链路的成本与覆盖面，不是答对率。前两题需要跨类追链，后两题直接点名标识符。",
+  "questions": [
+    {
+      "id": "H01",
+      "question": "下单的调用链是怎样的？",
+      "mustDiscloseGap": true
+    },
+    {
+      "id": "H02",
+      "question": "用户下单时订单是怎么创建并保存到数据库的？",
+      "mustDiscloseGap": true
+    },
+    {
+      "id": "H03",
+      "question": "购物车添加商品的流程是怎么走的？"
+    },
+    {
+      "id": "H04",
+      "question": "支付成功后订单状态是怎么更新的？"
+    },
+    {
+      "id": "H05",
+      "question": "TradeClient 被谁调用？"
+    },
+    {
+      "id": "H06",
+      "question": "登录后返回的令牌是怎么生成和校验的？"
+    }
+  ]
+}

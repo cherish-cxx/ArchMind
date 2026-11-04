@@ -44,6 +44,13 @@ services:
       - EMBED_URL=${EMBED_URL:-http://172.21.160.203:8010}
       - QDRANT_URL=${QDRANT_URL:-http://172.21.160.203:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-archmind_classes}
+      # R5 记忆。compose 只注入这里显式列出的变量 —— 只在 deploy/.env 里写不起作用。
+      - MEMORY_ENABLED=${MEMORY_ENABLED:-false}
+      # 只结算最近 N 天结束的会话；首次上线设 0，避免把历史会话一次蒸完
+      - MEMORY_DISTILL_MAX_AGE_DAYS=${MEMORY_DISTILL_MAX_AGE_DAYS:-7}
+      # R6：legacy（六选一）| tools（多步循环）。**必须在这里显式列出来**，
+      # 否则只在 deploy/.env 里写不起作用 —— 和上面 MEMORY_ENABLED 是同一个坑。
+      - AGENT_MODE=${AGENT_MODE:-legacy}
     depends_on:
       migrate:
         condition: service_completed_successfully

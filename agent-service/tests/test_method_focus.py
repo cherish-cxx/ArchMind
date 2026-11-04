@@ -9,6 +9,7 @@ from app.models.intent import Intent, Slots
 from app.models.response import NodeRef, NodeRefType
 from app.models.tool import ChainDirection
 from app.tools import registry
+from app.tools.executor import execute_tool
 from fakes import FakeJava, ok_chain
 
 OWNER = "com.demo.OrderServiceImpl"
@@ -67,7 +68,12 @@ async def test_call_chain_carries_method_uid():
         project_id=1, uid=OWNER, slots=Slots(direction=ChainDirection.UP), method_uid=METHOD
     )
 
-    await registry._call_chain(java, inv)
+    await execute_tool(
+        "call-chain",
+        java,
+        registry.ToolContext(project_id=1, has_anchor=True),
+        registry.invocation_args("call-chain", inv),
+    )
 
     assert java.calls[0] == ("call-chain", 1, OWNER)
     assert java.kwargs[0]["method_uid"] == METHOD
@@ -95,7 +101,12 @@ async def test_method_body_passes_method_uid_and_wide_line_budget():
     java = FakeJava(ok_chain())
     inv = registry.ToolInvocation(project_id=1, uid=OWNER, slots=Slots(), method_uid=METHOD)
 
-    await registry._method_body(java, inv)
+    await execute_tool(
+        "method-body",
+        java,
+        registry.ToolContext(project_id=1, has_anchor=True),
+        registry.invocation_args("method-body", inv),
+    )
 
     assert java.kwargs[0].get("method_uid") == METHOD
     assert java.kwargs[0].get("max_lines") == 300, "方法级只切一个方法，行数预算可以放宽"
@@ -106,7 +117,12 @@ async def test_method_body_falls_back_to_class_when_unlocked():
     java = FakeJava(ok_chain())
     inv = registry.ToolInvocation(project_id=1, uid=OWNER, slots=Slots())
 
-    await registry._method_body(java, inv)
+    await execute_tool(
+        "method-body",
+        java,
+        registry.ToolContext(project_id=1, has_anchor=True),
+        registry.invocation_args("method-body", inv),
+    )
 
     assert java.calls[0][2] == OWNER, "没锁方法时仍按类切"
     assert "method_uid" not in java.kwargs[0]

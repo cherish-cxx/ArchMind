@@ -43,7 +43,9 @@ async def start_index(
 
 @router.get("/status", dependencies=[Depends(require_internal_token)])
 async def index_status(
-    project_id: int = Query(...),
+    #: `alias` 不能省：内部接口对外一律 camelCase（`AskRequest`、`java_client`
+    #: 的 body 都是），漏了它只会认 `?project_id=`，camelCase 请求直接 422。
+    project_id: int = Query(..., alias="projectId"),
     store: IndexStore = Depends(get_index_store),
 ) -> dict:
     state = await store.get_state(project_id)
