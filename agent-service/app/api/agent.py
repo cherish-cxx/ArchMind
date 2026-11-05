@@ -8,15 +8,19 @@ Python **不是**给前端直接调的 —— 它是 Java 后面的内部服务�
 路由里如果出现 `if`，多半是编排漏到了这一层。
 """
 
+import asyncio
+import contextlib
 import logging
 import secrets
 import time
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 
 from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.core.agent_loop import run_agent_turn
+from app.core.events import ANSWER, ERROR, START, STEP, sse_frame
 from app.core.llm import LLMClient
 from app.core.memory import MemoryService
 from app.core.navigation import navigate as apply_navigation
@@ -108,6 +112,34 @@ def _apply_focus(ctx: AgentContext, focus) -> None:
     ctx.focus = focus
 
 
+async def _prepare_ask(
+    req: AskRequest, store: ConversationStore
+) -> tuple[str, AgentContext | None, AgentResponse | None]:
+    """解析/创建本轮 Context，并应用锚点。
+
+    返回 `(conversationId, ctx, expired)`。`expired` 非空时调用方**直接返回它**，
+    不要再跑循环 —— 「带 cid 却找不到」是会话过期，不是新会话。
+
+    抽出来是因为 `/ask` 与 `/ask/stream` 必须行为完全一致：
+    两份拷贝迟早会漂，而漂的那一处一定是过期分支。
+    """
+    conversation_id = req.conversation_id or _new_conversation_id()
+    if req.conversation_id is None:
+        # 没带 cid = 新会话。这是**唯一**该走「创建」的路径。
+        ctx = AgentContext(conversation_id=conversation_id, project_id=req.project_id,
+                           user_id=req.user_id)
+    else:
+        ctx = await store.load_or_none(req.user_id, req.project_id, conversation_id)
+        if ctx is None:
+            return conversation_id, None, _session_expired(conversation_id)
+        ctx.user_id = req.user_id
+
+    _apply_focus(ctx, req.focus)
+    # 每轮都覆盖：前端清掉锁时（不传）这里必须跟着清，否则会拿上一轮的方法答题
+    ctx.method_uid = req.method_uid
+    return conversation_id, ctx, None
+
+
 # ==================== 鉴权 ====================
 
 
@@ -149,26 +181,11 @@ async def ask(
     R6 第三步起**只有多步循环这一条链路**：模型自己选工具，
     预算耗尽或模型不可用时退回模板（设计 §8-C2），不会整轮失败。
     """
-    #看请求里有没有传conversation_id,如果传了，就用传过来的id，否则（or）就调用new，生成全新会话id
-    conversation_id = req.conversation_id or _new_conversation_id()
-    if req.conversation_id is None:
-        # 没带 cid = 新会话。这是**唯一**该走「创建」的路径。
-        ctx = AgentContext(conversation_id=conversation_id, project_id=req.project_id,
-                           user_id=req.user_id)
-    else:
-        # 带了 cid，就去 Redis 取那份 Context。
-        ctx = await store.load_or_none(req.user_id, req.project_id, conversation_id)
-        if ctx is None:
-            # 带了 cid 却找不到 → **会话已过期**（TTL 2h 是既定语义，必然发生）。
-            # 判据是「有没有带 cid」，不是「上下文在不在」——
-            # cid 是后端发的，带了就说明这是一个**曾经存在**的会话。
-            # **不静默开一个新的**：那样用户会在上文丢失的情况下收到一个看似正常的答案。
-            return _session_expired(conversation_id)
-        ctx.user_id = req.user_id
-    # 把请求里的focus更新到会话上下文ctx里面
-    _apply_focus(ctx, req.focus)
-    # 每轮都覆盖：前端清掉锁时（不传）这里必须跟着清，否则会拿上一轮的方法答题
-    ctx.method_uid = req.method_uid
+    # 这一段的语义（新会话 / 过期 / 锚点覆盖）全在 `_prepare_ask` 里，
+    # 因为 `/ask` 和 `/ask/stream` 必须**逐字一致** —— 两份拷贝迟早会漂。
+    conversation_id, ctx, expired = await _prepare_ask(req, store)
+    if expired is not None:
+        return expired
     """
     执行一轮 Agent 回答：模型自己选工具、多次取数，最后用 answer 收口。
     LLM 不可用或预算耗尽时退回模板，不会直接崩掉整个请求。
@@ -180,6 +197,90 @@ async def ask(
     # 循环不知道 conversation_id 是新生成的还是回传的（那是路由层的事），所以在这里补上
     response.conversation_id = conversation_id
     return response
+
+
+# ==================== 流式问答（R6 收尾）====================
+#
+# 和 `/ask` 的关系：**同一轮循环，只是把步骤边跑边推出去**。
+# 答案仍然是一次性的 —— 它是 `answer` 事件里的完整 AgentResponse。
+#
+# 为什么用旁路而不是改造 `/ask`：
+#   - 评测脚本、契约测试、前端回退路径都还在用 `/ask`，改它等于同时改三处；
+#   - SSE 只是传输层，循环一行都不用知道。
+
+
+@router.post("/ask/stream", dependencies=[Depends(require_internal_token)])
+async def ask_stream(
+    req: AskRequest,
+    java: JavaClient = Depends(get_java_client),
+    llm: LLMClient = Depends(get_llm_client),
+    store: ConversationStore = Depends(get_context_store),
+    retriever: Retriever = Depends(get_retriever),
+    memory: MemoryService = Depends(get_memory_service),
+) -> StreamingResponse:
+    """跑一轮，但把步骤实时推给调用方。
+
+    事件顺序**由构造保证**：单生产者（这一轮）写队列、单消费者（生成器）读，
+    `answer` / `error` 永远在最后一个 `step` 之后。
+    """
+    conversation_id, ctx, expired = await _prepare_ask(req, store)
+    queue: asyncio.Queue[tuple[str, dict] | None] = asyncio.Queue()
+
+    def emit_step(step) -> None:
+        queue.put_nowait((STEP, step.model_dump(mode="json", by_alias=True)))
+
+    async def run() -> None:
+        try:
+            if expired is not None:
+                queue.put_nowait((ANSWER, expired.model_dump(mode="json", by_alias=True)))
+                return
+            response = await run_agent_turn(
+                ctx, req.message, java, llm, retriever, memory, on_step=emit_step
+            )
+            persisted = await store.commit_turn(ctx, req.user_id, req.project_id)
+            if response.meta is not None:
+                response.meta.persist_failed = not persisted
+            response.conversation_id = conversation_id
+            queue.put_nowait((ANSWER, response.model_dump(mode="json", by_alias=True)))
+        except asyncio.CancelledError:
+            # 客户端断开：**不落库**。ctx 只在内存里被改过，Redis 仍是本轮之前的状态。
+            raise
+        except Exception as e:  # noqa: BLE001 —— 流已经开始，只能把它变成一帧
+            logger.exception("流式问答失败 cid=%s", conversation_id)
+            queue.put_nowait((ERROR, {
+                "message": "本轮回答失败，请重试",
+                "reason": type(e).__name__,
+            }))
+        finally:
+            queue.put_nowait(None)
+
+    task = asyncio.create_task(run())
+
+    async def frames():
+        try:
+            yield sse_frame(START, {"conversationId": conversation_id})
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                event, data = item
+                yield sse_frame(event, data)
+        finally:
+            # 生成器被关闭 = 客户端断开。取消在跑的那一轮，别再烧 token。
+            if not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+    return StreamingResponse(
+        frames(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            # 反代（nginx）看到这个头就不再攒包
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def _session_expired(conversation_id: str) -> AgentResponse:
