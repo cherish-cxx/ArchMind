@@ -60,7 +60,10 @@ class ClassSourceServiceImplTest {
     }
 
     private void stubClassRow() {
-        when(result.hasNext()).thenReturn(true);
+        // ★ 必须 once-then-false：服务里 `findMethods` 是 `while (result.hasNext())`，
+        // 永久桩成 true 会无限循环直到 OOM（全量套件跑不动就是这个原因）。
+        // 第一问（找类）拿到 true + 一行记录，第二问（方法大纲）拿到 false。
+        when(result.hasNext()).thenReturn(true, false);
         when(result.next()).thenReturn(record);
         when(record.get("uid")).thenReturn(strVal("com.x.Foo"));
         when(record.get("name")).thenReturn(strVal("Foo"));
