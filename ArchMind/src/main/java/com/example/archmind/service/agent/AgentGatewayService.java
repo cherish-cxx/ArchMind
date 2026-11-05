@@ -10,13 +10,19 @@ import com.example.archmind.dto.response.AgentResponse;
 import com.example.archmind.dto.response.ConversationDTO;
 import com.example.archmind.dto.response.ViewportAck;
 import com.example.archmind.service.ast.CodeGraphQueryService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /**
@@ -33,13 +39,26 @@ import java.util.stream.Collectors;
  * {@code BusinessException("无权操作该项目")}），校验通过才把 projectId 交给 Python。</p>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AgentGatewayService {
 
     private final AgentClient agentClient;
     private final CheckProjectUtil checkProjectUtil;
     private final CodeGraphQueryService codeGraphQueryService;
+    private final ObjectMapper objectMapper;
+    private final Executor streamExecutor;
+
+    public AgentGatewayService(AgentClient agentClient,
+                               CheckProjectUtil checkProjectUtil,
+                               CodeGraphQueryService codeGraphQueryService,
+                               ObjectMapper objectMapper,
+                               @Qualifier("agentStreamExecutor") Executor streamExecutor) {
+        this.agentClient = agentClient;
+        this.checkProjectUtil = checkProjectUtil;
+        this.codeGraphQueryService = codeGraphQueryService;
+        this.objectMapper = objectMapper;
+        this.streamExecutor = streamExecutor;
+    }
 
     /** 一轮问答。 */
     public AgentResponse ask(AgentAskRequest req) {
@@ -47,6 +66,103 @@ public class AgentGatewayService {
         // ★ R5：身份显式注入。Python 直连 MySQL，没有 userId 就无法按用户隔离会话与记忆。
         req.setUserId(currentUserIdOrThrow());
         return filterUiCommands(agentClient.ask(req), req.getProjectId());
+    }
+
+    /**
+     * 流式问答。**返回时请求线程立刻释放**，上游读取在独立线程池里跑。
+     *
+     * <p>租户校验必须发生在<b>任何上游调用之前</b>（和 {@link #ask} 同一条边界）。
+     * 区别是：一旦开始推流，就没有 HTTP 状态码可以表达失败了 ——
+     * 所以上游异常统一变成一帧 {@code error}。</p>
+     */
+    public SseEmitter askStream(AgentAskRequest req) {
+        checkProjectUtil.checkProject(req.getProjectId());
+        req.setUserId(currentUserIdOrThrow());
+
+        Long projectId = req.getProjectId();
+        SseEmitter emitter = new SseEmitter(0L);
+        AtomicBoolean alive = new AtomicBoolean(true);
+        emitter.onCompletion(() -> alive.set(false));
+        emitter.onTimeout(() -> {
+            alive.set(false);
+            emitter.complete();
+        });
+
+        String body;
+        try {
+            body = objectMapper.writeValueAsString(req);
+        } catch (RuntimeException e) {
+            throw new AgentBadRequestException("对话请求序列化失败");
+        }
+
+        try {
+            streamExecutor.execute(() -> agentClient.streamAsk(body, new AgentClient.SseSink() {
+                @Override
+                public boolean alive() {
+                    return alive.get();
+                }
+
+                @Override
+                public void event(SseEvent event) {
+                    String data;
+                    try {
+                        data = prepareEvent(event, projectId);
+                    } catch (RuntimeException e) {
+                        log.warn("事件转发失败 [{}] projectId={}: {}",
+                                event.name(), projectId, e.getMessage());
+                        return;
+                    }
+                    try {
+                        emitter.send(SseEmitter.event().name(event.name()).data(data));
+                    } catch (IOException | IllegalStateException e) {
+                        // 客户端走了：停掉读取循环，别再烧 token
+                        alive.set(false);
+                    }
+                }
+
+                @Override
+                public void complete() {
+                    emitter.complete();
+                }
+
+                @Override
+                public void error(Throwable error) {
+                    log.warn("流式对话中断 projectId={}: {}", projectId, error.getMessage());
+                    try {
+                        emitter.send(SseEmitter.event().name("error")
+                                .data("{\"message\":\"对话服务暂时不可用，请稍后再试\"}"));
+                    } catch (IOException | IllegalStateException ignored) {
+                        // 已经断开，没有可做的了
+                    }
+                    emitter.complete();
+                }
+            }));
+        } catch (RejectedExecutionException e) {
+            log.warn("流式问答排队已满，拒绝 projectId={}", projectId);
+            try {
+                emitter.send(SseEmitter.event().name("error")
+                        .data("{\"message\":\"当前对话较多，请稍后再试\"}"));
+            } catch (IOException | IllegalStateException ignored) {
+                // 已经断开
+            }
+            emitter.complete();
+        }
+        return emitter;
+    }
+
+    /**
+     * 按事件类型决定发什么。
+     *
+     * <p>只有 {@code answer} 需要解析：它带着 uiCommands，必须再过一次弱校验。
+     * 其余事件（start / step / error）原样转发 —— 解析再序列化只多一次出错机会。</p>
+     */
+    String prepareEvent(SseEvent event, Long projectId) {
+        if (!"answer".equals(event.name())) {
+            return event.data();
+        }
+        AgentResponse resp = objectMapper.readValue(event.data(), AgentResponse.class);
+        resp = filterUiCommands(resp, projectId);
+        return objectMapper.writeValueAsString(resp);
     }
 
     /** 零 LLM 导航（前端点按钮）。 */

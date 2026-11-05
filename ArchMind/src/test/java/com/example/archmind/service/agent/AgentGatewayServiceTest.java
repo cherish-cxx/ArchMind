@@ -13,6 +13,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,9 +46,13 @@ class AgentGatewayServiceTest {
 
     private AgentGatewayService service;
 
+    private final ObjectMapper mapper = JsonMapper.builder().build();
+
     @BeforeEach
     void setUp() {
-        service = new AgentGatewayService(agentClient, checkProjectUtil, codeGraphQueryService);
+        // 直接执行器：流式那条路在测试里同步跑完，不用等线程
+        service = new AgentGatewayService(
+                agentClient, checkProjectUtil, codeGraphQueryService, mapper, Runnable::run);
     }
 
     // ==================== 假数据构造 ====================
@@ -184,5 +190,38 @@ class AgentGatewayServiceTest {
 
         verify(checkProjectUtil).checkProject(PID);
         assertTrue(resp.getUiCommands().isEmpty());
+    }
+
+    // ==================== 流式（R6 收尾）====================
+
+    @Test
+    void streamForwardsStepsVerbatim() {
+        String out = service.prepareEvent(new SseEvent("step", "{\"n\":1}"), PID);
+
+        assertEquals("{\"n\":1}", out);
+        verifyNoInteractions(codeGraphQueryService);
+    }
+
+    @Test
+    void streamFiltersCommandsOnAnswerEvent() {
+        AgentResponse resp = responseWith(cmd("FOCUS_NODE", "com.x.GONE"));
+        resp.setMessage("答");
+        when(codeGraphQueryService.existingClassUids(eq(PID), anyCollection()))
+                .thenReturn(Set.of());
+
+        String out = service.prepareEvent(
+                new SseEvent("answer", mapper.writeValueAsString(resp)), PID);
+        AgentResponse parsed = mapper.readValue(out, AgentResponse.class);
+
+        assertTrue(parsed.getUiCommands().isEmpty());
+    }
+
+    @Test
+    void streamChecksTenantBeforeStarting() {
+        doThrow(new BusinessException("无权操作该项目"))
+                .when(checkProjectUtil).checkProject(PID);
+
+        assertThrows(BusinessException.class, () -> service.askStream(askRequest()));
+        verifyNoInteractions(agentClient);
     }
 }

@@ -39,4 +39,16 @@ public class AgentProperties {
      * 这类调用失败只是留下一点 Redis 里的孤儿数据，不影响删除结果。</p>
      */
     private int evictTimeoutMs = 3_000;
+
+    /**
+     * 流式问答（{@code /ask/stream}）的整体超时（毫秒）。
+     *
+     * <p>比 {@link #timeoutMs} 长一截：SSE 会把一整轮拉长（首事件之后还要继续跑），
+     * 但它<b>不改变总预算</b> —— 循环自己的 6 次模型调用上限仍是真正的刹车。
+     * 这个值只防「上游半死不活、连接一直挂着」。</p>
+     *
+     * <p>部署侧注意：nginx 的 {@code proxy_read_timeout} 要 ≥ 这个值，
+     * 否则网关还在等、反代已经掐了。</p>
+     */
+    private int streamTimeoutMs = 180_000;
 }

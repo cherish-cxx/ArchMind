@@ -15,8 +15,16 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.ProxySelector;
+import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -38,6 +46,7 @@ public class AgentClient {
     private static final String HEADER = "X-Internal-Token";
 
     private static final String PATH_ASK = "/internal/agent/ask";
+    private static final String PATH_ASK_STREAM = "/internal/agent/ask/stream";
     private static final String PATH_NAVIGATE = "/internal/agent/navigate";
     private static final String PATH_VIEWPORT = "/internal/agent/viewport";
     private static final String PATH_CONVERSATION = "/internal/agent/conversations/{id}";
@@ -49,30 +58,27 @@ public class AgentClient {
 
     private final RestClient longClient;
     private final RestClient shortClient;
+    private final HttpClient streamClient;
+    private final String baseUrl;
+    private final String token;
+    private final int streamTimeoutMs;
 
     public AgentClient(AgentProperties props, @Value("${internal.token}") String token) {
+        this.baseUrl = props.getBaseUrl();
+        this.token = token;
+        this.streamTimeoutMs = props.getStreamTimeoutMs();
+        // 流式必须用 JDK HttpClient 原生接口：RestClient 只能拿到「整个 body」，
+        // 拿不到逐行读的能力，SSE 需要的是后者。
+        this.streamClient = newHttpClient(CONNECT_TIMEOUT_MS);
         this.longClient = build(props, token, props.getTimeoutMs());
         this.shortClient = build(props, token, props.getEvictTimeoutMs());
-        log.info("Agent 客户端就绪: baseUrl={} timeout={}ms evictTimeout={}ms",
-                props.getBaseUrl(), props.getTimeoutMs(), props.getEvictTimeoutMs());
+        log.info("Agent 客户端就绪: baseUrl={} timeout={}ms streamTimeout={}ms evictTimeout={}ms",
+                props.getBaseUrl(), props.getTimeoutMs(), props.getStreamTimeoutMs(),
+                props.getEvictTimeoutMs());
     }
 
     private static RestClient build(AgentProperties props, String token, int timeoutMs) {
-        HttpClient httpClient = HttpClient.newBuilder()
-                // ★ 必须钉死 HTTP/1.1。JDK HttpClient 默认会尝试 **h2c 明文升级**
-                //   （先发 Upgrade: h2c，再退回 HTTP/1.1）。uvicorn 用的 h11 **不认这个升级**，
-                //   直接回 400「Invalid HTTP request received.」——
-                //   表现为 Java 打不通报错却指向 Python，极难看出是协议协商的问题。
-                //   （P4.3 的契约测试抓到的：AgentClientContractTest）
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofMillis(Math.min(CONNECT_TIMEOUT_MS, timeoutMs)))
-                // ★ 显式关掉代理，直连。和 Python 侧 java_client.py 的 trust_env=False 是同一件事：
-                //   Windows 上系统代理（本机是 Clash 挂在 127.0.0.1:7897）一旦被用上，
-                //   连 http://localhost:8000 都会被丢给代理 —— 表现为超时，极难排查。
-                //   服务间调用打的是固定地址，本来就不该走用户的桌面代理。
-                .proxy(ProxySelector.of(null))
-                .build();
-
+        HttpClient httpClient = newHttpClient(Math.min(CONNECT_TIMEOUT_MS, timeoutMs));
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(Duration.ofMillis(timeoutMs));
 
@@ -80,6 +86,23 @@ public class AgentClient {
                 .baseUrl(props.getBaseUrl())
                 .requestFactory(factory)
                 .defaultHeader(HEADER, token)
+                .build();
+    }
+
+    private static HttpClient newHttpClient(int connectTimeoutMs) {
+        return HttpClient.newBuilder()
+                // ★ 必须钉死 HTTP/1.1。JDK HttpClient 默认会尝试 **h2c 明文升级**
+                //   （先发 Upgrade: h2c，再退回 HTTP/1.1）。uvicorn 用的 h11 **不认这个升级**，
+                //   直接回 400「Invalid HTTP request received.」——
+                //   表现为 Java 打不通报错却指向 Python，极难看出是协议协商的问题。
+                //   （P4.3 的契约测试抓到的：AgentClientContractTest）
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
+                // ★ 显式关掉代理，直连。和 Python 侧 java_client.py 的 trust_env=False 是同一件事：
+                //   Windows 上系统代理（本机是 Clash 挂在 127.0.0.1:7897）一旦被用上，
+                //   连 http://localhost:8000 都会被丢给代理 —— 表现为超时，极难排查。
+                //   服务间调用打的是固定地址，本来就不该走用户的桌面代理。
+                .proxy(ProxySelector.of(null))
                 .build();
     }
 
@@ -109,6 +132,70 @@ public class AgentClient {
                 .uri(PATH_CONVERSATION + "?projectId={pid}&userId={uid}",
                         conversationId, projectId, userId)
                 .retrieve().body(ConversationDTO.class), "conversations");
+    }
+
+    /**
+     * 流式问答的接收端。网关实现它，把事件搬进 {@code SseEmitter}。
+     *
+     * <p>{@link #alive()} 让读取循环能在客户端断开后立刻停下 ——
+     * 否则用户已经关掉面板，这边还在把整轮跑完、烧 token。</p>
+     */
+    public interface SseSink {
+        boolean alive();
+
+        void event(SseEvent event);
+
+        void complete();
+
+        void error(Throwable error);
+    }
+
+    /**
+     * 流式问答。**阻塞到上游结束**，调用方必须放到独立线程执行。
+     *
+     * <p>请求体由网关序列化好传进来：这一层只管 HTTP，不认识 DTO。</p>
+     */
+    public void streamAsk(String body, SseSink sink) {
+        HttpRequest request;
+        try {
+            request = HttpRequest.newBuilder(URI.create(baseUrl + PATH_ASK_STREAM))
+                    .header(HEADER, token)
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "text/event-stream")
+                    .timeout(Duration.ofMillis(streamTimeoutMs))
+                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                    .build();
+        } catch (RuntimeException e) {
+            sink.error(e);
+            return;
+        }
+
+        try {
+            HttpResponse<InputStream> response =
+                    streamClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            try (InputStream in = response.body()) {
+                if (response.statusCode() != 200) {
+                    sink.error(new AgentTransportException(
+                            "对话服务返回 HTTP " + response.statusCode()));
+                    return;
+                }
+                SseBlockDecoder decoder = new SseBlockDecoder();
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(in, StandardCharsets.UTF_8));
+                String line;
+                while (sink.alive() && (line = reader.readLine()) != null) {
+                    decoder.accept(line).ifPresent(sink::event);
+                }
+            }
+            if (sink.alive()) {
+                sink.complete();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            sink.error(e);
+        } catch (IOException | RuntimeException e) {
+            sink.error(e);
+        }
     }
 
     /**

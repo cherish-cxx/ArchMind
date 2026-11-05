@@ -9,6 +9,7 @@ import com.example.archmind.dto.response.ConversationDTO;
 import com.example.archmind.dto.response.ViewportAck;
 import com.example.archmind.service.agent.AgentGatewayService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * Agent 对话的**公网入口**（{@code /api/agent/*}），带 JWT。
@@ -41,6 +43,19 @@ public class AgentController {
     @PostMapping("/ask")
     public Result<AgentResponse> ask(@RequestBody AgentAskRequest req) {
         return Result.success(agentGatewayService.ask(req));
+    }
+
+    /**
+     * 流式问答（SSE）。
+     *
+     * <p><b>全项目唯一不包 {@code Result} 的接口</b> —— 事件流本身就是响应体，
+     * 再套一层 {@code {code,message,data}}，前端就没法逐帧解析了。</p>
+     *
+     * <p>控制器只做转发：租户校验、线程池、事件过滤都在网关里。</p>
+     */
+    @PostMapping(value = "/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter askStream(@RequestBody AgentAskRequest req) {
+        return agentGatewayService.askStream(req);
     }
 
     /**
