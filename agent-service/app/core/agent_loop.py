@@ -47,6 +47,7 @@ from app.core.turn_support import (
 from app.core.memory import MemoryService
 from app.core.prompt import agent_system, render_candidates, render_tool_result
 from app.core.retriever import Retriever
+from app.core.step_sink import add_step as _add_step
 from app.models.context import AgentContext, ChatMessage, MessageRole, ToolCall, ToolResult
 from app.models.memory import MemoryHit
 from app.models.response import (
@@ -56,6 +57,7 @@ from app.models.response import (
     NodeRef,
     NodeRefType,
     Step,
+    StepHook,
     StepType,
     Suggestion,
     UICmd,
@@ -213,11 +215,16 @@ async def run_agent_turn(
     llm: Completer,
     retriever: Retriever | None = None,
     memory: MemoryService | None = None,
+    *,
+    on_step: StepHook | None = None,
 ) -> AgentResponse:
     """跑一轮多步调查。
 
     `retriever` 只用来做**初始提示**（在第一次 LLM 之前），
     模型仍然可以自己再 `classes` 一次 —— 预检索是省一次往返，不是唯一入口。
+
+    `on_step` 是**观察者**，不是控制点：它只能看到步骤，不能改变循环走向。
+    回调抛异常会被吞掉并记日志 —— 推流断了不该让整轮回答失败。
 
     记忆触发规则在 `memory.should_recall`，写入走 `explicit_draft` →
     `MemoryService.remember`。会话结算蒸馏不在这里：那是后台任务扫 MySQL。
@@ -226,7 +233,7 @@ async def run_agent_turn(
     started = time.perf_counter()
     steps: list[Step] = []
 
-    retrieval = await retrieve(ctx, message, retriever, steps)
+    retrieval = await retrieve(ctx, message, retriever, steps, on_step)
     ctx.turn.retrieval = retrieval
     if retrieval.candidates:
         ctx.append_retrieval(
@@ -238,7 +245,9 @@ async def run_agent_turn(
     if memory is not None and memory.enabled:
         trigger = memory_trigger(ctx, message, retrieval)
         if trigger is not None:
-            memory_hits = await recall_memories(ctx, message, memory, steps, trigger)
+            memory_hits = await recall_memories(
+                ctx, message, memory, steps, trigger, on_step
+            )
     ctx.turn.memory_hits = memory_hits
 
     known = _seed_known(ctx, retrieval)
@@ -256,12 +265,12 @@ async def run_agent_turn(
 
     if ctx.method_uid:
         await _prefetch_locked_method(
-            ctx, java, messages, known, cache, envelopes, evidence, steps
+            ctx, java, messages, known, cache, envelopes, evidence, steps, on_step
         )
 
     try:
         while not _exhausted(ctx):
-            result = await _ask(ctx, messages, llm, steps)
+            result = await _ask(ctx, messages, llm, steps, on_step=on_step)
             _remember(ctx, messages, result)
 
             if not result.tool_calls:
@@ -307,7 +316,7 @@ async def run_agent_turn(
 
                 if call.name == NAVIGATE:
                     # 本地工具：不扣工具预算、不进缓存（back 两次就该退两级）。
-                    content, command = _run_navigate(ctx, call, known, steps)
+                    content, command = _run_navigate(ctx, call, known, steps, on_step)
                     _append_tool(ctx, messages, call, content)
                     if command is not None:
                         nav_commands.clear()
@@ -321,7 +330,7 @@ async def run_agent_turn(
                     )
                     continue
 
-                content, env = await _run_call(ctx, call, java, known, cache, steps)
+                content, env = await _run_call(ctx, call, java, known, cache, steps, on_step)
                 _append_tool(ctx, messages, call, content)
                 if env is not None:
                     envelopes.append(env)
@@ -338,7 +347,7 @@ async def run_agent_turn(
 
     return await _force_answer(
         ctx, message, java, messages, envelopes, evidence, steps, started, llm,
-        nav_commands, memory,
+        nav_commands, memory, on_step,
     )
 
 
@@ -353,6 +362,7 @@ async def _ask(
     *,
     tools: list[dict[str, Any]] | None = None,
     tool_choice: str | dict[str, Any] | None = None,
+    on_step: StepHook | None = None,
 ) -> LLMResult:
     ctx.budget.steps_used += 1
     ctx.budget.llm_calls_this_turn += 1
@@ -380,7 +390,7 @@ async def _ask(
     detail = f"规划#{ctx.budget.llm_calls_this_turn}"
     if result.tool_calls:
         detail += "：" + "、".join(c.name for c in result.tool_calls)
-    steps.append(Step(n=len(steps) + 1, type=StepType.PLAN, detail=detail, ms=_ms(started)))
+    _add_step(steps, on_step, StepType.PLAN, detail, _ms(started))
     return result
 
 
@@ -394,6 +404,7 @@ async def _run_call(
     known: set[str],
     cache: dict[str, ToolEnvelope],
     steps: list[Step],
+    on_step: StepHook | None = None,
 ) -> tuple[str, ToolEnvelope | None]:
     """执行一次工具调用，返回 `(回填给模型的文本, 信封)`。
 
@@ -403,8 +414,7 @@ async def _run_call(
     key = _cache_key(call)
     if key in cache:
         logger.info("工具 %s 同参数重复调用，复用上一份结果（不扣预算）", call.name)
-        steps.append(Step(n=len(steps) + 1, type=StepType.TOOL,
-                          detail=f"{call.name}(cached)", ms=0))
+        _add_step(steps, on_step, StepType.TOOL, f"{call.name}(cached)", 0)
         return _clip(render_tool_result(cache[key])), None
 
     try:
@@ -430,23 +440,22 @@ async def _run_call(
         raise
     except ToolError as e:
         # 参数错 / 未知工具 / 起点不在已知集合 —— 都是「模型能自己改对」的失败。
-        steps.append(Step(n=len(steps) + 1, type=StepType.TOOL,
-                          detail=f"{call.name}({e.reason.value})", ms=_ms(started)))
+        _add_step(steps, on_step, StepType.TOOL,
+                  f"{call.name}({e.reason.value})", _ms(started))
         return _clip(e.render()), None
     except ToolTransportError as e:
         logger.warning("工具 %s 不可用：%s", call.name, e)
-        steps.append(Step(n=len(steps) + 1, type=StepType.TOOL,
-                          detail=f"{call.name}(down)", ms=_ms(started)))
+        _add_step(steps, on_step, StepType.TOOL, f"{call.name}(down)", _ms(started))
         return _clip(_error_content("transport", f"{type(e).__name__}: {e}")), None
 
     cache[key] = env
     ctx.budget.tool_calls_this_turn += 1
     ctx.turn.tool_results.append(ToolResult(call.name, env))
-    steps.append(Step(
-        n=len(steps) + 1, type=StepType.TOOL,
-        detail=f"{call.name}({args.get('uid') or args.get('methodUid') or '-'})",
-        ms=_ms(started),
-    ))
+    _add_step(
+        steps, on_step, StepType.TOOL,
+        f"{call.name}({args.get('uid') or args.get('methodUid') or '-'})",
+        _ms(started),
+    )
     return _clip(render_tool_result(env)), env
 
 
@@ -462,6 +471,7 @@ async def _prefetch_locked_method(
     envelopes: list[ToolEnvelope],
     evidence: set[str],
     steps: list[Step],
+    on_step: StepHook | None = None,
 ) -> None:
     """用户锁了方法：循环开始前先把这段源码取回来，放进对话。
 
@@ -512,8 +522,8 @@ async def _prefetch_locked_method(
     gained = evidence_uids([env])
     evidence |= gained
     known |= gained | _collect_uids(env.data)
-    steps.append(Step(n=len(steps) + 1, type=StepType.TOOL,
-                      detail=f"method-body({ctx.method_uid})", ms=_ms(started)))
+    _add_step(steps, on_step, StepType.TOOL,
+              f"method-body({ctx.method_uid})", _ms(started))
 
 
 # ==================== 收尾 ====================
@@ -531,6 +541,7 @@ async def _force_answer(
     llm: Completer,
     nav_commands: list[UICmd],
     memory: MemoryService | None,
+    on_step: StepHook | None = None,
 ) -> AgentResponse:
     """预算耗尽 / 模型一直不给答案：逼一次 `answer`，再不行退回模板。
 
@@ -547,7 +558,7 @@ async def _force_answer(
     try:
         result = await _ask(
             ctx, [*messages, nudge], llm, steps,
-            tools=[_ANSWER_DEF], tool_choice="required",
+            tools=[_ANSWER_DEF], tool_choice="required", on_step=on_step,
         )
     except LLMNotConfiguredError:
         raise
@@ -649,7 +660,8 @@ def _respond_clarify(
 
 
 def _run_navigate(
-    ctx: AgentContext, call: ToolCall, known: set[str], steps: list[Step]
+    ctx: AgentContext, call: ToolCall, known: set[str], steps: list[Step],
+    on_step: StepHook | None = None,
 ) -> tuple[str, UICmd | None]:
     """本地导航：只改 `ctx.focus` / `focus_stack`，**不碰 Java、不扣工具预算**。
 
@@ -715,8 +727,7 @@ def _run_navigate(
             "invalid_arguments", "action 只能是 focus / back / clear", field="action"
         ), None
 
-    steps.append(Step(n=len(steps) + 1, type=StepType.TOOL,
-                      detail=f"navigate({action})", ms=_ms(started)))
+    _add_step(steps, on_step, StepType.TOOL, f"navigate({action})", _ms(started))
     return json.dumps(
         {
             "ok": True,

@@ -16,9 +16,19 @@ import time
 from app.core.explain import ExplainResult
 from app.core.memory import MemoryService, explicit_draft, should_recall
 from app.core.retriever import Retriever
+from app.core.step_sink import add_step
 from app.models.context import AgentContext
 from app.models.memory import MemoryHit
-from app.models.response import NodeRef, NodeRefType, Step, StepType, Suggestion, UICmd, UiOp
+from app.models.response import (
+    NodeRef,
+    NodeRefType,
+    Step,
+    StepHook,
+    StepType,
+    Suggestion,
+    UICmd,
+    UiOp,
+)
 from app.models.retrieval import Retrieval
 from app.models.tool import ToolEnvelope
 
@@ -29,7 +39,8 @@ logger = logging.getLogger(__name__)
 
 
 async def retrieve(
-    ctx: AgentContext, message: str, retriever: Retriever | None, steps: list[Step]
+    ctx: AgentContext, message: str, retriever: Retriever | None, steps: list[Step],
+    on_step: StepHook | None = None,
 ) -> Retrieval:
     """无锚点时检索，并把"查没查、查了几个"记进 steps。
 
@@ -44,10 +55,7 @@ async def retrieve(
 
     started = time.perf_counter()
     result = await retriever.search(ctx.project_id, message)
-    steps.append(
-        Step(n=len(steps) + 1, type=StepType.TOOL,
-             detail=_retrieve_detail(result), ms=_ms(started))
-    )
+    add_step(steps, on_step, StepType.TOOL, _retrieve_detail(result), _ms(started))
     return result
 
 
@@ -69,6 +77,7 @@ async def recall_memories(
     memory: MemoryService,
     steps: list[Step],
     reason: str,
+    on_step: StepHook | None = None,
 ) -> list[MemoryHit]:
     """按触发原因召回。失败返回空列表 —— 记忆是附加路径。"""
     started = time.perf_counter()
@@ -77,8 +86,8 @@ async def recall_memories(
     except Exception as e:  # noqa: BLE001
         logger.warning("记忆召回失败，本轮不注入：%s", e)
         return []
-    steps.append(Step(n=len(steps) + 1, type=StepType.TOOL,
-                      detail=f"recall-memory({len(hits)}:{reason})", ms=_ms(started)))
+    add_step(steps, on_step, StepType.TOOL,
+             f"recall-memory({len(hits)}:{reason})", _ms(started))
     return hits
 
 
