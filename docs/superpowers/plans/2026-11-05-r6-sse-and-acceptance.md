@@ -706,7 +706,7 @@ git commit -m "eval: R6 二十题验收集"
 ```python
 def test_jaccard_of_first_three_tools():
     assert jaccard(["a", "b", "c"], ["a", "b", "c"]) == 1.0
-    assert jaccard(["a", "b", "c"], ["a", "x", "y"]) == 0.25   # {a}=1, {a,b,c,x,y}=5
+    assert jaccard(["a", "b", "c"], ["a", "x", "y"]) == 0.2   # {a}=1, 并集 5
     assert jaccard([], []) == 1.0
 
 def test_summarize_reports_drift():
