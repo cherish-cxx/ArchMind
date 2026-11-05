@@ -1,0 +1,204 @@
+{
+  "version": 1,
+  "name": "r6-archmind-20",
+  "projectId": 2115334472151040002,
+  "rev": 1,
+  "description": "R6 验收集：从 retrieval_dataset.archmind.json 派生，补 multiStep / mustDiscloseGap 两个期望字段。",
+  "questions": [
+    {
+      "id": "Q01",
+      "question": "用户注册的时候密码是怎么加密保存的？",
+      "expectAnchorUids": [
+        "com.example.archmind.config.SecurityConfig",
+        "com.example.archmind.service.impl.UserServiceImpl"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": true
+    },
+    {
+      "id": "Q02",
+      "question": "登录成功后返回给前端的凭证里包含哪些信息？",
+      "expectAnchorUids": [
+        "com.example.archmind.dto.response.LoginResponse",
+        "com.example.archmind.controller.AuthController"
+      ],
+      "multiStep": false,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q03",
+      "question": "访问令牌是怎么生成和校验的？",
+      "expectAnchorUids": [
+        "com.example.archmind.common.util.JwtUtil"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q04",
+      "question": "每次请求进来时是怎么识别当前用户的？",
+      "expectAnchorUids": [
+        "com.example.archmind.config.JwtAuthenticationFilter",
+        "com.example.archmind.common.security.SecurityUser"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": true
+    },
+    {
+      "id": "Q05",
+      "question": "用户认证信息是怎么从数据库加载给安全框架的？",
+      "expectAnchorUids": [
+        "com.example.archmind.service.UserDetailsServiceImpl"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q06",
+      "question": "用户没有权限访问某个接口时会返回什么？",
+      "expectAnchorUids": [
+        "com.example.archmind.common.handler.AccessDeniedHandlerImpl"
+      ],
+      "multiStep": false,
+      "mustDiscloseGap": true
+    },
+    {
+      "id": "Q07",
+      "question": "注册接口需要前端传哪些字段？",
+      "expectAnchorUids": [
+        "com.example.archmind.dto.request.RegisterRequest",
+        "com.example.archmind.service.impl.UserServiceImpl"
+      ],
+      "multiStep": false,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q08",
+      "question": "登录之后怎么把旧令牌换成新的？",
+      "expectAnchorUids": [
+        "com.example.archmind.service.impl.AuthServiceImpl",
+        "com.example.archmind.controller.AuthController"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q09",
+      "question": "上传的项目压缩包是怎么安全解压的？",
+      "expectAnchorUids": [
+        "com.example.archmind.service.impl.ZipExtractServiceImpl",
+        "com.example.archmind.service.impl.UploadServiceImpl"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q10",
+      "question": "上传源码后文件记录是怎么写进数据库的？",
+      "expectAnchorUids": [
+        "com.example.archmind.service.impl.UploadServiceImpl",
+        "com.example.archmind.service.impl.FileScannerServiceImpl"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q11",
+      "question": "项目的文件树是怎么构建和查询的？",
+      "expectAnchorUids": [
+        "com.example.archmind.service.impl.FileTreeNodeServiceImpl",
+        "com.example.archmind.dto.response.FileTreeNode"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q12",
+      "question": "上传文件的大小限制在哪里配置？",
+      "expectAnchorUids": [
+        "com.example.archmind.config.UploadProperties"
+      ],
+      "multiStep": false,
+      "mustDiscloseGap": true
+    },
+    {
+      "id": "Q13",
+      "question": "创建项目的接口和请求参数是什么？",
+      "expectAnchorUids": [
+        "com.example.archmind.controller.ProjectController",
+        "com.example.archmind.dto.request.ProjectCreateRequest",
+        "com.example.archmind.service.impl.ProjectServiceImpl"
+      ],
+      "multiStep": false,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q14",
+      "question": "删除项目的时候会清理哪些数据？",
+      "expectAnchorUids": [
+        "com.example.archmind.service.impl.ProjectServiceImpl"
+      ],
+      "multiStep": false,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q15",
+      "question": "怎么保证用户只能操作自己的项目？",
+      "expectAnchorUids": [
+        "com.example.archmind.common.util.CheckProjectUtil"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q16",
+      "question": "分析任务提交后是怎么异步执行的？",
+      "expectAnchorUids": [
+        "com.example.archmind.config.AsyncConfig",
+        "com.example.archmind.service.task.AnalysisTaskExecutor",
+        "com.example.archmind.service.impl.TaskServiceImpl"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": true
+    },
+    {
+      "id": "Q17",
+      "question": "分析流程分成几个阶段，各阶段进度是多少？",
+      "expectAnchorUids": [
+        "com.example.archmind.common.constant.AnalysisStage",
+        "com.example.archmind.service.impl.AnalysisPipelineServiceImpl"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q18",
+      "question": "项目里的 Java 文件是怎么被扫描出来的？",
+      "expectAnchorUids": [
+        "com.example.archmind.service.impl.FileScannerServiceImpl"
+      ],
+      "multiStep": true,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q24",
+      "question": "一个源文件解析后用什么对象表示？",
+      "expectAnchorUids": [
+        "com.example.archmind.model.ast.ParsedFile",
+        "com.example.archmind.model.ast.ParsedClass"
+      ],
+      "multiStep": false,
+      "mustDiscloseGap": false
+    },
+    {
+      "id": "Q27",
+      "question": "分析任务实体里包含哪些字段？",
+      "expectAnchorUids": [
+        "com.example.archmind.entity.Task",
+        "com.example.archmind.dto.response.TaskResponse"
+      ],
+      "multiStep": false,
+      "mustDiscloseGap": false
+    }
+  ]
+}
