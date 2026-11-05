@@ -153,11 +153,14 @@ class Suggestion(CamelModel):
 
 
 class StepType(StrEnum):
-    """`steps[].type`。给用户回放、给自己审计。"""
+    """`steps[].type`。给用户回放、给自己审计。
 
-    INTENT = "INTENT"
+    R6 收尾：多步循环里每一次模型调用都是**规划**，所以 `LLM` 并入 `PLAN`；
+    `INTENT` 随六选一删除，已经没有任何生产者。
+    """
+
+    PLAN = "PLAN"
     TOOL = "TOOL"
-    LLM = "LLM"
 
 
 class Step(CamelModel):

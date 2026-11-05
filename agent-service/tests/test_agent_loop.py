@@ -533,3 +533,20 @@ async def test_long_tool_result_is_clipped():
     body = max(tool_messages(context), key=len)
     assert len(body) <= MAX_TOOL_MESSAGE_CHARS + 100
     assert "已截断" in body
+
+
+# ==================== 步骤类型（R6 收尾）====================
+
+
+async def test_steps_use_plan_not_llm_or_intent():
+    llm = FakeLLM([
+        reply(tool_call("t1", "overview")),
+        reply(tool_call("a1", "answer", ANSWER_ARGS)),
+    ])
+    resp = await run_agent_turn(ctx(), "订单流程", FakeJava(), llm)
+
+    types = {s.type for s in resp.steps}
+    assert StepType.PLAN in types
+    assert types <= {StepType.PLAN, StepType.TOOL}
+    assert not hasattr(StepType, "LLM")
+    assert not hasattr(StepType, "INTENT")

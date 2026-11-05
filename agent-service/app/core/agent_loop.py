@@ -380,7 +380,7 @@ async def _ask(
     detail = f"规划#{ctx.budget.llm_calls_this_turn}"
     if result.tool_calls:
         detail += "：" + "、".join(c.name for c in result.tool_calls)
-    steps.append(Step(n=len(steps) + 1, type=StepType.LLM, detail=detail, ms=_ms(started)))
+    steps.append(Step(n=len(steps) + 1, type=StepType.PLAN, detail=detail, ms=_ms(started)))
     return result
 
 
