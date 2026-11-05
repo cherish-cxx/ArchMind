@@ -66,6 +66,8 @@ def parse_args():
     p.add_argument("--user-id", type=int, default=0)
     p.add_argument("--limit", type=int, default=0, help="只跑前 N 题，0 = 全部")
     p.add_argument("--ids", default="", help="只跑这些题号，逗号分隔（H02,H03）")
+    p.add_argument("--repeats", type=int, default=1,
+                   help="每题重复跑几次。>1 时汇总里会带 drift（工具选择稳定性）")
     p.add_argument("--with-memory", action="store_true")
     p.add_argument("--embed-url", default=settings.embed_url)
     p.add_argument("--qdrant-url", default=settings.qdrant_url)
@@ -131,6 +133,7 @@ def _metrics(question: dict, ctx: AgentContext, resp) -> dict:
 
     llm_calls = ctx.turn.llm_calls
     return {
+        "id": question.get("id"),
         "outcome": ctx.last_outcome,
         "latencyMs": resp.meta.latency_ms,
         "llmCalls": len(llm_calls),
@@ -158,16 +161,31 @@ def _metrics(question: dict, ctx: AgentContext, resp) -> dict:
 async def run_mode(
     mode: str, question: dict, *, args, java, llm, retriever, memory
 ) -> dict:
-    ctx = AgentContext(
-        conversation_id=f"ab-{mode}-{question['id']}",
-        project_id=args.project_id,
-        user_id=args.user_id,
-    )
-    try:
-        resp = await run_agent_turn(ctx, question["question"], java, llm, retriever, memory)
-    except Exception as e:  # noqa: BLE001 —— 一题失败不该终止整轮评测
-        return {"error": f"{type(e).__name__}: {e}"}
-    return _metrics(question, ctx, resp)
+    """跑 `--repeats` 次，返回**第一次成功的指标** + 全部原始 run。
+
+    为什么顶层保留一份完整指标：`_line` 和旧报告读的是它；
+    汇总则改用 `runs`，否则重复跑时 token 只会算一次。
+    """
+    runs: list[dict] = []
+    for i in range(max(1, args.repeats)):
+        ctx = AgentContext(
+            conversation_id=f"ab-{mode}-{question['id']}-{i}",
+            project_id=args.project_id,
+            user_id=args.user_id,
+        )
+        try:
+            resp = await run_agent_turn(
+                ctx, question["question"], java, llm, retriever, memory
+            )
+        except Exception as e:  # noqa: BLE001 —— 一题失败不该终止整轮评测
+            runs.append({"error": f"{type(e).__name__}: {e}"})
+            continue
+        runs.append(_metrics(question, ctx, resp))
+
+    good = [r for r in runs if "error" not in r]
+    if not good:
+        return {"error": runs[0]["error"] if runs else "no runs"}
+    return {**good[0], "runs": runs}
 
 
 # ==================== 汇总 ====================
@@ -177,13 +195,61 @@ def _mean(values: list[float]) -> float | None:
     return round(statistics.fmean(values), 1) if values else None
 
 
+def _runs_of(metrics: dict) -> list[dict]:
+    """一次问题的所有 run。老报告没有 `runs`，就当只跑了一次。"""
+    return metrics.get("runs") or [metrics]
+
+
+def jaccard(a: list[str], b: list[str]) -> float:
+    """工具选择相似度。两边都空算完全一致 —— 那说明两次都没查，不是漂移。"""
+    sa, sb = set(a), set(b)
+    if not sa and not sb:
+        return 1.0
+    return len(sa & sb) / len(sa | sb)
+
+
+def _drift(per_question: list[dict]) -> dict:
+    """同题多次运行，前 3 个工具名的两两 Jaccard 均值。
+
+    比「序列完全相等」现实（多步本来就有顺序自由度），
+    比「集合相等」严格（换掉一个工具会被扣分）。
+    """
+    values: list[float] = []
+    detail: dict[str, float] = {}
+    for metrics in per_question:
+        seqs = [r.get("toolNames", [])[:3] for r in _runs_of(metrics) if "error" not in r]
+        pairs = [
+            jaccard(seqs[i], seqs[j])
+            for i in range(len(seqs))
+            for j in range(i + 1, len(seqs))
+        ]
+        if not pairs:
+            continue
+        detail[str(metrics.get("id") or len(detail))] = round(statistics.fmean(pairs), 3)
+        values.extend(pairs)
+
+    return {
+        "meanJaccard": round(statistics.fmean(values), 3) if values else None,
+        "perQuestion": detail,
+    }
+
+
 def summarize(rows: list[dict], mode: str) -> dict:
-    ok = [r[mode] for r in rows if "error" not in r[mode]]
+    per_question = [r[mode] for r in rows if "error" not in r[mode]]
+    ok = [
+        run
+        for metrics in per_question
+        for run in _runs_of(metrics)
+        if "error" not in run
+    ]
     offered = sum(r["citationsOffered"] for r in ok)
     ungrounded = sum(r["citationsUngrounded"] for r in ok)
     return {
-        "questions": len(ok),
-        "errors": sum(1 for r in rows if "error" in r[mode]),
+        "questions": len(per_question),
+        "runs": len(ok),
+        "errors": sum(1 for r in rows if "error" in r[mode])
+                  + sum(1 for metrics in per_question
+                        for run in _runs_of(metrics) if "error" in run),
         "answers": sum(1 for r in ok if r["outcome"] == "OK"),
         "degrades": sum(1 for r in ok if r["outcome"] in ("DEGRADED", "TOOL_DOWN", "TOOL_NO")),
         "clarifies": sum(
@@ -192,6 +258,7 @@ def summarize(rows: list[dict], mode: str) -> dict:
         "meanLatencyMs": _mean([r["latencyMs"] for r in ok]),
         "meanLlmCalls": _mean([r["llmCalls"] for r in ok]),
         "meanToolCalls": _mean([r["toolCalls"] for r in ok]),
+        "maxToolCalls": max((r["toolCalls"] for r in ok), default=0),
         "totalTokensIn": sum(r["tokensIn"] for r in ok),
         "totalTokensOut": sum(r["tokensOut"] for r in ok),
         "citationsOffered": offered,
@@ -199,6 +266,7 @@ def summarize(rows: list[dict], mode: str) -> dict:
         "ungroundedRate": round(ungrounded / offered, 4) if offered else None,
         "gapRequired": sum(1 for r in ok if r["disclosedGap"] is not None),
         "gapDisclosed": sum(1 for r in ok if r["disclosedGap"] is True),
+        "drift": _drift(per_question),
     }
 
 
@@ -275,6 +343,7 @@ async def main() -> int:
 
     print()
     print(f"tools: {tools}")
+    print(f"drift: {tools['drift']}")
     print(f"[OK] 结果已写入 {args.out}")
     return 0
 

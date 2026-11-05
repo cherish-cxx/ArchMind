@@ -104,3 +104,53 @@ def test_gap_disclosure_is_only_measured_when_required():
 
     assert ab._metrics({"id": "q"}, ctx, resp)["disclosedGap"] is None
     assert ab._metrics({"id": "q", "mustDiscloseGap": True}, ctx, resp)["disclosedGap"] is True
+
+
+# ==================== 重复与漂移 ====================
+
+
+def test_jaccard_of_first_three_tools():
+    assert ab.jaccard(["a", "b", "c"], ["a", "b", "c"]) == 1.0
+    assert ab.jaccard(["a"], ["x"]) == 0.0
+    assert ab.jaccard(["a", "b", "c"], ["a", "x", "y"]) == 0.2
+    assert ab.jaccard([], []) == 1.0
+
+
+def _run(tools: list[str]) -> dict:
+    return {
+        "toolNames": tools,
+        "outcome": "OK",
+        "latencyMs": 10,
+        "llmCalls": 2,
+        "toolCalls": len(tools),
+        "tokensIn": 5,
+        "tokensOut": 5,
+        "citationsOffered": 0,
+        "citationsUngrounded": 0,
+        "disclosedGap": None,
+    }
+
+
+def test_summarize_counts_every_run_and_reports_drift():
+    rows = [{
+        "id": "Q01",
+        "question": "q",
+        "tools": {"id": "Q01", "runs": [_run(["a", "b"]), _run(["a", "c"])]},
+    }]
+
+    summary = ab.summarize(rows, "tools")
+
+    assert summary["questions"] == 1
+    assert summary["runs"] == 2
+    assert summary["totalTokensIn"] == 10
+    # {"a"} / {"a","b","c"} = 1/3
+    assert summary["drift"]["meanJaccard"] == 0.333
+    assert summary["drift"]["perQuestion"]["Q01"] == 0.333
+
+
+def test_summarize_without_repeats_has_no_drift():
+    rows = [{"id": "Q01", "question": "q", "tools": _run(["a"])}]
+    summary = ab.summarize(rows, "tools")
+
+    assert summary["runs"] == 1
+    assert summary["drift"]["meanJaccard"] is None
