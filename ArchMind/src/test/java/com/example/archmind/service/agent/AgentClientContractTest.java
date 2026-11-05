@@ -64,6 +64,8 @@ class AgentClientContractTest {
     void navigateReachesPythonAndDeserializesTheWholeResponse() {
         NavigateRequest req = new NavigateRequest();
         req.setProjectId(1001L);
+        // R5 起 userId 是必填（Python 直连 MySQL 做隔离）—— 不传会被 422 拒掉
+        req.setUserId(2001L);
         req.setConversationId("c_contract_probe");
         req.setOp("BACK");
 
@@ -84,9 +86,15 @@ class AgentClientContractTest {
         // 对内是 POST /internal/agent/viewport（id 在 body）—— 这里验的就是这次翻译
         ViewportReportRequest req = new ViewportReportRequest();
         req.setProjectId(1001L);
+        req.setUserId(2001L);          // R5 起必填，理由同 navigate
         req.setConversationId("c_contract_probe");
         req.setRev(1);
         req.setVisibleNodes(java.util.List.of("com.x.A"));
+        // 标量也要给值：Python 侧这几个字段有默认值，但**显式 null 不触发默认值**。
+        // 生产上前端每次都会带，漏掉的话契约测试会被 422 拒掉。
+        req.setMode("cumulative");
+        req.setHops(0);
+        req.setFoldedCount(0);
 
         ViewportAck ack = client.reportViewport(req);
 
@@ -105,8 +113,12 @@ class AgentClientContractTest {
 
     @Test
     void evictReachesPython() {
-        // 不存在的项目也应「成功」（删 0 个），证明短超时实例也能正常打通
-        assertDoesNotThrow(() -> client.evictProject(999_999_999L));
+        // 不存在的项目也应「成功」（删 0 个），证明这条链路能打通。
+        // 超时放宽到 15s：这里验的是**接线**，不是延迟预算 —— evict 会顺带清 Qdrant/MySQL，
+        // 依赖在另一台机器上时 3s 的短超时本来就不够（生产里它们在同一个内网）。
+        props.setEvictTimeoutMs(15_000);
+        AgentClient slowClient = new AgentClient(props, TOKEN);
+        assertDoesNotThrow(() -> slowClient.evictProject(999_999_999L));
     }
 
     // ==================== 错误分类 ====================
