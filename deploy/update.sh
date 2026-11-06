@@ -53,7 +53,10 @@ sync_repo() {
 
 services=()
 if sync_repo "$BACKEND_DIR" "后端"; then
-  services+=(backend agent-service)
+  # migrate 必须一起重建：它的镜像里带的是 alembic/versions，
+  # 新增迁移后不重建会报 "Can't locate revision"，agent-service 因为
+  # depends_on 它而根本起不来。
+  services+=(backend agent-service migrate)
 fi
 if sync_repo "$FRONTEND_DIR" "前端"; then
   services+=(frontend)
