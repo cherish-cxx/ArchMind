@@ -9,6 +9,7 @@ P3 只换 `message` 的来源（模板 → LLM），不产生接口变更。
   - `StepType`：示例里出现过 `INTENT` / `TOOL` / `LLM`，是否还有别的（如四道拦截）待定
 """
 
+from collections.abc import Callable
 from enum import StrEnum
 from typing import Any
 
@@ -170,6 +171,11 @@ class Step(CamelModel):
     type: StepType
     detail: str
     ms: int
+
+
+#: 步骤产生时的回调（SSE 推流用）。**必须同步且不阻塞** ——
+#: 它在事件循环里被直接调用，只允许做 `queue.put_nowait` 这类动作。
+StepHook = Callable[[Step], None]
 
 
 class Meta(CamelModel):
