@@ -143,6 +143,14 @@ public class AgentClient {
     public interface SseSink {
         boolean alive();
 
+        /**
+         * 上游响应体就绪。网关拿它以便在客户端断开时**主动关闭** ——
+         * 不关的话，`readLine()` 会一直阻塞到下一个事件，Python 那头就继续跑、
+         * 继续烧 token，最后还会把这一轮落库。
+         */
+        default void onOpen(InputStream upstream) {
+        }
+
         void event(SseEvent event);
 
         void complete();
@@ -179,6 +187,7 @@ public class AgentClient {
                             "对话服务返回 HTTP " + response.statusCode()));
                     return;
                 }
+                sink.onOpen(in);
                 SseBlockDecoder decoder = new SseBlockDecoder();
                 BufferedReader reader = new BufferedReader(
                         new InputStreamReader(in, StandardCharsets.UTF_8));
@@ -189,6 +198,9 @@ public class AgentClient {
             }
             if (sink.alive()) {
                 sink.complete();
+                log.debug("上游流正常结束，已请求关闭发射器");
+            } else {
+                log.debug("上游流结束但接收端已标记不可用，不 complete");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

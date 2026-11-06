@@ -43,6 +43,8 @@ class AgentGatewayServiceTest {
     private CheckProjectUtil checkProjectUtil;
     @Mock
     private CodeGraphQueryService codeGraphQueryService;
+    @Mock
+    private java.util.concurrent.ScheduledExecutorService heartbeat;
 
     private AgentGatewayService service;
 
@@ -52,7 +54,8 @@ class AgentGatewayServiceTest {
     void setUp() {
         // 直接执行器：流式那条路在测试里同步跑完，不用等线程
         service = new AgentGatewayService(
-                agentClient, checkProjectUtil, codeGraphQueryService, mapper, Runnable::run);
+                agentClient, checkProjectUtil, codeGraphQueryService, mapper,
+                Runnable::run, heartbeat);
     }
 
     // ==================== 假数据构造 ====================

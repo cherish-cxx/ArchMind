@@ -5,7 +5,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -36,5 +38,22 @@ public class AgentStreamConfig {
                     return t;
                 },
                 new ThreadPoolExecutor.AbortPolicy());
+    }
+
+    /**
+     * SSE 心跳。**不是为了保活，是为了发现「人已经走了」**。
+     *
+     * <p>Tomcat 只有在写响应时才会发现客户端断开。如果模型正安静地想 20 秒，
+     * 这期间一个字节都不写，Java 就不知道对面已经关了 —— 上游会继续跑完、
+     * 继续烧 token，最后还把这一轮落库。每 2s 写一个注释帧，断开就能及时暴露。</p>
+     */
+    @Bean(name = "agentStreamHeartbeat", destroyMethod = "shutdown")
+    public ScheduledExecutorService agentStreamHeartbeat() {
+        AtomicInteger seq = new AtomicInteger();
+        return Executors.newScheduledThreadPool(1, r -> {
+            Thread t = new Thread(r, "agent-heartbeat-" + seq.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        });
     }
 }

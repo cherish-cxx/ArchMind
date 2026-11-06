@@ -17,12 +17,17 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -47,17 +52,20 @@ public class AgentGatewayService {
     private final CodeGraphQueryService codeGraphQueryService;
     private final ObjectMapper objectMapper;
     private final Executor streamExecutor;
+    private final ScheduledExecutorService heartbeat;
 
     public AgentGatewayService(AgentClient agentClient,
                                CheckProjectUtil checkProjectUtil,
                                CodeGraphQueryService codeGraphQueryService,
                                ObjectMapper objectMapper,
-                               @Qualifier("agentStreamExecutor") Executor streamExecutor) {
+                               @Qualifier("agentStreamExecutor") Executor streamExecutor,
+                               @Qualifier("agentStreamHeartbeat") ScheduledExecutorService heartbeat) {
         this.agentClient = agentClient;
         this.checkProjectUtil = checkProjectUtil;
         this.codeGraphQueryService = codeGraphQueryService;
         this.objectMapper = objectMapper;
         this.streamExecutor = streamExecutor;
+        this.heartbeat = heartbeat;
     }
 
     /** 一轮问答。 */
@@ -82,9 +90,17 @@ public class AgentGatewayService {
         Long projectId = req.getProjectId();
         SseEmitter emitter = new SseEmitter(0L);
         AtomicBoolean alive = new AtomicBoolean(true);
-        emitter.onCompletion(() -> alive.set(false));
-        emitter.onTimeout(() -> {
+        AtomicReference<ScheduledFuture<?>> beat = new AtomicReference<>();
+        AtomicReference<InputStream> upstream = new AtomicReference<>();
+        emitter.onCompletion(() -> {
+            log.debug("SSE 完成回调 projectId={}", projectId);
             alive.set(false);
+            cancel(beat);
+        });
+        emitter.onTimeout(() -> {
+            log.warn("SSE 超时 projectId={}", projectId);
+            alive.set(false);
+            cancel(beat);
             emitter.complete();
         });
 
@@ -95,49 +111,77 @@ public class AgentGatewayService {
             throw new AgentBadRequestException("对话请求序列化失败");
         }
 
+        // 心跳：**不是保活，是发现断开**。Tomcat 只在写响应时才知道客户端走了；
+        // 模型安静思考时一个字节都不写，断开就会拖到整轮跑完 —— 那时候再停已经晚了。
+        beat.set(heartbeat.scheduleAtFixedRate(() -> {
+            if (!alive.get()) {
+                return;
+            }
+            try {
+                emitter.send(SseEmitter.event().comment("ping"));
+            } catch (IOException | IllegalStateException e) {
+                alive.set(false);
+                closeQuietly(upstream.get());
+            }
+        }, 2, 2, TimeUnit.SECONDS));
+
         try {
-            streamExecutor.execute(() -> agentClient.streamAsk(body, new AgentClient.SseSink() {
-                @Override
-                public boolean alive() {
-                    return alive.get();
-                }
+            streamExecutor.execute(() -> {
+                try {
+                    agentClient.streamAsk(body, new AgentClient.SseSink() {
+                        @Override
+                        public boolean alive() {
+                            return alive.get();
+                        }
 
-                @Override
-                public void event(SseEvent event) {
-                    String data;
-                    try {
-                        data = prepareEvent(event, projectId);
-                    } catch (RuntimeException e) {
-                        log.warn("事件转发失败 [{}] projectId={}: {}",
-                                event.name(), projectId, e.getMessage());
-                        return;
-                    }
-                    try {
-                        emitter.send(SseEmitter.event().name(event.name()).data(data));
-                    } catch (IOException | IllegalStateException e) {
-                        // 客户端走了：停掉读取循环，别再烧 token
-                        alive.set(false);
-                    }
-                }
+                        @Override
+                        public void onOpen(InputStream in) {
+                            upstream.set(in);
+                        }
 
-                @Override
-                public void complete() {
-                    emitter.complete();
-                }
+                        @Override
+                        public void event(SseEvent event) {
+                            String data;
+                            try {
+                                data = prepareEvent(event, projectId);
+                            } catch (RuntimeException e) {
+                                log.warn("事件转发失败 [{}] projectId={}: {}",
+                                        event.name(), projectId, e.getMessage());
+                                return;
+                            }
+                            try {
+                                emitter.send(SseEmitter.event().name(event.name()).data(data));
+                            } catch (IOException | IllegalStateException e) {
+                                // 客户端走了：停掉读取循环，别再烧 token
+                                alive.set(false);
+                                closeQuietly(upstream.get());
+                            }
+                        }
 
-                @Override
-                public void error(Throwable error) {
-                    log.warn("流式对话中断 projectId={}: {}", projectId, error.getMessage());
-                    try {
-                        emitter.send(SseEmitter.event().name("error")
-                                .data("{\"message\":\"对话服务暂时不可用，请稍后再试\"}"));
-                    } catch (IOException | IllegalStateException ignored) {
-                        // 已经断开，没有可做的了
-                    }
-                    emitter.complete();
+                        @Override
+                        public void complete() {
+                            log.debug("SSE 请求关闭 projectId={}", projectId);
+                            emitter.complete();
+                        }
+
+                        @Override
+                        public void error(Throwable error) {
+                            log.warn("流式对话中断 projectId={}: {}", projectId, error.getMessage());
+                            try {
+                                emitter.send(SseEmitter.event().name("error")
+                                        .data("{\"message\":\"对话服务暂时不可用，请稍后再试\"}"));
+                            } catch (IOException | IllegalStateException ignored) {
+                                // 已经断开，没有可做的了
+                            }
+                            emitter.complete();
+                        }
+                    });
+                } finally {
+                    cancel(beat);
                 }
-            }));
+            });
         } catch (RejectedExecutionException e) {
+            cancel(beat);
             log.warn("流式问答排队已满，拒绝 projectId={}", projectId);
             try {
                 emitter.send(SseEmitter.event().name("error")
@@ -148,6 +192,24 @@ public class AgentGatewayService {
             emitter.complete();
         }
         return emitter;
+    }
+
+    private static void cancel(AtomicReference<ScheduledFuture<?>> beat) {
+        ScheduledFuture<?> future = beat.getAndSet(null);
+        if (future != null) {
+            future.cancel(false);
+        }
+    }
+
+    private static void closeQuietly(InputStream in) {
+        if (in == null) {
+            return;
+        }
+        try {
+            in.close();
+        } catch (IOException ignored) {
+            // 关上游只是为了让它早点结束，关不掉也无所谓
+        }
     }
 
     /**

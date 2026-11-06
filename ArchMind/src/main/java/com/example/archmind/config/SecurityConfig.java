@@ -1,6 +1,7 @@
 package com.example.archmind.config;
 
 import com.example.archmind.common.handler.AccessDeniedHandlerImpl;
+import jakarta.servlet.DispatcherType;
 import com.example.archmind.common.handler.AuthenticationEntryPointImpl;
 import com.example.archmind.common.security.InternalTokenFilter;
 import org.springframework.beans.factory.annotation.Value;
@@ -79,6 +80,12 @@ public class SecurityConfig {
 
                 // 4. 请求授权配置
                 .authorizeHttpRequests(auth -> auth
+                        // ★ ASYNC / ERROR 派发不再重复鉴权。
+                        //   SSE（SseEmitter.complete()）结束时会触发一次 ASYNC 派发，
+                        //   而 JWT 过滤器只跑 REQUEST 派发，此时 SecurityContext 是空的 ——
+                        //   不放行就会在响应已提交后抛 AccessDenied，连接被重置，
+                        //   前端永远等不到流结束。初次请求已经过完整的鉴权链，这里放行是安全的。
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         // 白名单路径（无需认证）
                         .requestMatchers(
                                 "/api/auth/login",
