@@ -78,6 +78,18 @@ class ConversationStore:
         return AgentContext(conversation_id=conversation_id, project_id=project_id,
                             user_id=user_id)
 
+    async def list_conversations(
+        self, user_id: int, project_id: int | None = None, limit: int = 50
+    ):
+        """会话索引：只读 MySQL，不碰 Redis（索引页不需要每条的完整 Context）。"""
+        return await self._repo.list_conversations(user_id, project_id, limit)
+
+    async def load_turns(
+        self, user_id: int, project_id: int, conversation_id: str
+    ):
+        """会话历史：返回按 turn_no 正序的有效回合。"""
+        return await self._repo.load_turns(user_id, project_id, conversation_id)
+
     # ==================== 写 ====================
 
     async def save(self, ctx: AgentContext) -> None:

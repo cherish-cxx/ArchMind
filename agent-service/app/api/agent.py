@@ -97,6 +97,10 @@ def _new_conversation_id() -> str:
     return f"c_{uuid.uuid4().hex[:16]}"
 
 
+def _iso(value) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
 def _apply_focus(ctx: AgentContext, focus) -> None:
     """把请求里的锚点应用到这个会话上。
 
@@ -396,6 +400,86 @@ async def viewport(req: ViewportReport, store: ConversationStore = Depends(get_c
     )
     await store.save(ctx)
     return {"accepted": True, "reason": None, "rev": ctx.viewport.rev}
+
+
+@router.get("/conversations", dependencies=[Depends(require_internal_token)])
+async def list_conversations(
+    user_id: int = Query(alias="userId"),
+    project_id: int | None = Query(default=None, alias="projectId"),
+    store: ConversationStore = Depends(get_context_store),
+) -> dict:
+    """会话索引：一个项目下可以有多个会话，每个会话是一份独立上下文。
+
+    不传 projectId 时跨项目返回（前端「最近会话」一次拿全）；
+    projectId 只用于过滤，归属隔离仍由 user_id 保证。
+    """
+    rows = await store.list_conversations(user_id, project_id)
+    return {
+        "conversations": [
+            {
+                "id": c.id,
+                "projectId": c.project_id,
+                "title": c.title or "新会话",
+                "turnCount": c.turn_count,
+                "status": c.status,
+                "createdAt": _iso(c.created_at),
+                "updatedAt": _iso(c.updated_at),
+            }
+            for c in rows
+        ]
+    }
+
+
+@router.get(
+    "/conversations/{conversation_id}/messages",
+    dependencies=[Depends(require_internal_token)],
+)
+async def get_conversation_messages(
+    conversation_id: str,
+    project_id: int = Query(alias="projectId"),
+    user_id: int = Query(alias="userId"),
+    store: ConversationStore = Depends(get_context_store),
+) -> dict:
+    """会话历史：把回合流水还原成前端可直接渲染的消息列表。
+
+    只给**已经落库的完整回合**（ACTIVE），不重放工具调用与检索细节 ——
+    那些在 `agent_turn` 里，属于审计面，不是对话面。
+    """
+    turns = await store.load_turns(user_id, project_id, conversation_id)
+    if not turns:
+        return {"exists": False, "reason": "SESSION_GONE", "messages": []}
+
+    messages: list[dict] = []
+    for t in turns:
+        created = _iso(t.created_at)
+        messages.append({
+            "role": "user",
+            "text": t.question or "",
+            "createdAt": created,
+        })
+        messages.append({
+            "role": "agent",
+            "text": t.answer_message or "",
+            "headline": t.headline,
+            "sections": t.sections_json or [],
+            "citations": t.citations_json or [],
+            "steps": t.steps_json or [],
+            "meta": {
+                "intent": t.intent,
+                "confidence": t.confidence,
+                "graphRev": t.graph_rev,
+                "latencyMs": t.latency_ms,
+                "persistFailed": False,
+            },
+            "createdAt": created,
+        })
+
+    return {
+        "exists": True,
+        "reason": None,
+        "conversationId": conversation_id,
+        "messages": messages,
+    }
 
 
 @router.get("/conversations/{conversation_id}", dependencies=[Depends(require_internal_token)])

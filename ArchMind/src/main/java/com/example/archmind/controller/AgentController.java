@@ -6,6 +6,8 @@ import com.example.archmind.dto.request.NavigateRequest;
 import com.example.archmind.dto.request.ViewportReportRequest;
 import com.example.archmind.dto.response.AgentResponse;
 import com.example.archmind.dto.response.ConversationDTO;
+import com.example.archmind.dto.response.ConversationHistoryDTO;
+import com.example.archmind.dto.response.ConversationSummaryDTO;
 import com.example.archmind.dto.response.ViewportAck;
 import com.example.archmind.service.agent.AgentGatewayService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.List;
 
 /**
  * Agent 对话的**公网入口**（{@code /api/agent/*}），带 JWT。
@@ -81,5 +85,21 @@ public class AgentController {
     public Result<ConversationDTO> getConversation(@PathVariable String conversationId,
                                                    @RequestParam Long projectId) {
         return Result.success(agentGatewayService.getConversation(conversationId, projectId));
+    }
+
+    /** 会话索引：一个项目下可以有多个会话，不传 projectId 时跨项目。 */
+    @GetMapping("/conversations")
+    public Result<List<ConversationSummaryDTO>> listConversations(
+            @RequestParam(required = false) Long projectId) {
+        return Result.success(agentGatewayService.listConversations(projectId));
+    }
+
+    /** 会话历史：打开一个已存在的会话时恢复消息列表。 */
+    @GetMapping("/conversations/{conversationId}/messages")
+    public Result<ConversationHistoryDTO> getConversationMessages(
+            @PathVariable String conversationId,
+            @RequestParam Long projectId) {
+        return Result.success(
+                agentGatewayService.getConversationMessages(conversationId, projectId));
     }
 }

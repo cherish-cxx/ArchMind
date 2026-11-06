@@ -8,6 +8,9 @@ import com.example.archmind.dto.request.NavigateRequest;
 import com.example.archmind.dto.request.ViewportReportRequest;
 import com.example.archmind.dto.response.AgentResponse;
 import com.example.archmind.dto.response.ConversationDTO;
+import com.example.archmind.dto.response.ConversationHistoryDTO;
+import com.example.archmind.dto.response.ConversationListDTO;
+import com.example.archmind.dto.response.ConversationSummaryDTO;
 import com.example.archmind.dto.response.ViewportAck;
 import com.example.archmind.service.ast.CodeGraphQueryService;
 import lombok.extern.slf4j.Slf4j;
@@ -254,6 +257,29 @@ public class AgentGatewayService {
     public ConversationDTO getConversation(String conversationId, Long projectId) {
         checkProjectUtil.checkProject(projectId);
         return agentClient.getConversation(conversationId, projectId, currentUserIdOrThrow());
+    }
+
+    /**
+     * 会话索引。
+     *
+     * <p>{@code projectId} 为空时跨项目返回 —— 前端「最近会话」要一次拿全。
+     * 指定项目时仍然先做归属校验；不指定时 Python 按 {@code userId} 隔离，
+     * 不会返回别人的会话。</p>
+     */
+    public List<ConversationSummaryDTO> listConversations(Long projectId) {
+        if (projectId != null) {
+            checkProjectUtil.checkProject(projectId);
+        }
+        ConversationListDTO dto = agentClient.listConversations(
+                projectId, currentUserIdOrThrow());
+        return dto == null ? List.of() : dto.getConversations();
+    }
+
+    /** 会话历史：打开一个已存在的会话时恢复消息列表。 */
+    public ConversationHistoryDTO getConversationMessages(String conversationId, Long projectId) {
+        checkProjectUtil.checkProject(projectId);
+        return agentClient.getConversationMessages(
+                conversationId, projectId, currentUserIdOrThrow());
     }
 
     /**

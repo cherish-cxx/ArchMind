@@ -96,6 +96,38 @@ class ConversationRepo:
             messages.extend(chunk or [])
         return messages
 
+    async def list_conversations(
+        self, user_id: int, project_id: int | None = None, limit: int = 50
+    ) -> list[Conversation]:
+        """会话索引页用：按最近活动倒序列出该用户的会话。
+
+        project_id 为空时跨项目返回 —— 前端「最近会话」需要一次拿全，
+        再自己按项目分组/标注项目名，避免每个项目发一次请求。
+        """
+        async with self._db.session() as s:
+            stmt = select(Conversation).where(
+                Conversation.user_id == user_id,
+            )
+            if project_id is not None:
+                stmt = stmt.where(Conversation.project_id == project_id)
+            stmt = stmt.order_by(Conversation.updated_at.desc()).limit(limit)
+            rows = (await s.execute(stmt)).scalars().all()
+        return list(rows)
+
+    async def load_turns(
+        self, user_id: int, project_id: int, conversation_id: str
+    ) -> list[Turn]:
+        """会话历史页用：按 turn_no 正序取回全部有效回合。"""
+        async with self._db.session() as s:
+            rows = (await s.execute(
+                select(Turn).where(
+                    Turn.conversation_id == conversation_id,
+                    Turn.user_id == user_id,
+                    Turn.project_id == project_id,
+                ).order_by(Turn.turn_no.asc())
+            )).scalars().all()
+        return list(rows)
+
     # ==================== 记忆蒸馏（R5 阶段 3）====================
 
     async def idle_conversations_for_distill(

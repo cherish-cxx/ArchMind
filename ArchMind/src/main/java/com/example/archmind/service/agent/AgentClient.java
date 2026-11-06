@@ -6,6 +6,8 @@ import com.example.archmind.dto.request.NavigateRequest;
 import com.example.archmind.dto.request.ViewportReportRequest;
 import com.example.archmind.dto.response.AgentResponse;
 import com.example.archmind.dto.response.ConversationDTO;
+import com.example.archmind.dto.response.ConversationHistoryDTO;
+import com.example.archmind.dto.response.ConversationListDTO;
 import com.example.archmind.dto.response.ViewportAck;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,6 +52,9 @@ public class AgentClient {
     private static final String PATH_NAVIGATE = "/internal/agent/navigate";
     private static final String PATH_VIEWPORT = "/internal/agent/viewport";
     private static final String PATH_CONVERSATION = "/internal/agent/conversations/{id}";
+    private static final String PATH_CONVERSATIONS = "/internal/agent/conversations";
+    private static final String PATH_CONVERSATION_MESSAGES =
+            "/internal/agent/conversations/{id}/messages";
     private static final String PATH_EVICT = "/internal/agent/admin/evict";
     private static final String PATH_INDEX = "/internal/index";
 
@@ -132,6 +137,25 @@ public class AgentClient {
                 .uri(PATH_CONVERSATION + "?projectId={pid}&userId={uid}",
                         conversationId, projectId, userId)
                 .retrieve().body(ConversationDTO.class), "conversations");
+    }
+
+    /** 会话索引：跨项目或指定项目，按最近活动倒序。 */
+    public ConversationListDTO listConversations(Long projectId, Long userId) {
+        String query = projectId == null
+                ? "?userId=" + userId
+                : "?projectId=" + projectId + "&userId=" + userId;
+        return execute(() -> longClient.get()
+                .uri(PATH_CONVERSATIONS + query)
+                .retrieve().body(ConversationListDTO.class), "conversations");
+    }
+
+    /** 会话历史：打开一个已存在的会话时恢复消息列表。 */
+    public ConversationHistoryDTO getConversationMessages(
+            String conversationId, Long projectId, Long userId) {
+        return execute(() -> longClient.get()
+                .uri(PATH_CONVERSATION_MESSAGES + "?projectId={pid}&userId={uid}",
+                        conversationId, projectId, userId)
+                .retrieve().body(ConversationHistoryDTO.class), "conversation-messages");
     }
 
     /**
