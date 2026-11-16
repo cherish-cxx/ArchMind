@@ -5,7 +5,10 @@
 """
 
 import httpx
+from starlette.testclient import TestClient
 
+from app.mcp import deps
+from app.mcp.asgi import create_app
 from app.mcp.auth import PatAuthMiddleware
 from app.mcp.principal import McpAuthError, Principal, current_principal
 
@@ -111,3 +114,50 @@ async def test_lifespan_scope_is_forwarded_without_auth():
     await app({"type": "lifespan"}, None, None)
 
     assert seen["type"] == "lifespan"
+
+
+# ── 完整 ASGI 组装：反向代理 Host 与 /mcp 路由 ──────────────────────────────
+
+
+class _Services:
+    """create_app 只用到 context 与 limiter；其余组件这里不需要。"""
+
+    def __init__(self) -> None:
+        self.context = FakeContext()
+        self.limiter = FakeLimiter()
+
+
+def _post_mcp(client: TestClient):
+    return client.post(
+        "/mcp",
+        headers={
+            "Authorization": "Bearer good",
+            "Accept": "application/json, text/event-stream",
+        },
+        json={},
+        follow_redirects=False,
+    )
+
+
+def test_non_localhost_host_header_is_not_blocked_by_dns_rebinding():
+    """反代传入外部域名 Host；FastMCP 的默认校验会在鉴权前 421。"""
+    app = create_app(_Services())
+    try:
+        with TestClient(app, base_url="http://your-host") as client:
+            r = _post_mcp(client)
+    finally:
+        deps.reset()
+
+    assert r.status_code != 421
+
+
+def test_post_mcp_is_not_redirected_before_auth():
+    """内层已有 /mcp 路由；挂载路径写错会让 /mcp 在鉴权前 307 到 /mcp/。"""
+    app = create_app(_Services())
+    try:
+        with TestClient(app, base_url="http://your-host") as client:
+            r = _post_mcp(client)
+    finally:
+        deps.reset()
+
+    assert r.status_code != 307

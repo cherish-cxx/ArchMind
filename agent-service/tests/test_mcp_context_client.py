@@ -11,11 +11,12 @@ from app.mcp.context_client import McpContextClient
 from app.mcp.principal import McpAuthError, Principal
 
 
-def _client(handler) -> McpContextClient:
+def _client(handler, cache_seconds: int | None = None) -> McpContextClient:
     return McpContextClient(
         base_url="http://java.test",
         internal_token="test-internal-token",
         transport=httpx.MockTransport(handler),
+        cache_seconds=cache_seconds,
     )
 
 
@@ -126,7 +127,8 @@ async def test_authenticate_cache_avoids_second_http_call():
         counter["calls"] += 1
         return httpx.Response(200, json={"patId": 1, "userId": 7})
 
-    client = _client(handler)
+    # 显式开启缓存：默认 TTL=0（关闭），见下一个用例。
+    client = _client(handler, cache_seconds=60)
     try:
         first = await client.authenticate("am_pat_token")
         second = await client.authenticate("am_pat_token")
@@ -136,6 +138,24 @@ async def test_authenticate_cache_avoids_second_http_call():
     assert counter["calls"] == 1
     assert first.user_id == 7
     assert second.user_id == 7
+
+
+async def test_default_cache_disabled_makes_two_http_calls():
+    """默认 TTL=0：吊销/过期必须立即 401，不能让缓存兜住鉴权结论。"""
+    counter = {"calls": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        counter["calls"] += 1
+        return httpx.Response(200, json={"patId": 1, "userId": 7})
+
+    client = _client(handler)
+    try:
+        await client.authenticate("am_pat_token")
+        await client.authenticate("am_pat_token")
+    finally:
+        await client.aclose()
+
+    assert counter["calls"] == 2
 
 
 async def test_projects_returns_data_list():

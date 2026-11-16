@@ -44,6 +44,7 @@ class McpContextClient:
         base_url: str | None = None,
         internal_token: str | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        cache_seconds: int | None = None,
     ) -> None:
         self._client = httpx.AsyncClient(
             base_url=base_url or agent_settings.java_base_url,
@@ -56,7 +57,12 @@ class McpContextClient:
             trust_env=False,
         )
         self._cache: dict[tuple[str, ...], tuple[float, Any]] = {}
-        self._cache_seconds = mcp_settings.context_cache_seconds
+        # 默认读配置（默认 0 = 关闭）；测试可显式传 TTL 验证缓存路径。
+        self._cache_seconds = (
+            mcp_settings.context_cache_seconds
+            if cache_seconds is None
+            else cache_seconds
+        )
 
     async def aclose(self) -> None:
         await self._client.aclose()

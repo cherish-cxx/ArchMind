@@ -22,8 +22,8 @@ async def health(request):
 
 def create_app(services=None) -> Starlette:
     mcp = build_mcp()
-    # 必须在创建 app 之前设置：路由是在 streamable_http_app() 里按这个值建的。
-    mcp.settings.streamable_http_path = "/"
+    # 保留 SDK 默认的 `/mcp`：若改成 "/" 再挂到 /mcp，外部请求 /mcp 会被
+    # Starlette 的尾斜杠规则 307 到 /mcp/ —— 重定向发生在鉴权之前。
     inner = mcp.streamable_http_app()
 
     @contextlib.asynccontextmanager
@@ -34,7 +34,9 @@ def create_app(services=None) -> Starlette:
     svc = deps.configure(services)
     routes = [
         Route("/health", health, methods=["GET"]),
-        Mount("/mcp", app=PatAuthMiddleware(inner, svc.context, svc.limiter)),
+        # 内层已经有 `/mcp` 路由，所以挂在 "/"；放在 /health 之后，
+        # 让健康检查不被根挂载吞掉。
+        Mount("/", app=PatAuthMiddleware(inner, svc.context, svc.limiter)),
     ]
     return Starlette(routes=routes, lifespan=lifespan)
 
