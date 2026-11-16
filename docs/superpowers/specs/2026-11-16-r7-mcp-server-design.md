@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS mcp_pat (
 - `overview` 是分析时 LLM 生成，字段可能缺失或过期，只能作为背景，不作为具体类的事实证据。
 - gap 目前只有 `REMOTE_SERVICE` 与 `INTERFACE_NO_IMPLEMENTATION`。
 - `trace_flow` 的层标签是推断，不是图上的事实。
-- 一个账号一个 token，泄露影响该账号全部项目；靠过期、吊销、限流、审计收窄。
+- token 绑定账号而不是项目，单个 token 泄露会影响该账号的全部项目；可以为不同客户端各建一个 token，并用过期、吊销、限流、审计收窄风险。
 
 ## 9. 验收
 
