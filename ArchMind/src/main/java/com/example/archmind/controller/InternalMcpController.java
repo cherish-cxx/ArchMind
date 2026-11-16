@@ -3,11 +3,15 @@ package com.example.archmind.controller;
 import com.example.archmind.common.exception.McpAuthException;
 import com.example.archmind.common.result.Result;
 import com.example.archmind.dto.request.McpContextRequest;
+import com.example.archmind.dto.response.BriefResponse;
 import com.example.archmind.dto.response.McpContext;
 import com.example.archmind.dto.response.McpPrincipal;
 import com.example.archmind.dto.response.McpProjectItem;
+import com.example.archmind.dto.response.ToolEnvelope;
 import com.example.archmind.service.McpPatService;
+import com.example.archmind.service.ProjectBriefService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,6 +36,12 @@ public class InternalMcpController {
 
     private final McpPatService mcpPatService;
 
+    /**
+     * 字段注入以保持既有单参构造签名不变（Task 3 的 standalone MockMvc 测试直接 new 本类）。
+     */
+    @Autowired
+    private ProjectBriefService projectBriefService;
+
     @PostMapping("/context")
     public ResponseEntity<?> context(@RequestBody McpContextRequest request) {
         String token = request.getToken();
@@ -51,5 +61,16 @@ public class InternalMcpController {
     @GetMapping("/projects")
     public Result<List<McpProjectItem>> projects(@RequestParam Long userId) {
         return Result.success(mcpPatService.projects(userId));
+    }
+
+    /**
+     * MCP 的 {@code archmind_project_brief} 工具数据源。返回裸 {@link ToolEnvelope}（HTTP 200），
+     * 不包 {@link Result}，供 Python JavaClient 直接解析。
+     */
+    @GetMapping("/brief")
+    public ToolEnvelope<BriefResponse> brief(@RequestParam Long projectId,
+                                             @RequestParam(defaultValue = "claude") String target) {
+        BriefResponse res = projectBriefService.render(projectId, target);
+        return ToolEnvelope.success(res).withGraphRev(res.getGraphRev());
     }
 }

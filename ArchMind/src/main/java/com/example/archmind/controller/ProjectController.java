@@ -3,8 +3,10 @@ package com.example.archmind.controller;
 import com.example.archmind.common.result.Result;
 import com.example.archmind.common.util.CheckProjectUtil;
 import com.example.archmind.dto.request.ProjectCreateRequest;
+import com.example.archmind.dto.response.BriefResponse;
 import com.example.archmind.dto.response.CreateProjectWithSourceResponse;
 import com.example.archmind.dto.response.ProjectResponse;
+import com.example.archmind.service.ProjectBriefService;
 import com.example.archmind.service.ProjectCreationService;
 import com.example.archmind.service.ProjectService;
 import jakarta.validation.Valid;
@@ -22,6 +24,7 @@ public class ProjectController {
 
     private final ProjectService projectService;
     private final ProjectCreationService projectCreationService;
+    private final ProjectBriefService projectBriefService;
     private final CheckProjectUtil checkProjectUtil;
 
     @PostMapping
@@ -56,5 +59,15 @@ public class ProjectController {
     public Result<Void> deleteProject(@PathVariable Long projectId) {
         projectService.deleteProject(projectId);
         return Result.success();
+    }
+
+    /**
+     * 导出项目说明草稿。先做归属校验，brief 内容只含 projectId，不含 userId 或 token。
+     */
+    @GetMapping("/{projectId}/brief")
+    public Result<BriefResponse> brief(@PathVariable Long projectId,
+                                       @RequestParam(defaultValue = "claude") String target) {
+        checkProjectUtil.checkProject(projectId);
+        return Result.success(projectBriefService.render(projectId, target));
     }
 }
