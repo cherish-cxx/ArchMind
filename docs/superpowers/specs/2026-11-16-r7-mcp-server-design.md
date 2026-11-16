@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS mcp_pat (
 
 ## 8. 已知限制
 
-- 图对应某次分析快照，可能落后于工作区；所有响应带 `graphRev`，brief 带生成时间与分析时间。`method_body` 不在本版，Claude 读当前文件时以文件为准。
+- 图对应某次分析快照，可能落后于工作区；所有响应带 `graphRev`，brief 带生成时间与 `graphRev`（图版本即分析版本）。`method_body` 不在本版，Claude 读当前文件时以文件为准。
 - `overview` 是分析时 LLM 生成，字段可能缺失或过期，只能作为背景，不作为具体类的事实证据。
 - gap 目前只有 `REMOTE_SERVICE` 与 `INTERFACE_NO_IMPLEMENTATION`。
 - `trace_flow` 的层标签是推断，不是图上的事实。
