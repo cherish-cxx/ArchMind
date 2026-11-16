@@ -100,7 +100,9 @@ Web ──JWT──▶ Java GET /api/project/{id}/brief?target=claude|agents
 - token 明文只在创建响应中出现一次；数据库只存 SHA-256；列表只返回前缀。
 - 过期时间默认 90 天，可吊销；`last_used_at` 用于泄露定位。
 - 每次项目访问都校验 `project.userId == token.userId`；token 可预留项目绑定（`project_id` 可空）。
-- 限流 60 次/分/token；429 在 MCP 层返回。
+- 限流 60 次/分/token；429 在 MCP 层返回。限流在 Redis 故障时 fail-open（记日志，不含 token）。
+- 认证缓存默认关闭（`MCP_CONTEXT_CACHE_SECONDS=0`），保证吊销/过期立即生效；开启后接受该窗口内的吊销延迟。
+- 反向代理下关闭 MCP SDK 的 DNS-rebinding 防护；鉴权由 PAT 中间件强制。
 - 任何日志、错误响应、brief 内容都不包含 token、userId；brief 只含 projectId。
 - 全部工具只读。
 

@@ -433,7 +433,9 @@ Expected: FAIL（模块不存在）
 - 中间件只处理 `scope["type"] == "http"`；`lifespan` 直接透传。缺 token → 401 JSON；`McpAuthError` → 对应状态；限流 → 429 JSON。
 - `McpContextClient` 按 HTTP 状态码映射：401 → `McpAuthError(401)`，403 → 403，404 → 404；不解析 body 判断。
 - `deps.configure()` 幂等；`Retriever`、`IndexStore` 共用同一个 `IndexStore` 实例。
-- `app/mcp/config.py` 定义 `McpSettings`（环境变量前缀 `MCP_`，含 `rate_limit_per_minute=60`、`context_cache_seconds=60`），不改动已有的 `app/config.py`。- `asgi.py`：`mcp.settings.streamable_http_path = "/"` 后再 `streamable_http_app()`，`Starlette(routes=[Route("/health", health), Mount("/mcp", app=PatAuthMiddleware(inner, ...))])`。
+- `app/mcp/config.py` 定义 `McpSettings`（环境变量前缀 `MCP_`，含 `rate_limit_per_minute=60`、`context_cache_seconds=0`——默认关闭缓存以便吊销即时生效，可用 `MCP_CONTEXT_CACHE_SECONDS` 开启），不改动已有的 `app/config.py`。
+- `FastMCP("archmind", transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))`：PAT 已强制鉴权，关闭 SDK 的 DNS-rebinding 防护，否则反向代理的 Host 会被挡成 421。
+- `asgi.py`：保留 SDK 默认的 `/mcp` 路径；`Starlette(routes=[Route("/health", health), Mount("/", app=PatAuthMiddleware(inner, ...))])`，避免鉴权前的 307。外层 lifespan 需转发给 MCP app 的 lifespan，否则 session manager 不启动。
 - 测试辅助：`build_test_app(context, limiter)` 返回 `PatAuthMiddleware` 包住一个最小 ASGI app；`FakeContext.authenticate` 对 `"good"` 返回 `Principal(pat_id=1, user_id=7, bound_project_id=None, expires_at=None, raw_token="good")`。
 
 - [ ] **Step 4: 运行测试，确认通过**
@@ -449,7 +451,7 @@ Expected: `Starlette`
 - [ ] **Step 6: 提交**
 
 ```bash
-git add agent-service/requirements.txt agent-service/app/config.py agent-service/app/mcp agent-service/tests/test_mcp_auth.py
+git add agent-service/requirements.txt agent-service/app/mcp agent-service/tests/test_mcp_auth.py agent-service/tests/test_mcp_context_client.py agent-service/tests/test_mcp_rate_limit.py
 git commit -m "feat(r7): add MCP process skeleton and PAT middleware"
 ```
 
