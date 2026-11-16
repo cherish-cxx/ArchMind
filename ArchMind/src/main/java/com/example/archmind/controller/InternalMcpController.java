@@ -1,5 +1,6 @@
 package com.example.archmind.controller;
 
+import com.example.archmind.common.exception.BusinessException;
 import com.example.archmind.common.exception.McpAuthException;
 import com.example.archmind.common.result.Result;
 import com.example.archmind.dto.request.McpContextRequest;
@@ -10,8 +11,8 @@ import com.example.archmind.dto.response.McpProjectItem;
 import com.example.archmind.dto.response.ToolEnvelope;
 import com.example.archmind.service.McpPatService;
 import com.example.archmind.service.ProjectBriefService;
+import com.example.archmind.service.ast.GraphRevService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,12 +36,8 @@ import java.util.List;
 public class InternalMcpController {
 
     private final McpPatService mcpPatService;
-
-    /**
-     * 字段注入以保持既有单参构造签名不变（Task 3 的 standalone MockMvc 测试直接 new 本类）。
-     */
-    @Autowired
-    private ProjectBriefService projectBriefService;
+    private final ProjectBriefService projectBriefService;
+    private final GraphRevService graphRevService;
 
     @PostMapping("/context")
     public ResponseEntity<?> context(@RequestBody McpContextRequest request) {
@@ -70,7 +67,14 @@ public class InternalMcpController {
     @GetMapping("/brief")
     public ToolEnvelope<BriefResponse> brief(@RequestParam Long projectId,
                                              @RequestParam(defaultValue = "claude") String target) {
-        BriefResponse res = projectBriefService.render(projectId, target);
-        return ToolEnvelope.success(res).withGraphRev(res.getGraphRev());
+        try {
+            BriefResponse res = projectBriefService.render(projectId, target);
+            return ToolEnvelope.success(res).withGraphRev(res.getGraphRev());
+        } catch (BusinessException e) {
+            // 全局异常处理器返回 Result 包装，Python 的 ToolEnvelope 解析器读不了；
+            // 这里显式转成 200 + ok=false 的信封。
+            return ToolEnvelope.<BriefResponse>failure(e.getMessage())
+                    .withGraphRev(graphRevService.currentRev(projectId));
+        }
     }
 }

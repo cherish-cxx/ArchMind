@@ -8,7 +8,7 @@ import com.example.archmind.entity.Project;
 import com.example.archmind.service.ProjectBriefService;
 import com.example.archmind.service.ProjectOverviewService;
 import com.example.archmind.service.ast.GraphRevService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -21,7 +21,6 @@ import java.util.List;
  * <p>只输出项目认知与 {@code projectId}；不读取、不输出 userId 或任何 token。</p>
  */
 @Service
-@RequiredArgsConstructor
 public class ProjectBriefServiceImpl implements ProjectBriefService {
 
     private static final String EMPTY = "（暂无）";
@@ -38,6 +37,18 @@ public class ProjectBriefServiceImpl implements ProjectBriefService {
     private final ProjectMapper projectMapper;
     private final ProjectOverviewService overviewService;
     private final GraphRevService graphRevService;
+    private final String mcpPublicUrl;
+
+    public ProjectBriefServiceImpl(ProjectMapper projectMapper,
+                                   ProjectOverviewService overviewService,
+                                   GraphRevService graphRevService,
+                                   @Value("${mcp.public-url:${MCP_PUBLIC_URL:https://your-host/mcp}}")
+                                   String mcpPublicUrl) {
+        this.projectMapper = projectMapper;
+        this.overviewService = overviewService;
+        this.graphRevService = graphRevService;
+        this.mcpPublicUrl = mcpPublicUrl;
+    }
 
     @Override
     public BriefResponse render(Long projectId, String target) {
@@ -88,7 +99,7 @@ public class ProjectBriefServiceImpl implements ProjectBriefService {
         sb.append("## 模块\n\n").append(renderModules(overview.getModules())).append("\n\n");
         sb.append("## 使用 ArchMind MCP\n\n");
         sb.append("本项目已通过 ArchMind MCP 暴露为只读工具。连接信息：\n\n");
-        sb.append("- MCP 端点：`https://<your-host>/mcp`\n");
+        sb.append("- MCP 端点：`").append(mcpPublicUrl).append("`\n");
         sb.append("- 鉴权：请求头 `Authorization: Bearer $ARCHMIND_PAT`（PAT 在 ArchMind 网页创建）\n\n");
         sb.append("所有 ArchMind MCP 工具调用都使用 projectId: ").append(projectId).append("。\n\n");
         sb.append("可用工具：\n\n");

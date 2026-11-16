@@ -1,10 +1,14 @@
 package com.example.archmind.controller;
 
+import com.example.archmind.common.exception.BusinessException;
 import com.example.archmind.common.exception.McpAuthException;
+import com.example.archmind.dto.response.BriefResponse;
 import com.example.archmind.dto.response.McpContext;
 import com.example.archmind.dto.response.McpPrincipal;
 import com.example.archmind.dto.response.McpProjectItem;
 import com.example.archmind.service.McpPatService;
+import com.example.archmind.service.ProjectBriefService;
+import com.example.archmind.service.ast.GraphRevService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,12 +32,17 @@ class InternalMcpControllerTest {
 
     @Mock
     private McpPatService service;
+    @Mock
+    private ProjectBriefService projectBriefService;
+    @Mock
+    private GraphRevService graphRevService;
 
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new InternalMcpController(service)).build();
+        mvc = MockMvcBuilders.standaloneSetup(
+                new InternalMcpController(service, projectBriefService, graphRevService)).build();
     }
 
     @Test
@@ -139,5 +148,41 @@ class InternalMcpControllerTest {
                 .andExpect(jsonPath("$.data[0].name").value("hmall"))
                 .andExpect(jsonPath("$.data[0].analysisStatus").value("COMPLETED"))
                 .andExpect(jsonPath("$.data[0].graphRev").value(9));
+    }
+
+    @Test
+    void briefReturnsToolEnvelopeWithGraphRev() throws Exception {
+        BriefResponse brief = BriefResponse.builder()
+                .filename("CLAUDE.md")
+                .content("# CLAUDE.md\nprojectId: 99")
+                .graphRev(7L)
+                .build();
+        when(projectBriefService.render(99L, "claude")).thenReturn(brief);
+
+        mvc.perform(get("/internal/mcp/brief")
+                        .param("projectId", "99")
+                        .param("target", "claude"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ok").value(true))
+                .andExpect(jsonPath("$.data.filename").value("CLAUDE.md"))
+                .andExpect(jsonPath("$.data.content").value("# CLAUDE.md\nprojectId: 99"))
+                .andExpect(jsonPath("$.graphRev").value(7));
+    }
+
+    @Test
+    void briefUnknownTargetReturnsEnvelopeFailure() throws Exception {
+        String message = "不支持的导出目标: readme（仅支持 claude / agents）";
+        when(projectBriefService.render(99L, "readme"))
+                .thenThrow(new BusinessException(message));
+        when(graphRevService.currentRev(99L)).thenReturn(5L);
+
+        mvc.perform(get("/internal/mcp/brief")
+                        .param("projectId", "99")
+                        .param("target", "readme"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.data").doesNotExist())
+                .andExpect(jsonPath("$.note").value(message))
+                .andExpect(jsonPath("$.graphRev").value(5));
     }
 }

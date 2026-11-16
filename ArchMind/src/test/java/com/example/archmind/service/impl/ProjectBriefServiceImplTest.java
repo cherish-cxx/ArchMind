@@ -24,6 +24,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ProjectBriefServiceImplTest {
 
+    private static final String MCP_PUBLIC_URL = "https://archmind.test/mcp";
+
     @Mock
     private ProjectMapper projectMapper;
     @Mock
@@ -35,7 +37,8 @@ class ProjectBriefServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new ProjectBriefServiceImpl(projectMapper, overviewService, graphRevService);
+        service = new ProjectBriefServiceImpl(
+                projectMapper, overviewService, graphRevService, MCP_PUBLIC_URL);
     }
 
     private ProjectOverviewResponse sampleOverview() {
@@ -96,6 +99,7 @@ class ProjectBriefServiceImplTest {
         assertTrue(res.getContent().contains("archmind_project_brief"));
         assertTrue(res.getContent().contains("graphRev=7"));
         assertTrue(res.getContent().contains("Authorization: Bearer $ARCHMIND_PAT"));
+        assertTrue(res.getContent().contains("MCP 端点：`" + MCP_PUBLIC_URL + "`"));
         assertTrue(res.getContent().contains("所有 ArchMind MCP 工具调用都使用 projectId: 99"));
         assertFalse(res.getContent().contains("userId"));
     }
