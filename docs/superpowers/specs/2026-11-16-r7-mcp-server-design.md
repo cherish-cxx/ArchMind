@@ -45,8 +45,10 @@
 ```
 Claude Code ──HTTPS /mcp──▶ mcp 进程 (agent-service 镜像, :8001)
                               │  Bearer PAT
+                              ├─▶ Java POST /internal/mcp/authenticate (内部 token)
+                              │      PAT → userId / patId（不带项目）
                               ├─▶ Java POST /internal/mcp/context   (内部 token)
-                              │      PAT → userId / projectId / 分析状态 / graphRev
+                              │      PAT + projectId → 项目/分析状态/graphRev
                               ├─▶ Java GET  /internal/mcp/projects  (内部 token)
                               ├─▶ Java /internal/tools/*            (内部 token)
                               ├─▶ Java GET  /internal/mcp/brief     (内部 token)

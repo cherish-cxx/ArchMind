@@ -229,6 +229,7 @@ git commit -m "feat(r7): add PAT management endpoints"
 **Interfaces:**
 - Consumes: `McpPatService`（Task 1）
 - Produces:
+  - `POST /internal/mcp/authenticate` body `{"token":"..."}` → 200 `McpPrincipal`；401 用 HTTP 状态码
   - `POST /internal/mcp/context` body `{"token":"...","projectId":123}` → 200 `McpContext`；401/403/404 用 HTTP 状态码
   - `GET /internal/mcp/projects?userId=7` → `Result<List<McpProjectItem>>`
 
@@ -356,7 +357,7 @@ git commit -m "feat(r7): render and export AGENTS/CLAUDE project brief"
 
 **Files:**
 - Modify: `agent-service/requirements.txt`（追加 `mcp>=1.9,<2`）
-- Modify: `agent-service/app/config.py`
+- Create: `agent-service/app/mcp/config.py`（独立 `McpSettings`，不改动已有未提交的 `app/config.py`）
 - Create: `agent-service/app/mcp/__init__.py`
 - Create: `agent-service/app/mcp/deps.py`
 - Create: `agent-service/app/mcp/context_client.py`
@@ -370,8 +371,8 @@ git commit -m "feat(r7): render and export AGENTS/CLAUDE project brief"
 - Produces:
   - `McpServices { JavaClient java; Retriever retriever; IndexStore index_store; McpContextClient context; RateLimiter limiter; }`
   - `deps.configure(services=None) -> McpServices`、`deps.services() -> McpServices`、`deps.reset() -> None`
-  - `McpContextClient.authenticate(token) -> Principal`（401 抛 `McpAuthError`）
-  - `McpContextClient.context(principal, project_id) -> ProjectContext`（403/404 抛 `McpAuthError`）
+  - `McpContextClient.authenticate(token) -> Principal`（401 抛 `McpAuthError`；调用 `/internal/mcp/authenticate`）
+  - `McpContextClient.context(principal, project_id) -> ProjectContext`（403/404 抛 `McpAuthError`；调用 `/internal/mcp/context`）
   - `McpContextClient.projects(user_id) -> list[dict]`
   - `RateLimiter.allow(pat_id) -> bool`
   - `PatAuthMiddleware(app, context, limiter)`（纯 ASGI）
@@ -432,8 +433,7 @@ Expected: FAIL（模块不存在）
 - 中间件只处理 `scope["type"] == "http"`；`lifespan` 直接透传。缺 token → 401 JSON；`McpAuthError` → 对应状态；限流 → 429 JSON。
 - `McpContextClient` 按 HTTP 状态码映射：401 → `McpAuthError(401)`，403 → 403，404 → 404；不解析 body 判断。
 - `deps.configure()` 幂等；`Retriever`、`IndexStore` 共用同一个 `IndexStore` 实例。
-- `config.py` 增加 `mcp_rate_limit_per_minute: int = 60`、`mcp_context_cache_seconds: int = 60`。
-- `asgi.py`：`mcp.settings.streamable_http_path = "/"` 后再 `streamable_http_app()`，`Starlette(routes=[Route("/health", health), Mount("/mcp", app=PatAuthMiddleware(inner, ...))])`。
+- `app/mcp/config.py` 定义 `McpSettings`（环境变量前缀 `MCP_`，含 `rate_limit_per_minute=60`、`context_cache_seconds=60`），不改动已有的 `app/config.py`。- `asgi.py`：`mcp.settings.streamable_http_path = "/"` 后再 `streamable_http_app()`，`Starlette(routes=[Route("/health", health), Mount("/mcp", app=PatAuthMiddleware(inner, ...))])`。
 - 测试辅助：`build_test_app(context, limiter)` 返回 `PatAuthMiddleware` 包住一个最小 ASGI app；`FakeContext.authenticate` 对 `"good"` 返回 `Principal(pat_id=1, user_id=7, bound_project_id=None, expires_at=None, raw_token="good")`。
 
 - [ ] **Step 4: 运行测试，确认通过**
