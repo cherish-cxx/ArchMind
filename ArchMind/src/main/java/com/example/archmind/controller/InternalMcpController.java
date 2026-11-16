@@ -39,6 +39,30 @@ public class InternalMcpController {
     private final ProjectBriefService projectBriefService;
     private final GraphRevService graphRevService;
 
+    private static final String AUTH_FAILED_MESSAGE = "认证失败";
+
+    /**
+     * 纯 token 校验（不涉及 projectId），供 Python PAT 中间件换取调用者身份。
+     *
+     * <p>成功时返回裸 {@link McpPrincipal}（userId / patId / boundProjectId / expiresAt），
+     * 失败一律 401 + 通用 {@link Result}，不回显 token。</p>
+     */
+    @PostMapping("/authenticate")
+    public ResponseEntity<?> authenticate(@RequestBody(required = false) McpContextRequest request) {
+        String token = request == null ? null : request.getToken();
+        if (token == null || token.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Result.fail(HttpStatus.UNAUTHORIZED.value(), "缺少 token"));
+        }
+        try {
+            McpPrincipal principal = mcpPatService.authenticate(token);
+            return ResponseEntity.ok(principal);
+        } catch (McpAuthException e) {
+            return ResponseEntity.status(e.getStatus())
+                    .body(Result.fail(e.getStatus(), AUTH_FAILED_MESSAGE));
+        }
+    }
+
     @PostMapping("/context")
     public ResponseEntity<?> context(@RequestBody McpContextRequest request) {
         String token = request.getToken();

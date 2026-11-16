@@ -132,6 +132,43 @@ class InternalMcpControllerTest {
     }
 
     @Test
+    void authenticateValidTokenReturnsPrincipal() throws Exception {
+        McpPrincipal principal = McpPrincipal.builder().patId(1L).userId(7L).build();
+        when(service.authenticate("good")).thenReturn(principal);
+
+        mvc.perform(post("/internal/mcp/authenticate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"good\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(7))
+                .andExpect(jsonPath("$.patId").value(1))
+                .andExpect(jsonPath("$.boundProjectId").doesNotExist())
+                .andExpect(jsonPath("$.token").doesNotExist());
+    }
+
+    @Test
+    void authenticateInvalidTokenReturns401WithGenericBody() throws Exception {
+        when(service.authenticate("bad")).thenThrow(new McpAuthException(401, "无效 token"));
+
+        mvc.perform(post("/internal/mcp/authenticate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"bad\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(401))
+                .andExpect(jsonPath("$.message").value("认证失败"));
+    }
+
+    @Test
+    void authenticateBlankTokenReturns401WithoutCallingService() throws Exception {
+        mvc.perform(post("/internal/mcp/authenticate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"   \"}"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
     void projectsReturnsList() throws Exception {
         when(service.projects(7L)).thenReturn(List.of(
                 McpProjectItem.builder()
