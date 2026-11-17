@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-16-r7-mcp-server-design.md`
 
+> **实施状态（2026-11-17）：** Task 1–11 已完成，每个任务经独立子代理审查；Java R7 测试、Python 全量 315 passed / 16 skipped、前端构建、`docker compose config`、`bash -n`、`py_compile` 均通过。真实栈 E2E 与 Claude Code 手工演示未执行（本机未起服务）。上线前需在服务器 `deploy/.env` 设置 `MCP_PUBLIC_URL`，并确认 MySQL 用户有建表权限。
+
 ## Global Constraints
 
 - token 明文只在创建响应出现一次；库中只存 SHA-256；日志与响应不得出现 token 或 `Authorization`。
