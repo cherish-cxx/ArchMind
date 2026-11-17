@@ -1,0 +1,146 @@
+{
+  "generatedAt": "2026-11-04T06:18:30.517534+00:00",
+  "projectId": 2117859147238891521,
+  "dataset": "scripts\\eval\\ab_questions_hmall.json",
+  "memoryEnabled": false,
+  "summary": {
+    "legacy": {
+      "questions": 2,
+      "errors": 0,
+      "answers": 1,
+      "degrades": 1,
+      "clarifies": 0,
+      "meanLatencyMs": 3362.5,
+      "meanLlmCalls": 1.5,
+      "meanToolCalls": 1.0,
+      "totalTokensIn": 4324,
+      "totalTokensOut": 717,
+      "citationsOffered": 7,
+      "citationsUngrounded": 0,
+      "ungroundedRate": 0.0,
+      "gapRequired": 2,
+      "gapDisclosed": 1
+    },
+    "tools": {
+      "questions": 2,
+      "errors": 0,
+      "answers": 1,
+      "degrades": 0,
+      "clarifies": 1,
+      "meanLatencyMs": 8947.5,
+      "meanLlmCalls": 5.0,
+      "meanToolCalls": 4.5,
+      "totalTokensIn": 52416,
+      "totalTokensOut": 2017,
+      "citationsOffered": 9,
+      "citationsUngrounded": 3,
+      "ungroundedRate": 0.3333,
+      "gapRequired": 2,
+      "gapDisclosed": 1
+    },
+    "delta": {
+      "latencyMs": 5585.0,
+      "toolCalls": 3.5,
+      "tokens": 49392,
+      "ungrounded": 3,
+      "answers": 0
+    }
+  },
+  "perQuestion": [
+    {
+      "id": "H01",
+      "question": "下单的调用链是怎样的？",
+      "legacy": {
+        "outcome": "TOOL_NO",
+        "latencyMs": 1618,
+        "llmCalls": 1,
+        "tokensIn": 1262,
+        "tokensOut": 70,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 0,
+        "sections": 0,
+        "citations": 0,
+        "citationsOffered": 0,
+        "citationsUngrounded": 0,
+        "uiCommands": [],
+        "disclosedGap": false,
+        "messagePreview": "这个我答不了：该类下没有方法，或指定方法不存在: com.hmall.trade.domain.dto.OrderFormDTO"
+      },
+      "tools": {
+        "outcome": "CLARIFY",
+        "latencyMs": 8520,
+        "llmCalls": 6,
+        "tokensIn": 37949,
+        "tokensOut": 515,
+        "toolCalls": 4,
+        "toolNames": [
+          "classes",
+          "classes",
+          "call-chain",
+          "call-chain"
+        ],
+        "evidenceUids": 0,
+        "sections": 0,
+        "citations": 0,
+        "citationsOffered": 0,
+        "citationsUngrounded": 0,
+        "uiCommands": [],
+        "disclosedGap": false,
+        "messagePreview": "我这边只检索到 `hm-api` 里的 Feign 客户端（`TradeClient`、`ItemClient` 等），没拿到订单服务里真正处理下单的 Controller/Service 类。你希望我从哪个起点讲下单流程？"
+      }
+    },
+    {
+      "id": "H02",
+      "question": "用户下单时订单是怎么创建并保存到数据库的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5107,
+        "llmCalls": 2,
+        "tokensIn": 3062,
+        "tokensOut": 647,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 6,
+        "sections": 3,
+        "citations": 6,
+        "citationsOffered": 7,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": true,
+        "messagePreview": "## 下单入口是 IOrderService.createOrder，实现类 OrderServiceImpl 负责组装订单\n\n### 结论\n\n**下单的入口是 `IOrderService` 接口上的 `createOrder` 方法，真正干活的是它的实现类 `OrderServiceImpl`。** 这个接口还定义了 `cancelOrder`（取消订单）和 `markOrderPaySuccess`（支付成功后改状态），但本次调用链只覆盖了创建订单这一条线。\n\n### 创建订单时它做了什么\n\n`OrderServiceImpl` 在创建订单过程中会调用四个外部组件，每个都有明确分工：\n\n"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9375,
+        "llmCalls": 4,
+        "tokensIn": 14467,
+        "tokensOut": 1502,
+        "toolCalls": 5,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 11,
+        "sections": 4,
+        "citations": 3,
+        "citationsOffered": 9,
+        "citationsUngrounded": 3,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": true,
+        "messagePreview": "## 下单由 `OrderController.createOrder` 接收，`OrderServiceImpl.createOrder` 在一个事务里写订单主表、明细表，再清购物车、扣库存。\n\n### 结论\n\n下单入口是 `trade-service` 模块（交易服务，负责订单的创建与状态流转）里的 `OrderController.createOrder`，它只做转发，真正的业务全在 `OrderServiceImpl.createOrder` 里。这个方法带 `@Transactional`，所以「写订单主表 + 写订单明细 + 清购物车 + 扣库存」是一个整体事务：任何一步抛异常，前"
+      }
+    }
+  ]
+}

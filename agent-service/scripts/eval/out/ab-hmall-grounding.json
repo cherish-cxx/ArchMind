@@ -1,0 +1,358 @@
+{
+  "generatedAt": "2026-11-04T06:46:42.927907+00:00",
+  "projectId": 2117859147238891521,
+  "dataset": "scripts\\eval\\ab_questions_hmall.json",
+  "memoryEnabled": false,
+  "summary": {
+    "legacy": {
+      "questions": 6,
+      "errors": 0,
+      "answers": 5,
+      "degrades": 1,
+      "clarifies": 0,
+      "meanLatencyMs": 4910.2,
+      "meanLlmCalls": 1.8,
+      "meanToolCalls": 1.0,
+      "totalTokensIn": 15874,
+      "totalTokensOut": 3465,
+      "citationsOffered": 27,
+      "citationsUngrounded": 0,
+      "ungroundedRate": 0.0,
+      "gapRequired": 2,
+      "gapDisclosed": 1
+    },
+    "tools": {
+      "questions": 6,
+      "errors": 0,
+      "answers": 6,
+      "degrades": 0,
+      "clarifies": 0,
+      "meanLatencyMs": 9884.3,
+      "meanLlmCalls": 5.0,
+      "meanToolCalls": 6.5,
+      "totalTokensIn": 127391,
+      "totalTokensOut": 7961,
+      "citationsOffered": 49,
+      "citationsUngrounded": 8,
+      "ungroundedRate": 0.1633,
+      "gapRequired": 2,
+      "gapDisclosed": 2
+    },
+    "delta": {
+      "latencyMs": 4974.1,
+      "toolCalls": 5.5,
+      "tokens": 116013,
+      "ungrounded": 8,
+      "answers": 1
+    }
+  },
+  "perQuestion": [
+    {
+      "id": "H01",
+      "question": "下单的调用链是怎样的？",
+      "legacy": {
+        "outcome": "TOOL_NO",
+        "latencyMs": 1531,
+        "llmCalls": 1,
+        "tokensIn": 1262,
+        "tokensOut": 70,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 0,
+        "sections": 0,
+        "citations": 0,
+        "citationsOffered": 0,
+        "citationsUngrounded": 0,
+        "uiCommands": [],
+        "disclosedGap": false,
+        "messagePreview": "这个我答不了：该类下没有方法，或指定方法不存在: com.hmall.trade.domain.dto.OrderFormDTO"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 11301,
+        "llmCalls": 7,
+        "tokensIn": 49435,
+        "tokensOut": 1228,
+        "toolCalls": 6,
+        "toolNames": [
+          "classes",
+          "classes",
+          "call-chain",
+          "call-chain",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 184,
+        "sections": 4,
+        "citations": 8,
+        "citationsOffered": 11,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": true,
+        "messagePreview": "## 下单主流程在 trade-service 的 `OrderServiceImpl.createOrder`，串起商品、购物车、库存和延迟消息\n\n### 结论\n\n下单入口是订单服务（trade-service，负责订单主表和订单明细）的 `OrderController`，它把请求交给 `IOrderService`，实际实现是 `OrderServiceImpl.createOrder(OrderFormDTO)`。这个方法在一个 `@GlobalTransactional` 全局事务里依次做五件事：查商品算总价并落订单、存订单明细、清购物车、扣库存、发延迟消息。\n\n### 调用路径（按"
+      }
+    },
+    {
+      "id": "H02",
+      "question": "用户下单时订单是怎么创建并保存到数据库的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5390,
+        "llmCalls": 2,
+        "tokensIn": 3062,
+        "tokensOut": 657,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 6,
+        "sections": 3,
+        "citations": 6,
+        "citationsOffered": 7,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": true,
+        "messagePreview": "## 下单入口是 IOrderService.createOrder，实现类 OrderServiceImpl 负责组装订单\n\n### 结论\n\n**下单的入口是 `IOrderService` 接口上的 `createOrder` 方法，真正干活的是它的实现类 `OrderServiceImpl`。** 这个接口还定义了 `cancelOrder`（取消订单）和 `markOrderPaySuccess`（支付成功后改状态）两个方法，说明它是 trade-service（交易微服务）里订单业务的统一门面。\n\n### 创建订单时它做了什么\n\n`OrderServiceImpl` 在创建订单过程中"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 11784,
+        "llmCalls": 6,
+        "tokensIn": 22200,
+        "tokensOut": 1619,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "class-relations",
+          "class-relations",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 12,
+        "sections": 4,
+        "citations": 3,
+        "citationsOffered": 9,
+        "citationsUngrounded": 5,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": true,
+        "messagePreview": "## 下单由 `OrderController.createOrder` 触发，`OrderServiceImpl.createOrder` 在一个事务里算价、存订单、存明细、清购物车、扣库存。\n\n### 结论\n\n下单入口是 `com.hmall.controller.OrderController#createOrder(OrderFormDTO)`，它只做一件事：把请求体原样交给 `orderService.createOrder(orderFormDTO)` 并返回订单 id。真正的创建逻辑在 `com.hmall.trade.service.impl.OrderServiceImpl#"
+      }
+    },
+    {
+      "id": "H03",
+      "question": "购物车添加商品的流程是怎么走的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6064,
+        "llmCalls": 2,
+        "tokensIn": 3188,
+        "tokensOut": 800,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 6,
+        "sections": 3,
+        "citations": 6,
+        "citationsOffered": 10,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 添加购物车由 CartServiceImpl 编排，依赖用户上下文、商品服务与工具类\n\n### 结论\n\n**购物车添加商品的核心入口是 `com.hmall.cart.service.impl.CartServiceImpl`**，它负责把一次「加购」请求落成购物车条目。从调用图看，它向下依赖 5 个类：`BeanUtils`、`UserContext`、`CollUtils`、`ItemClient`、`BizIllegalException`。注意：图里只解析到这些直接下游，**`ItemClient` 是跨服务调用，本图没有它的下游，这是已知边界，不是流程到此结束**。\n\n### "
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9199,
+        "llmCalls": 5,
+        "tokensIn": 15699,
+        "tokensOut": 1381,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 10,
+        "sections": 3,
+        "citations": 4,
+        "citationsOffered": 5,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 添加购物车：先查是否已有该商品，有则加数量，无则校验上限后新增条目。\n\n### 结论\n\n入口是 `CartServiceImpl#addItem2Cart(CartFormDTO)`（`com.hmall.service.impl.CartServiceImpl`，购物车业务实现类）。它按「取当前登录用户 → 判断该商品是否已在购物车 → 已存在就数量 +1，不存在就先校验购物车是否已满、再插入一条新条目」的顺序走完，是一个典型的「有则更新、无则新增」逻辑。\n\n### 执行路径\n\n1. `UserContext.getUser()` 拿到当前登录用户 id（`UserContext` 是"
+      }
+    },
+    {
+      "id": "H04",
+      "question": "支付成功后订单状态是怎么更新的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5961,
+        "llmCalls": 2,
+        "tokensIn": 2966,
+        "tokensOut": 701,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 3,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 6,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 支付成功消息由 PayStatusListener 接收，再经 IOrderService 落到 OrderServiceImpl 更新订单状态\n\n### 结论\n\n**支付成功后订单状态的更新，入口是 `trade-service` 模块里的 `PayStatusListener`（一个消息监听器，负责接收「支付成功」事件），它把这件事交给订单服务接口 `IOrderService`，最终由实现类 `OrderServiceImpl` 完成状态处理。** 也就是说，监听器只负责「收到消息」，真正的业务动作在订单服务实现里。\n\n### 调用是怎么走的\n\n顺序是这样的：\n\n1. `PaySt"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9271,
+        "llmCalls": 5,
+        "tokensIn": 17074,
+        "tokensOut": 1218,
+        "toolCalls": 7,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 11,
+        "sections": 4,
+        "citations": 2,
+        "citationsOffered": 5,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 支付成功消息经 MQ 触发监听器，把订单状态从 1（待支付）改成 2（已支付）\n\n### 结论\n\n支付成功后，订单状态**不是**由支付服务直接改的，而是通过 RabbitMQ 消息异步通知 `trade-service`（交易服务，负责下单和订单状态）里的 `PayStatusListener`，再由它调用 `OrderServiceImpl.markOrderPaySuccess` 把订单 `status` 置为 `2` 并写入 `payTime`。\n\n### 路径\n\n1. `PayStatusListener.listenPaySuccess(Long orderId)` 是消息入"
+      }
+    },
+    {
+      "id": "H05",
+      "question": "TradeClient 被谁调用？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5454,
+        "llmCalls": 2,
+        "tokensIn": 2641,
+        "tokensOut": 599,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 0,
+        "sections": 3,
+        "citations": 0,
+        "citationsOffered": 0,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 图里查不到 TradeClient 的调用方，上游关系未解析\n\n### 结论\n\n**这次没有查到 `TradeClient` 被谁调用。** 针对 `com.hmall.api.client.TradeClient` 做了一次「向上找调用方」（direction=UP）的关系查询，工具返回里只有中心类本身，没有任何上游节点，也没有任何图上的凭据。所以「谁调用了它」这个问题，在当前代码图谱里**没有答案**，不是「没有调用方」。\n\n### 这个类本身是干什么的\n\n`TradeClient` 是一个**接口**，按检索描述，它是「调用订单服务标记支付成功的客户端」，对外暴露的方法是 `mar"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 5422,
+        "llmCalls": 3,
+        "tokensIn": 8178,
+        "tokensOut": 560,
+        "toolCalls": 2,
+        "toolNames": [
+          "call-chain",
+          "class-relations"
+        ],
+        "evidenceUids": 1,
+        "sections": 3,
+        "citations": 1,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 图里查不到任何调用方，`TradeClient` 是孤立节点\n\n### 结论\n\n在当前项目的调用图里，`com.hmall.api.client.TradeClient`（`hm-api` 模块中声明「调用订单服务标记支付成功」的 Feign 客户端接口，唯一方法是 `markOrderPaySuccess`）**没有任何上游调用者**。它既没有被别的类调用，也没有被继承或依赖的记录。\n\n### 查证路径\n\n我先用 `call-chain` 以 `TradeClient` 为起点做 UP 方向反查，结果只返回它自己一个节点（depth=0），没有任何入边；再用 `class-relati"
+      }
+    },
+    {
+      "id": "H06",
+      "question": "登录后返回的令牌是怎么生成和校验的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5061,
+        "llmCalls": 2,
+        "tokensIn": 2755,
+        "tokensOut": 638,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 令牌由 `JwtTool` 生成与解析，解析失败抛 `UnauthorizedException`\n\n### 结论\n\n登录令牌的生成和校验都落在 `com.hmall.utils.JwtTool` 这个工具类上：它对外提供 `createToken`（生成令牌）和 `parseToken`（解析/校验令牌）两个方法。校验不通过时，它不会静默返回 null，而是抛出 `com.hmall.common.exception.UnauthorizedException`，由上层（比如拦截器）转成未登录的响应。\n\n### 它怎么发生\n\n从图上看，`JwtTool` 位于 `hm-service`"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 12329,
+        "llmCalls": 4,
+        "tokensIn": 14805,
+        "tokensOut": 1955,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "method-body",
+          "call-chain",
+          "call-chain",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 21,
+        "sections": 7,
+        "citations": 7,
+        "citationsOffered": 17,
+        "citationsUngrounded": 3,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 登录时用 RS256 私钥签发 JWT，网关和拦截器用同一套逻辑验签解析出 userId。\n\n### 结论\n\n令牌是标准 JWT（JSON Web Token，一种带签名的自包含凭证）：登录成功后由用户模块的 `com.hmall.user.utils.JwtTool#createToken` 用 **RS256** 签名生成，载荷里只放一个 `user` 字段（用户 id）和过期时间。校验不是查库，而是重新验签 + 校验过期时间，再把 `user` 解析回 `Long` 类型的 userId。项目里 `com.hmall.user.utils.JwtTool`、`com.hmall.g"
+      }
+    }
+  ]
+}

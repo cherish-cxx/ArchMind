@@ -1,0 +1,157 @@
+{
+  "generatedAt": "2026-11-04T04:40:47.526709+00:00",
+  "projectId": 2115334472151040002,
+  "dataset": "scripts\\eval\\retrieval_dataset.archmind.json",
+  "memoryEnabled": false,
+  "summary": {
+    "legacy": {
+      "questions": 2,
+      "errors": 0,
+      "answers": 2,
+      "degrades": 0,
+      "clarifies": 0,
+      "meanLatencyMs": 5528.0,
+      "meanLlmCalls": 2.0,
+      "meanToolCalls": 1.0,
+      "totalTokensIn": 5312,
+      "totalTokensOut": 1149,
+      "citationsOffered": 8,
+      "citationsUngrounded": 0,
+      "ungroundedRate": 0.0,
+      "gapRequired": 0,
+      "gapDisclosed": 0
+    },
+    "tools": {
+      "questions": 2,
+      "errors": 0,
+      "answers": 2,
+      "degrades": 0,
+      "clarifies": 0,
+      "meanLatencyMs": 9981.5,
+      "meanLlmCalls": 5.0,
+      "meanToolCalls": 8.0,
+      "totalTokensIn": 30121,
+      "totalTokensOut": 2668,
+      "citationsOffered": 21,
+      "citationsUngrounded": 0,
+      "ungroundedRate": 0.0,
+      "gapRequired": 0,
+      "gapDisclosed": 0
+    },
+    "delta": {
+      "latencyMs": 4453.5,
+      "toolCalls": 7.0,
+      "tokens": 26328,
+      "ungrounded": 0,
+      "answers": 0
+    }
+  },
+  "perQuestion": [
+    {
+      "id": "Q01",
+      "question": "用户注册的时候密码是怎么加密保存的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6133,
+        "llmCalls": 2,
+        "tokensIn": 2644,
+        "tokensOut": 588,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 图里只看到注册失败抛异常，密码加密环节没解析到\n\n### 结论\n\n**从当前代码图谱里，看不到密码加密保存的具体实现。** 以 `UserServiceImpl`（用户账户业务实现类，负责注册、查询、登录信息更新）为起点向下查调用链，图里只解析出它调用了 `BusinessException`（项目自定义的业务异常类），没有任何加密工具、密码编码器或保存动作的节点。所以「密码怎么加密」这个问题，**图给不出答案**，需要直接读 `UserServiceImpl` 的注册方法源码确认。\n\n### 图上能确认的那条路径\n\n唯一被解析到的调用关系是：`UserServiceImpl` 在业务处"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 10221,
+        "llmCalls": 5,
+        "tokensIn": 15382,
+        "tokensOut": 1319,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "class-relations",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "class-relations",
+          "call-chain",
+          "class-relations"
+        ],
+        "evidenceUids": 19,
+        "sections": 4,
+        "citations": 8,
+        "citationsOffered": 11,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 注册链路能追到 `UserServiceImpl`，但密码加密的具体实现没解析到。\n\n### 结论\n\n从图上看，注册请求由 `AuthController` 接收，转给 `UserService` 接口，落到实现类 `UserServiceImpl` 的 `UserRegister(RegisterRequest)` 方法里处理；它依赖 `UserMapper` 落库、`User` 实体承载账号信息。但**密码到底用什么算法、在哪一行加密，图里没有给出**——`UserServiceImpl` 的下游只有 `BusinessException`，没有出现任何密码编码器（如 `Passwo"
+      }
+    },
+    {
+      "id": "Q02",
+      "question": "登录成功后返回给前端的凭证里包含哪些信息？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4923,
+        "llmCalls": 2,
+        "tokensIn": 2668,
+        "tokensOut": 561,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 3,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## LoginResponse 是登录凭证载体，由 AuthService 及其实现类产出\n\n### 结论\n\n**`LoginResponse` 是登录成功后返回给前端的响应对象，负责承载登录结果与凭证信息。** 但需要先说明：图谱只解析到「谁依赖它」，**没有解析出它内部包含哪些字段**，所以具体字段清单在这张图里查不到。\n\n### 它是怎么被产出的\n\n从依赖方向看，是服务层指向这个响应类，而不是反过来：\n\n- `AuthService` 是认证服务的接口，负责用户登录、登出及令牌校验，它依赖 `LoginResponse`，说明登录方法的返回类型就是它；\n- `AuthServiceIm"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9742,
+        "llmCalls": 5,
+        "tokensIn": 14739,
+        "tokensOut": 1349,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "class-relations",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 11,
+        "sections": 4,
+        "citations": 8,
+        "citationsOffered": 10,
+        "citationsUngrounded": 0,
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 只能确认凭证由 `LoginResponse` 承载，具体字段源码读不到\n\n### 结论\n\n登录成功后返回给前端的凭证，在结构上就是 `com.example.archmind.dto.response.LoginResponse`（检索描述为「返回登录结果及凭证信息」）。但**它内部到底包含哪些字段，这次没能查到**：`LoginResponse` 的方法体读取返回空，`AuthServiceImpl#login(LoginRequest,String)` 和 `JwtUtil#generateAccessToken(Long,String)` 的源码读取都报「文件不存在或不可读」。所"
+      }
+    }
+  ]
+}

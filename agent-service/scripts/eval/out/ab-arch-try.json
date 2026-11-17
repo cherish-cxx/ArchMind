@@ -1,0 +1,158 @@
+{
+  "generatedAt": "2026-11-04T09:30:25.596561+00:00",
+  "projectId": 2117911554954194946,
+  "dataset": "scripts\\eval\\retrieval_dataset.archmind.json",
+  "memoryEnabled": false,
+  "summary": {
+    "legacy": {
+      "questions": 2,
+      "errors": 0,
+      "answers": 2,
+      "degrades": 0,
+      "clarifies": 0,
+      "meanLatencyMs": 5326.0,
+      "meanLlmCalls": 2.0,
+      "meanToolCalls": 1.0,
+      "totalTokensIn": 5750,
+      "totalTokensOut": 1163,
+      "citationsOffered": 5,
+      "citationsUngrounded": 0,
+      "ungroundedRate": 0.0,
+      "gapRequired": 0,
+      "gapDisclosed": 0
+    },
+    "tools": {
+      "questions": 2,
+      "errors": 0,
+      "answers": 2,
+      "degrades": 0,
+      "clarifies": 0,
+      "meanLatencyMs": 9475.0,
+      "meanLlmCalls": 5.5,
+      "meanToolCalls": 6.5,
+      "totalTokensIn": 40477,
+      "totalTokensOut": 2355,
+      "citationsOffered": 10,
+      "citationsUngrounded": 0,
+      "ungroundedRate": 0.0,
+      "gapRequired": 0,
+      "gapDisclosed": 0
+    },
+    "delta": {
+      "latencyMs": 4149.0,
+      "toolCalls": 5.5,
+      "tokens": 35919,
+      "ungrounded": 0,
+      "answers": 0
+    }
+  },
+  "perQuestion": [
+    {
+      "id": "Q01",
+      "question": "用户注册的时候密码是怎么加密保存的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5640,
+        "llmCalls": 2,
+        "tokensIn": 2898,
+        "tokensOut": 632,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 图里只看到注册业务会抛业务异常，密码加密环节没解析到\n\n### 结论\n\n**就当前代码图谱能查到的范围而言，`UserServiceImpl`（负责用户注册、查询和登录信息更新的账户业务实现类）的下游只有一个 `BusinessException`（项目自定义的业务异常类），并没有出现任何密码加密相关的调用。** 也就是说，注册时密码怎么加密保存，这张图回答不了；这并不代表项目里没有加密，只是图谱没有解析到。\n\n### 图上实际能看到的路径\n\n从 `UserServiceImpl` 出发向下游查调用链，只展开出两层：起点是 `UserServiceImpl` 本身（模块 `src`），深"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 8751,
+        "llmCalls": 5,
+        "tokensIn": 17392,
+        "tokensOut": 1030,
+        "toolCalls": 6,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "class-relations",
+          "method-body"
+        ],
+        "evidenceUids": 18,
+        "sections": 3,
+        "citations": 5,
+        "citationsOffered": 5,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 注册时用 `passwordEncoder.encode()` 把明文密码哈希后存入 `User` 表\n\n### 结论\n\n注册流程里密码不是明文落库的：`UserServiceImpl.UserRegister` 在把请求参数搬进 `User` 实体时，调用 `passwordEncoder.encode(request.getPassword())` 做一次单向哈希，再把结果 `setPassword` 到实体上，随后 `userMapper.insert(user)` 写入数据库。所以库里存的是哈希串，原始明文密码不会被保存。\n\n### 路径\n\n1. `AuthController."
+      }
+    },
+    {
+      "id": "Q02",
+      "question": "登录成功后返回给前端的凭证里包含哪些信息？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5012,
+        "llmCalls": 2,
+        "tokensIn": 2852,
+        "tokensOut": 531,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 3,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## LoginResponse 是登录成功后返回给前端的凭证载体，由认证服务产出\n\n### 结论\n\n**`LoginResponse` 是登录成功后返回给前端的响应对象，用来承载凭证与用户信息。** 但需要先说明：当前代码图谱只解析到「谁依赖它」，**没有解析出它内部包含哪些字段**，所以具体字段清单无法从图上给出。\n\n### 它是怎么被产出的\n\n从依赖方向看，指向 `LoginResponse` 的有两个类：\n\n- `AuthService`：认证服务的接口，负责登录、登出、令牌校验等认证动作，它依赖 `LoginResponse` 说明登录方法的返回类型就是这个响应对象。\n- `Auth"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 10199,
+        "llmCalls": 6,
+        "tokensIn": 23085,
+        "tokensOut": 1325,
+        "toolCalls": 7,
+        "toolNames": [
+          "method-body",
+          "call-chain",
+          "class-relations",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 14,
+        "sections": 4,
+        "citations": 5,
+        "citationsOffered": 5,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 登录返回 `LoginResponse`：userId、username、accessToken、refreshToken、expiresIn\n\n### 结论\n\n登录成功后，后端返回的是 `LoginResponse`（`com.example.archmind.dto.response.LoginResponse`，登录成功的响应体）。它包含 5 个字段：`userId`、`username`、`accessToken`、`refreshToken`、`expiresIn`。其中两个 token 都是 JWT，`expiresIn` 是 access token 的有效秒数。\n\n###"
+      }
+    }
+  ]
+}

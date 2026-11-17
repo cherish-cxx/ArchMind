@@ -1,0 +1,221 @@
+{
+  "generatedAt": "2026-11-04T09:10:37.321401+00:00",
+  "projectId": 2117859147238891521,
+  "dataset": "scripts\\eval\\ab_questions_hmall.json",
+  "memoryEnabled": false,
+  "summary": {
+    "legacy": {
+      "questions": 3,
+      "errors": 0,
+      "answers": 3,
+      "degrades": 0,
+      "clarifies": 0,
+      "meanLatencyMs": 5418.7,
+      "meanLlmCalls": 2.0,
+      "meanToolCalls": 1.0,
+      "totalTokensIn": 9005,
+      "totalTokensOut": 2089,
+      "citationsOffered": 21,
+      "citationsUngrounded": 0,
+      "ungroundedRate": 0.0,
+      "gapRequired": 1,
+      "gapDisclosed": 1
+    },
+    "tools": {
+      "questions": 3,
+      "errors": 0,
+      "answers": 3,
+      "degrades": 0,
+      "clarifies": 0,
+      "meanLatencyMs": 10904.7,
+      "meanLlmCalls": 5.3,
+      "meanToolCalls": 7.0,
+      "totalTokensIn": 77257,
+      "totalTokensOut": 4222,
+      "citationsOffered": 22,
+      "citationsUngrounded": 6,
+      "ungroundedRate": 0.2727,
+      "gapRequired": 1,
+      "gapDisclosed": 1
+    },
+    "delta": {
+      "latencyMs": 5486.0,
+      "toolCalls": 6.0,
+      "tokens": 70385,
+      "ungrounded": 6,
+      "answers": 0
+    }
+  },
+  "perQuestion": [
+    {
+      "id": "H02",
+      "question": "用户下单时订单是怎么创建并保存到数据库的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5292,
+        "llmCalls": 2,
+        "tokensIn": 3062,
+        "tokensOut": 664,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 6,
+        "sections": 3,
+        "citations": 6,
+        "citationsOffered": 7,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": true,
+        "messagePreview": "## 下单入口是 IOrderService.createOrder，实现类 OrderServiceImpl 负责组装订单\n\n### 结论\n\n**下单创建订单的入口是 `IOrderService` 接口上的 `createOrder` 方法，真正干活的是它的实现类 `OrderServiceImpl`。** 这个接口还定义了 `cancelOrder`（取消订单）和 `markOrderPaySuccess`（标记支付成功）两个方法，说明它是 trade-service（交易服务模块）对外暴露的订单业务门面。\n\n### 创建订单时它依赖了谁\n\n`OrderServiceImpl` 在创建订"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 12120,
+        "llmCalls": 7,
+        "tokensIn": 47403,
+        "tokensOut": 1286,
+        "toolCalls": 8,
+        "toolNames": [
+          "overview",
+          "classes",
+          "classes",
+          "class-relations",
+          "call-chain",
+          "method-body",
+          "class-relations",
+          "class-relations"
+        ],
+        "evidenceUids": 184,
+        "sections": 4,
+        "citations": 5,
+        "citationsOffered": 6,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": true,
+        "messagePreview": "## 订单创建在 `OrderServiceImpl`，但具体落库细节本轮没查到\n\n### 结论\n\n下单的入口不在购物车服务，而在订单服务（trade 模块）的 `com.hmall.trade.service.impl.OrderServiceImpl`。这个类是我在查 `ItemClient` 的上游时发现的：它既 `CALLS` 也 `DEPENDS` 于 `ItemClient`，说明下单流程里会远程调用商品服务（查商品、扣库存）。但**它内部具体怎么组装订单、怎么写入数据库，本轮没有查到**，所以不能给你确定的落库路径。\n\n### 已确认的路径\n\n从购物车侧追下来是这样的：`Cart"
+      }
+    },
+    {
+      "id": "H03",
+      "question": "购物车添加商品的流程是怎么走的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6265,
+        "llmCalls": 2,
+        "tokensIn": 3188,
+        "tokensOut": 822,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 6,
+        "sections": 3,
+        "citations": 6,
+        "citationsOffered": 10,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 加购入口在 CartServiceImpl，它依赖用户上下文、商品微服务和几个工具类\n\n### 结论\n\n购物车添加商品的业务逻辑集中在 `com.hmall.cart.service.impl.CartServiceImpl`（cart-service 模块里实现购物车增删查的服务类）。从调用图看，它向下依赖 5 个类：`UserContext`、`ItemClient`、`BeanUtils`、`CollUtils`、`BizIllegalException`。**注意：图里只解析到「它调用了谁」，没有解析到具体是哪个方法在什么条件下调用谁**，所以下面讲的是依赖关系，不是逐行执行顺序"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9847,
+        "llmCalls": 5,
+        "tokensIn": 15831,
+        "tokensOut": 1388,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 9,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 6,
+        "citationsUngrounded": 4,
+        "citationsUngroundedUids": [
+          "com.hmall.service.ICartService",
+          "com.hmall.cart.mapper.CartMapper",
+          "com.hmall.cart.domain.dto.CartFormDTO",
+          "com.hmall.cart.domain.po.Cart"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 添加购物车走 `addItem2Cart`：先查是否已存在，存在就加数量，不存在就校验上限后新增。\n\n### 结论\n\n购物车添加商品的主流程在 `com.hmall.cart.service.impl.CartServiceImpl#addItem2Cart(CartFormDTO)` 里，它由接口 `com.hmall.cart.service.ICartService` 声明、由 `CartServiceImpl` 实现。整体是「先判断这件商品在不在我的购物车里」：在就只把数量 +1，不在才走新增，新增前还要检查购物车是否已满。\n\n### 路径（按执行顺序）\n\n1. `UserCon"
+      }
+    },
+    {
+      "id": "H06",
+      "question": "登录后返回的令牌是怎么生成和校验的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4699,
+        "llmCalls": 2,
+        "tokensIn": 2755,
+        "tokensOut": 603,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 令牌由 `JwtTool` 生成与解析，解析失败抛 `UnauthorizedException`\n\n### 结论\n\n登录令牌的生成和校验都落在 `com.hmall.utils.JwtTool` 这个工具类上：它对外提供 `createToken`（生成令牌）和 `parseToken`（解析/校验令牌）两个方法。校验不通过时，它不会返回 null 或布尔值，而是直接抛出 `com.hmall.common.exception.UnauthorizedException`，由上层（比如拦截器）去捕获并决定返回 401 还是跳登录。\n\n### 它怎么发生\n\n按图上的调用关系，`JwtTo"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 10747,
+        "llmCalls": 4,
+        "tokensIn": 14023,
+        "tokensOut": 1548,
+        "toolCalls": 5,
+        "toolNames": [
+          "method-body",
+          "method-body",
+          "call-chain",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 10,
+        "sections": 4,
+        "citations": 4,
+        "citationsOffered": 10,
+        "citationsUngrounded": 2,
+        "citationsUngroundedUids": [
+          "com.hmall.user.config.JwtProperties",
+          "com.hmall.common.utils.UserContext"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 登录时用 RS256 私钥签发 JWT，请求时拦截器用同一签名器验签并取出 userId\n\n### 结论\n\n令牌是 **JWT（JSON Web Token）**，由用户模块的 `com.hmall.user.utils.JwtTool` 用 **RS256 非对称签名**生成：`JwtTool` 构造时接收一个 `KeyPair`，用 `JWTSignerUtil.createSigner(\"rs256\", keyPair)` 造出签名器。登录成功后 `UserServiceImpl.login` 调 `createToken(userId, ttl)` 签发，把令牌塞进 `UserL"
+      }
+    }
+  ]
+}

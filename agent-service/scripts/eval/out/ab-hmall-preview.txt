@@ -1,0 +1,25 @@
+===== H01 下单的调用链是怎样的？
+--- legacy: outcome=TOOL_NO tools=['call-chain'] evidence=0 llm=1 ui=[]
+这个我答不了：该类下没有方法，或指定方法不存在: com.hmall.trade.domain.dto.OrderFormDTO
+
+--- tools: outcome=DEGRADED tools=['overview', 'classes', 'classes', 'call-chain', 'class-relations', 'call-chain', 'method-body', 'method-body'] evidence=187 llm=7 ui=['FOCUS_NODE']
+（本轮没能生成结构化讲解，以下是已经查到的结果）这是一个后端服务项目。基于 Spring Cloud Alibaba 的电商微服务模块，集成 Nacos、Seata、Sentinel 与 MyBatis-Plus。（技术栈 11 项，架构 微服务，3 个模块） 取到 60 条结果。 取到 181 条结果。 这个我答不了：该类下没有方法，或指定方法不存在: com.hmall.trade.domain.dto.OrderFormDTO 已取到数据。 OrderController（接口，实现类 OrderServiceImpl） 往下调用了 7 个类 —— hm-common: BeanUtil
+
+===== H02 用户下单时订单是怎么创建并保存到数据库的？
+--- legacy: outcome=OK tools=['call-chain'] evidence=6 llm=2 ui=['SHOW_PATH']
+## 下单入口是 IOrderService.createOrder，实现类 OrderServiceImpl 负责组装订单
+
+### 结论
+
+**订单创建的业务入口是 `IOrderService` 接口上的 `createOrder` 方法，真正干活的是它的实现类 `OrderServiceImpl`。** 从这张图能看到的只是「下单流程会去查商品、查购物车、取当前用户、并在校验失败时抛异常」这一层骨架；**订单对象最终怎么落库（写 `Order` / `OrderDetail` 表的那一步），图里没有解析到**，所以不能从这张图断言保存细节。
+
+### 调用是怎么发生的
+
+顺序是这样的：
+
+--- tools: outcome=OK tools=['call-chain', 'method-body', 'call-chain', 'method-body', 'method-body', 'call-chain'] evidence=17 llm=4 ui=['SHOW_PATH']
+## 下单由 `OrderController.createOrder` 进入，`OrderServiceImpl.createOrder` 在一个事务里写订单主表、明细表，再清购物车、扣库存。
+
+### 结论
+
+下单入口是 `com.hmall.controller.OrderController#createOrder`（`POST` 接口，接收 `OrderFormDTO` 请求体），它只做一件事：把请求原样交给 `IOrderService.createOrder`。真正的创建与落库逻辑全在实现类 `com.hmall.service.impl.OrderServiceImpl#cre

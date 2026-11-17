@@ -1,0 +1,2222 @@
+{
+  "generatedAt": "2026-11-04T09:40:56.248820+00:00",
+  "projectId": 2117911554954194946,
+  "dataset": "scripts\\eval\\retrieval_dataset.archmind.json",
+  "memoryEnabled": false,
+  "summary": {
+    "legacy": {
+      "questions": 40,
+      "errors": 0,
+      "answers": 38,
+      "degrades": 2,
+      "clarifies": 0,
+      "meanLatencyMs": 5241.6,
+      "meanLlmCalls": 1.9,
+      "meanToolCalls": 1.0,
+      "totalTokensIn": 117346,
+      "totalTokensOut": 25785,
+      "citationsOffered": 148,
+      "citationsUngrounded": 0,
+      "ungroundedRate": 0.0,
+      "gapRequired": 0,
+      "gapDisclosed": 0
+    },
+    "tools": {
+      "questions": 40,
+      "errors": 0,
+      "answers": 39,
+      "degrades": 1,
+      "clarifies": 0,
+      "meanLatencyMs": 9983.3,
+      "meanLlmCalls": 4.7,
+      "meanToolCalls": 6.6,
+      "totalTokensIn": 690098,
+      "totalTokensOut": 54592,
+      "citationsOffered": 194,
+      "citationsUngrounded": 25,
+      "ungroundedRate": 0.1289,
+      "gapRequired": 0,
+      "gapDisclosed": 0
+    },
+    "delta": {
+      "latencyMs": 4741.7,
+      "toolCalls": 5.6,
+      "tokens": 601559,
+      "ungrounded": 25,
+      "answers": 1
+    }
+  },
+  "perQuestion": [
+    {
+      "id": "Q01",
+      "question": "用户注册的时候密码是怎么加密保存的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5241,
+        "llmCalls": 2,
+        "tokensIn": 2898,
+        "tokensOut": 526,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 图里只看到注册业务抛异常，没解析到密码加密环节\n\n### 先给结论\n\n**从这张代码图谱里，看不到密码是怎么加密保存的。** 以 `UserServiceImpl`（账户业务实现类，负责注册、查询、更新登录信息）为起点往下查，图里只解析出它调用了 `BusinessException`（项目自定义的业务异常类，用来在业务校验失败时中断流程并抛出错误），没有任何加密工具类、密码编码器或用户表写入的调用边。所以「注册时密码如何加密」这一步，在当前图谱里是缺失的，不能凭常识替它补上。\n\n### 图里实际有的那条路径\n\n目前唯一能确认的调用关系是：`UserServiceImpl` 在注册等账户"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9824,
+        "llmCalls": 5,
+        "tokensIn": 19216,
+        "tokensOut": 1301,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "class-relations",
+          "method-body",
+          "classes"
+        ],
+        "evidenceUids": 71,
+        "sections": 3,
+        "citations": 5,
+        "citationsOffered": 5,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 注册时用 `passwordEncoder.encode()` 把明文密码哈希后再入库，库里不存明文。\n\n### 结论\n\n注册流程里唯一处理密码的地方是 `UserServiceImpl.UserRegister` 中的一行：`user.setPassword(passwordEncoder.encode(request.getPassword()))`。也就是说，从 `RegisterRequest` 拿到的明文密码先经过 `passwordEncoder` 编码，编码结果才写进 `User` 实体，随后 `userMapper.insert(user)` 落库。因此数据库里保存的是编"
+      }
+    },
+    {
+      "id": "Q02",
+      "question": "登录成功后返回给前端的凭证里包含哪些信息？",
+      "legacy": {
+        "outcome": "TOOL_NO",
+        "latencyMs": 1470,
+        "llmCalls": 1,
+        "tokensIn": 1271,
+        "tokensOut": 77,
+        "toolCalls": 1,
+        "toolNames": [
+          "method-body"
+        ],
+        "evidenceUids": 0,
+        "sections": 0,
+        "citations": 0,
+        "citationsOffered": 0,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [],
+        "disclosedGap": null,
+        "messagePreview": "这个我答不了：没有找到可切片的方法: com.example.archmind.dto.response.LoginResponse"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 11112,
+        "llmCalls": 6,
+        "tokensIn": 22995,
+        "tokensOut": 1396,
+        "toolCalls": 7,
+        "toolNames": [
+          "method-body",
+          "call-chain",
+          "call-chain",
+          "class-relations",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 14,
+        "sections": 5,
+        "citations": 6,
+        "citationsOffered": 6,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 登录返回 `LoginResponse`：userId、username、accessToken、refreshToken、expiresIn\n\n### 结论\n\n登录成功后，后端返回的是 `com.example.archmind.dto.response.LoginResponse`（登录响应 DTO，DTO 即专门用于接口出入参的数据对象），里面共 5 个字段：`userId`、`username`、`accessToken`、`refreshToken`、`expiresIn`。也就是说，前端拿到的是「用户身份 + 双令牌 + access token 有效期秒数」，而不是完整的用"
+      }
+    },
+    {
+      "id": "Q03",
+      "question": "访问令牌是怎么生成和校验的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6832,
+        "llmCalls": 2,
+        "tokensIn": 2839,
+        "tokensOut": 774,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 1,
+        "sections": 3,
+        "citations": 1,
+        "citationsOffered": 1,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## JwtUtil 是令牌生成与解析的落点，但图里查不到它的上下游\n\n### 先给结论\n\n**访问令牌的生成与校验，在这个项目的代码图谱里只定位到 `com.example.archmind.common.util.JwtUtil` 这一个类，它自己就是链条的起点，也是唯一被查到的节点。** 也就是说，从图上看，`JwtUtil` 往下没有任何被调用的类，往上也没有任何调用它的类被解析出来。所以「谁在登录时调它生成令牌、谁在请求进来时调它校验令牌」这条完整链路，**这张图给不出来**。\n\n### 这个类本身负责什么\n\n`JwtUtil` 位于 `common.util` 包下，从命名和包位置"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 12281,
+        "llmCalls": 5,
+        "tokensIn": 23847,
+        "tokensOut": 1803,
+        "toolCalls": 7,
+        "toolNames": [
+          "method-body",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 14,
+        "sections": 6,
+        "citations": 2,
+        "citationsOffered": 3,
+        "citationsUngrounded": 1,
+        "citationsUngroundedUids": [
+          "com.example.archmind.config.JwtAuthenticationFilter"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## JWT 负责签名与过期，Redis 负责「是否仍有效」的实时判定\n\n### 结论\n\n令牌由 `JwtUtil` 用同一套 claims（`userId`、`username`、`type`）签发两种：`type=access` 的访问令牌和 `type=refresh` 的刷新令牌，区别只在过期时长。校验分两层：`JwtAuthenticationFilter` 每个请求先问 `AuthServiceImpl.validateTokenFromRedis` 这个令牌在 Redis 里还在不在、有没有被拉黑，通过后再用 `JwtUtil` 解析出用户名去加载用户、写入 `SecurityC"
+      }
+    },
+    {
+      "id": "Q04",
+      "question": "每次请求进来时是怎么识别当前用户的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5822,
+        "llmCalls": 2,
+        "tokensIn": 3016,
+        "tokensOut": 685,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 5,
+        "sections": 3,
+        "citations": 5,
+        "citationsOffered": 5,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 请求身份由 JwtAuthenticationFilter 解析令牌并校验后确定\n\n### 结论\n\n**每次请求进来时，识别当前用户的工作由 `JwtAuthenticationFilter` 承担**：它是一个过滤器（Filter，在请求进入业务代码之前先跑的一段拦截逻辑），负责从请求里取出 JWT 令牌、解析并校验它，从而确定这次请求属于哪个用户。\n\n### 它怎么发生\n\n按图上的调用关系，顺序是这样的：\n\n- `JwtAuthenticationFilter` 先调用 `JwtUtil`（JWT 工具类，负责令牌的解析/校验这类纯技术操作），把请求里带的令牌解出来。\n- 同时它调用"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 8544,
+        "llmCalls": 3,
+        "tokensIn": 10202,
+        "tokensOut": 1184,
+        "toolCalls": 4,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 11,
+        "sections": 5,
+        "citations": 5,
+        "citationsOffered": 6,
+        "citationsUngrounded": 1,
+        "citationsUngroundedUids": [
+          "com.example.archmind.common.util.CheckProjectUtil"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 请求身份由 JWT 过滤器解析，校验 Redis 后写入 SecurityContext\n\n### 结论\n\n每个请求进来先过 `JwtAuthenticationFilter`（一个 Spring Security 的 `OncePerRequestFilter`，即每个请求只执行一次的过滤器）。它从请求里取出 JWT，确认这个 token 在 Redis 里仍然有效，然后解析出用户名、加载用户信息，把认证对象塞进 `SecurityContextHolder`。后续业务代码不再看 token，而是从 `SecurityContextHolder` 里读当前用户。\n\n### 路径\n\n1."
+      }
+    },
+    {
+      "id": "Q05",
+      "question": "用户认证信息是怎么从数据库加载给安全框架的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4683,
+        "llmCalls": 2,
+        "tokensIn": 2927,
+        "tokensOut": 630,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 3,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 安全框架通过 UserDetailsServiceImpl 调用 UserService 取用户，再落到实现类\n\n### 结论\n\n**认证信息的加载入口是 `UserDetailsServiceImpl`，它自己不查库，而是把活交给 `UserService` 接口，最终由实现类 `UserServiceImpl` 承接。** 也就是说，从图上看，这条链只到「接口 → 实现类」这一层，再往下的数据库访问没有被解析出来。\n\n### 这条链怎么走\n\n1. 安全框架需要某个用户的认证信息时，会调用 `UserDetailsServiceImpl`（这个类的作用就是「为安全框架提供用户认证信息加"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9639,
+        "llmCalls": 5,
+        "tokensIn": 15577,
+        "tokensOut": 1311,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "class-relations",
+          "method-body",
+          "class-relations"
+        ],
+        "evidenceUids": 11,
+        "sections": 4,
+        "citations": 5,
+        "citationsOffered": 7,
+        "citationsUngrounded": 2,
+        "citationsUngroundedUids": [
+          "com.example.archmind.config.SecurityConfig",
+          "com.example.archmind.dao.UserMapper"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 安全框架通过 `UserDetailsServiceImpl` 按用户名查库，再包装成 `SecurityUser` 交给 Spring Security。\n\n### 结论\n\n认证信息不是安全框架自己去读库的：Spring Security 在认证时回调 `UserDetailsServiceImpl.loadUserByUsername(String)`，这个方法用 `UserService.getByUsername` 从数据库取出一条 `User` 实体，再把它包成 `SecurityUser`（`UserDetails` 的实现）返回。所以「加载」这一步的落点是 `UserDet"
+      }
+    },
+    {
+      "id": "Q06",
+      "question": "用户没有权限访问某个接口时会返回什么？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5038,
+        "llmCalls": 2,
+        "tokensIn": 2766,
+        "tokensOut": 570,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 无权限时由 AccessDeniedHandlerImpl 统一返回 Result 封装的错误响应\n\n### 结论\n\n用户没有权限访问某个接口时，响应由 `AccessDeniedHandlerImpl` 这个类统一处理——它是 Spring Security 体系里的「拒绝访问处理器」，专门接管「已登录但权限不够」的情况。它最终把结果包装成项目统一的 `Result` 对象返回给前端，而不是抛裸异常或返回框架默认页面。\n\n### 它是怎么发生的\n\n触发方不是业务代码，而是安全框架：当请求通过了认证、但在鉴权阶段被判定为权限不足时，框架会把控制权交给注册的 `AccessDeniedHa"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 11329,
+        "llmCalls": 5,
+        "tokensIn": 19821,
+        "tokensOut": 1445,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "class-relations",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "classes",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 66,
+        "sections": 4,
+        "citations": 4,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 返回 HTTP 403 + 统一 `Result` 体，code/message 取自 `ResultCode.FORBIDDEN`\n\n### 结论\n\n用户已登录但**没有权限**访问某接口时，项目走的是 Spring Security 的「拒绝访问」回调 `AccessDeniedHandlerImpl#handle`：HTTP 状态码设为 **403（`SC_FORBIDDEN`）**，响应体是项目统一的 `Result<Void>` 封装，内容由 `Result.fail(ResultCode.FORBIDDEN)` 生成，即 `code` 和 `message` 都取自枚举 `R"
+      }
+    },
+    {
+      "id": "Q07",
+      "question": "注册接口需要前端传哪些字段？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5035,
+        "llmCalls": 2,
+        "tokensIn": 2827,
+        "tokensOut": 580,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 4,
+        "sections": 3,
+        "citations": 4,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 注册请求体由 RegisterRequest 承载，被三层依赖\n\n### 结论\n\n注册接口的入参就是 `RegisterRequest` 这个 DTO（数据传输对象，专门用来装一次请求提交的字段）。图里能看到它被三个地方依赖：**接口层**的 `AuthController`、**服务接口** `UserService`、**服务实现** `UserServiceImpl`。也就是说，前端提交的注册数据从控制器一路传到业务层，用的都是同一个对象。\n\n### 它怎么被用起来\n\n调用顺序是：`AuthController`（对外暴露注册、登录等 HTTP 接口的入口类）接收请求，把请求体绑定"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 7575,
+        "llmCalls": 4,
+        "tokensIn": 12860,
+        "tokensOut": 912,
+        "toolCalls": 5,
+        "toolNames": [
+          "method-body",
+          "method-body",
+          "class-relations",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 10,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 注册接口 `POST /register` 的请求体是 `RegisterRequest`，实际用到 username、password、email、phone 四个字段。\n\n### 结论\n\n前端调用 `AuthController#register` 时，请求体（JSON）需要提供 `username`、`password`、`email`、`phone` 四个字段。这四个字段是 `UserServiceImpl#UserRegister` 里真正读取并写入 `User` 实体的全部内容，其余字段（`id`、`createTime`、`updateTime`）由后端自己生成。\n\n###"
+      }
+    },
+    {
+      "id": "Q08",
+      "question": "登录之后怎么把旧令牌换成新的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6210,
+        "llmCalls": 2,
+        "tokensIn": 3593,
+        "tokensOut": 839,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 9,
+        "sections": 3,
+        "citations": 8,
+        "citationsOffered": 8,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 刷新令牌由 AuthController 的 refresh 接口发起，经 AuthService 落到 AuthServiceImpl 完成换发\n\n### 结论\n\n**换令牌的入口是 `AuthController` 的 `refresh` 方法**（这个类集中提供注册、登录、登出和令牌刷新四类 HTTP 接口）。它把请求交给认证服务接口 `AuthService`，真正干活的是实现类 `AuthServiceImpl` 的 `refreshToken` 方法——旧令牌校验、新令牌生成、缓存更新都在这一层完成。\n\n### 调用路径\n\n按图上的调用关系，顺序是这样的：\n\n1. **`Au"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 13086,
+        "llmCalls": 5,
+        "tokensIn": 20024,
+        "tokensOut": 1818,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body",
+          "class-relations",
+          "method-body"
+        ],
+        "evidenceUids": 20,
+        "sections": 5,
+        "citations": 4,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 旧令牌换新令牌走 `AuthServiceImpl.refreshToken`：校验旧 refresh token 后签发一对新令牌，并删掉旧的 refresh token。\n\n### 结论\n\n换令牌的核心逻辑在 `AuthServiceImpl.refreshToken(String refreshToken)` 里。它接收的是**刷新令牌（refresh token）**，不是访问令牌（access token）：校验通过后重新生成一对 access + refresh 令牌写回 Redis，并把旧的 refresh token 删掉（代码注释写明「一次性的」）。所以调用方必须拿登录"
+      }
+    },
+    {
+      "id": "Q09",
+      "question": "上传的项目压缩包是怎么安全解压的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6283,
+        "llmCalls": 2,
+        "tokensIn": 2860,
+        "tokensOut": 695,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 安全解压由 ZipExtractServiceImpl 负责，校验失败抛 BusinessException\n\n### 结论\n\n上传压缩包的安全解压入口是 `ZipExtractServiceImpl`（`com.example.archmind.service.impl.ZipExtractServiceImpl`），它对外提供 `extract` 方法把压缩包解到目标目录，内部用 `resolveEntry` 逐个处理压缩包里的条目。当某个条目被判定为不安全时，它不会静默跳过，而是抛出 `BusinessException`（项目自定义的业务异常，用来把「解压失败」这类可预期错误统一"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 10322,
+        "llmCalls": 5,
+        "tokensIn": 19182,
+        "tokensOut": 1338,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 14,
+        "sections": 4,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 上传先做四道校验，落盘后用 Zip Slip 防护逐条解压到 source 子目录\n\n### 结论\n\n安全解压分两层：入口 `UploadServiceImpl.upload` 先校验文件本身（非空、大小、后缀、ZIP 魔数），再由 `ZipExtractServiceImpl.extract` 逐条解析压缩条目，每条都经 `resolveEntry` 做路径逃逸检查，命中就抛异常中止。\n\n### 路径：从上传到解压\n\n1. `upload(projectId, file)` 第一步调 `validateFile`：空文件直接拒；大小超过 `UploadProperties.getMax"
+      }
+    },
+    {
+      "id": "Q10",
+      "question": "上传源码后文件记录是怎么写进数据库的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5202,
+        "llmCalls": 2,
+        "tokensIn": 3262,
+        "tokensOut": 666,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 7,
+        "sections": 3,
+        "citations": 7,
+        "citationsOffered": 7,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 上传链路只到解压和扫描，写库这一步图里没解析到\n\n### 先给结论\n\n**从当前这张调用图看，`UploadServiceImpl` 的下游只到「校验 → 解压 → 扫描文件」为止，没有任何一条边指向数据库访问层。** 也就是说，文件记录最终怎么落库，这张图没有给出答案；检索参考里提到的 `ProjectSourceMapper`（项目源码数据的数据库访问接口）只是候选，并没有被查证过，不能当作调用链的一环。\n\n### 上传时实际发生了什么\n\n入口是 `UploadServiceImpl`（上传业务的实现类，负责接收压缩包并准备源码目录）。它按顺序调用三样东西：\n\n- `CheckPro"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 14206,
+        "llmCalls": 4,
+        "tokensIn": 15945,
+        "tokensOut": 1767,
+        "toolCalls": 5,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 19,
+        "sections": 5,
+        "citations": 7,
+        "citationsOffered": 7,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 上传后先插 `project_source` 占位，解压后递归扫描目录逐条插入 `file` 表，最后回填 `project_source`。\n\n### 结论\n\n文件记录不是一次性批量写入的，而是分两阶段：先插一条 `ProjectSource`（`project_source` 表）拿到自增 ID，用这个 ID 当磁盘目录名；解压完成后由 `FileScannerServiceImpl` 递归遍历解压目录，**每个文件/目录各插一条 `FileEntity`（`file` 表）**，最后再 `updateById` 回填 `project_source` 的根文件 ID 和状态。\n\n#"
+      }
+    },
+    {
+      "id": "Q11",
+      "question": "项目的文件树是怎么构建和查询的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6187,
+        "llmCalls": 2,
+        "tokensIn": 2924,
+        "tokensOut": 725,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 3,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 文件树由 FileTreeNodeServiceImpl 构建，但图里只解析到校验与异常两条下游\n\n### 先给结论\n\n**文件树的构建与查询入口是 `FileTreeNodeServiceImpl`（`FileTreeNodeService` 接口的实现类），但本次调用链只解析出它依赖两个类：`CheckProjectUtil` 和 `BusinessException`。** 也就是说，从这张图能确认的只有「先校验项目、校验不过就抛业务异常」这一段；真正把文件记录拼成树节点、按父目录查子节点的逻辑，图里没有解析到，不能替你补。\n\n### 它怎么发生\n\n按图上的调用关系，顺序是这样的："
+      },
+      "tools": {
+        "outcome": "DEGRADED",
+        "latencyMs": 11712,
+        "llmCalls": 5,
+        "tokensIn": 19979,
+        "tokensOut": 1716,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 23,
+        "sections": 0,
+        "citations": 12,
+        "citationsOffered": 0,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "（本轮没能生成结构化讲解，以下是已经查到的结果）ProjectSourceController（接口，实现类 UploadServiceImpl、FileTreeNodeServiceImpl、ZipExtractServiceImpl、FileScannerServiceImpl） 往下调用了 11 个类 —— src: UploadService、Result、FileTreeNodeService、UploadServiceImpl、FileTreeNodeServiceImpl、CheckProjectUtil、ZipExtractService、BusinessException、F"
+      }
+    },
+    {
+      "id": "Q12",
+      "question": "上传文件的大小限制在哪里配置？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4976,
+        "llmCalls": 2,
+        "tokensIn": 2845,
+        "tokensOut": 647,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 3,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 上传大小限制配置在 UploadProperties，被两个 ServiceImpl 依赖\n\n### 结论\n\n上传文件的大小限制配置在 **`com.example.archmind.config.UploadProperties`** 这个类里 —— 它是专门承载文件上传相关配置参数的配置类（`config` 包下的 `*Properties` 通常就是绑定配置文件里某一组参数的载体）。图里能确认的是：有两个业务实现类依赖它，但**具体是哪个字段、哪个方法读取了大小限制，图里没有解析到**。\n\n### 谁在用它、怎么用\n\n从依赖方向看，`UploadProperties` 是**被依赖"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 6970,
+        "llmCalls": 4,
+        "tokensIn": 13466,
+        "tokensOut": 917,
+        "toolCalls": 4,
+        "toolNames": [
+          "method-body",
+          "class-relations",
+          "method-body",
+          "call-chain"
+        ],
+        "evidenceUids": 6,
+        "sections": 4,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 大小限制在 `UploadProperties` 的 `maxZipSizeMb` 字段，由 `UploadServiceImpl.validateFile` 读取\n\n### 结论\n\n上传压缩包的大小上限由配置类 `com.example.archmind.config.UploadProperties` 的 `maxZipSizeMb` 字段承载（单位 MB）。真正执行校验的是 `UploadServiceImpl` 的私有方法 `validateFile`，它把该值换算成字节后与 `file.getSize()` 比较，超限就抛 `BusinessException(\"压缩包大小超过"
+      }
+    },
+    {
+      "id": "Q13",
+      "question": "创建项目的接口和请求参数是什么？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5853,
+        "llmCalls": 2,
+        "tokensIn": 3108,
+        "tokensOut": 732,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 7,
+        "sections": 3,
+        "citations": 7,
+        "citationsOffered": 7,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 创建项目入口在 ProjectController.create，请求体由 ProjectCreateRequest 承载\n\n### 结论\n\n创建项目的接口是 `ProjectController` 里的 `create` 方法（这个类负责项目的新建、查询和删除三类 HTTP 接口）。请求参数封装在 `ProjectCreateRequest` 这个 DTO 里——DTO 就是专门用来接前端提交数据的对象，字段与前端 JSON 一一对应。不过要提醒：**图里没有解析出 `create` 方法到 `ProjectCreateRequest` 的参数绑定关系**，所以具体字段名和校验注解，需"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 7955,
+        "llmCalls": 4,
+        "tokensIn": 12824,
+        "tokensOut": 1159,
+        "toolCalls": 5,
+        "toolNames": [
+          "method-body",
+          "method-body",
+          "class-relations",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 12,
+        "sections": 5,
+        "citations": 8,
+        "citationsOffered": 8,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [],
+        "disclosedGap": null,
+        "messagePreview": "## `POST /api/projects`（类级 `@RequestMapping` 前缀未在切片中显示），请求体为 `ProjectCreateRequest`，含 name、description、gitUrl 三个字段。\n\n### 结论\n\n创建项目走 `ProjectController#create`，它是一个 `@PostMapping` 方法，接收 `@Valid @RequestBody ProjectCreateRequest`，返回 `Result<ProjectResponse>`。也就是说：请求体是 JSON，字段由 `ProjectCreateRequest` 决定"
+      }
+    },
+    {
+      "id": "Q14",
+      "question": "删除项目的时候会清理哪些数据？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4927,
+        "llmCalls": 2,
+        "tokensIn": 2973,
+        "tokensOut": 641,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 4,
+        "sections": 3,
+        "citations": 4,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 删除项目由 ProjectServiceImpl 处理，图中只解析到缓存清理与校验两个下游\n\n### 结论\n\n**删除项目的入口是 `ProjectServiceImpl`（项目业务逻辑的实现类），但图里能确认的清理动作只有缓存这一块，数据库记录和磁盘目录的删除在图里没有解析到。** 所以「删项目会清哪些数据」这个问题，目前只能回答一半：缓存会被清，其余部分属于图的盲区。\n\n### 它怎么发生\n\n调用链从 `ProjectServiceImpl` 出发，往下只连到三个类：\n\n- `CheckProjectUtil`（项目校验工具类）：删除前先做项目相关的合法性检查，比如项目是否存在、是否"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 10276,
+        "llmCalls": 5,
+        "tokensIn": 18525,
+        "tokensOut": 1445,
+        "toolCalls": 7,
+        "toolNames": [
+          "method-body",
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 10,
+        "sections": 4,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 删除项目会清三张子表 + 项目主表 + 磁盘目录 + Redis 缓存\n\n### 结论\n\n删除项目由 `ProjectServiceImpl.deleteProject(Long projectId)` 完成，它在一个事务里按「先子表、后主表」的顺序清掉 4 张表的数据，然后删磁盘上的项目目录，最后删 Redis 里该项目的 overview 缓存。所以清理范围是：`project_source`、`file_entity`、`project_overview`、`project` 四张表 + `{baseDir}/{projectId}` 目录 + 一个缓存 key。\n\n### 执行路"
+      }
+    },
+    {
+      "id": "Q15",
+      "question": "怎么保证用户只能操作自己的项目？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6298,
+        "llmCalls": 2,
+        "tokensIn": 2856,
+        "tokensOut": 773,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 归属校验集中在 CheckProjectUtil，校验失败抛 BusinessException\n\n### 结论\n\n**项目归属权限的校验逻辑集中在一个工具类 `CheckProjectUtil` 里**：它负责判断项目是否存在、以及当前登录用户是不是这个项目的主人。校验不通过时，它不会返回 false 让调用方自己处理，而是直接抛出 `BusinessException`（项目自定义的业务异常），由上层统一转成错误响应。需要说明的是，图里只解析出 `CheckProjectUtil` 到 `BusinessException` 这一条调用关系，**谁调用了 `CheckProjectU"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 7950,
+        "llmCalls": 3,
+        "tokensIn": 10141,
+        "tokensOut": 1079,
+        "toolCalls": 4,
+        "toolNames": [
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 17,
+        "sections": 4,
+        "citations": 5,
+        "citationsOffered": 5,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 靠 `CheckProjectUtil.checkProject` 在按 projectId 操作前校验归属，列表则按 userId 过滤\n\n### 结论\n\n项目归属校验集中在一个工具类 `CheckProjectUtil` 里：它先从 Spring Security 的 `SecurityContextHolder` 取出当前登录用户（`SecurityUser` 里的 `userId`），再拿数据库里 `Project.userId` 与之比对，不一致就抛 `BusinessException(\"无权操作该项目\")`。所以「只能操作自己的项目」不是靠每个接口各写一遍，而是靠这个统一入"
+      }
+    },
+    {
+      "id": "Q16",
+      "question": "分析任务提交后是怎么异步执行的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6415,
+        "llmCalls": 2,
+        "tokensIn": 3551,
+        "tokensOut": 887,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 11,
+        "sections": 3,
+        "citations": 11,
+        "citationsOffered": 11,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 任务由 AnalysisTaskExecutor 驱动，先改状态再跑分析流水线\n\n### 结论\n\n**异步执行的核心是 `AnalysisTaskExecutor`（任务执行器，负责跑一次项目分析任务并驱动整体流程）。** 它自己不写业务逻辑，而是同时调用两个接口：`TaskService`（管理任务状态与进度流转）和 `AnalysisPipelineService`（分析流水线，真正执行分析步骤）。所以「提交后怎么异步执行」的答案落在它身上：先通过 `TaskService` 把任务状态推进到运行中，再交给 `AnalysisPipelineService` 跑完整条分析链路。\n\n#"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 12563,
+        "llmCalls": 5,
+        "tokensIn": 18261,
+        "tokensOut": 1929,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 12,
+        "sections": 5,
+        "citations": 3,
+        "citationsOffered": 4,
+        "citationsUngrounded": 1,
+        "citationsUngroundedUids": [
+          "com.example.archmind.config.AsyncConfig"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 提交接口先落库 PENDING，再交给 @Async 线程池跑四阶段流水线\n\n### 结论\n\n分析任务不是同步跑完的：`ProjectAnalysisController` 的 `POST /{projectId}/analyze` 只负责校验项目、取当前用户，然后调 `TaskServiceImpl.submitAnalysis`。`submitAnalysis` 在数据库里插入一条 `PENDING` 的 `Task` 记录后立刻返回 `TaskResponse`，真正的分析由 `AnalysisTaskExecutor.run` 在名为 `analysisExecutor` 的线程"
+      }
+    },
+    {
+      "id": "Q17",
+      "question": "分析流程分成几个阶段，各阶段进度是多少？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5175,
+        "llmCalls": 2,
+        "tokensIn": 2926,
+        "tokensOut": 564,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 1,
+        "sections": 3,
+        "citations": 1,
+        "citationsOffered": 1,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 分析阶段由 `AnalysisStage` 枚举定义，但图里查不到具体阶段和进度区间\n\n### 结论\n\n**这次查图只拿到了 `AnalysisStage` 这一个节点本身，没有拿到它内部定义了哪几个阶段、每个阶段的进度区间是多少。** 从检索摘要看，这个枚举的职责就是「定义项目分析各阶段及其进度区间」，并且带有 `getStart`、`getEnd`、`getLabel`、`progressAt` 这几个方法，说明阶段和区间确实是它管的；但具体枚举常量名和数值，图里没有给出，我不能替它编。\n\n### 为什么只查到这一点\n\n我对 `AnalysisStage` 做了一次调用链查询，返回结"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 10116,
+        "llmCalls": 5,
+        "tokensIn": 17807,
+        "tokensOut": 1505,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "class-relations",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 25,
+        "sections": 4,
+        "citations": 10,
+        "citationsOffered": 10,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 流程分 4 个阶段（扫描/解析/概览/描述），进度按区间映射到 0–100\n\n### 结论\n\n项目分析由 `AnalysisPipelineService` 编排成 4 个阶段：`scanStage`（扫描）、`astStage`（AST 解析建图）、`overviewStage`（生成项目概览）、`describeStage`（生成类描述）。每个阶段在 `AnalysisStage` 枚举里带一个 `start`/`end` 进度区间，阶段内部用 `progressAt(percentWithinStage)` 把「本阶段完成百分比」换算成全局进度：`start + (end - st"
+      }
+    },
+    {
+      "id": "Q18",
+      "question": "项目里的 Java 文件是怎么被扫描出来的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5925,
+        "llmCalls": 2,
+        "tokensIn": 2848,
+        "tokensOut": 709,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 扫描入口是 FileScannerServiceImpl，但图里只解析到它抛异常这一条下游\n\n### 结论\n\n**Java 文件的扫描由 `FileScannerServiceImpl` 负责**，它是 `FileScannerService` 接口（「扫描项目目录，发现待分析文件」）的实现类，职责是扫描项目目录并生成文件实体记录。但要注意：**这张图只解析出它调用 `BusinessException` 这一条下游关系**，它具体怎么遍历目录、怎么读文件，图里没有记录。\n\n### 图里能看到的路径\n\n从 `FileScannerServiceImpl` 出发做调用链查询，只得到两个节点"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 11374,
+        "llmCalls": 5,
+        "tokensIn": 18861,
+        "tokensOut": 1815,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 20,
+        "sections": 4,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## Java 文件先由 FileScannerServiceImpl 递归落库，再由 CodeGraphServiceImpl 按 language=Java 过滤取出\n\n### 结论\n\n项目里的 Java 文件不是靠一次目录遍历直接拿到的，而是分两步：第一步 `FileScannerServiceImpl` 把解压后的目录树**全量**递归写进 `FileEntity` 表（每个文件/目录一条记录，并给文件打上 `language` 标记）；第二步 `CodeGraphServiceImpl.rebuild` 再从数据库里按 `language = \"Java\"` 把记录捞出来，做二次过滤"
+      }
+    },
+    {
+      "id": "Q19",
+      "question": "Java 源码是怎么解析成类、字段和方法的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5493,
+        "llmCalls": 2,
+        "tokensIn": 3114,
+        "tokensOut": 751,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 4,
+        "sections": 3,
+        "citations": 4,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## AstParserServiceImpl 解析源码，产出 ProjectIndex，并交给 RelationResolver 建立关系\n\n### 结论\n\n**Java 源码的解析入口是 `AstParserServiceImpl`**（`com.example.archmind.service.impl` 包下的实现类，负责把源码解析成类、字段、方法的结构数据）。它解析完成后，把结果写进 `ProjectIndex`（项目级索引，用来承载整个项目的代码结构），再调用 `RelationResolver` 去解析类与方法之间的关系；`RelationResolver` 内部又依赖 `Typ"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 11014,
+        "llmCalls": 5,
+        "tokensIn": 20496,
+        "tokensOut": 1630,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 11,
+        "sections": 4,
+        "citations": 6,
+        "citationsOffered": 8,
+        "citationsUngrounded": 2,
+        "citationsUngroundedUids": [
+          "com.example.archmind.model.ast.ParsedMethod",
+          "com.example.archmind.service.ast.AstParserService"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 入口是 `AstParserServiceImpl.parse`：JavaParser 出 AST，再逐层抽成类/字段/方法，最后建索引补关系。\n\n### 结论\n\n源码解析由 `AstParserServiceImpl`（`AstParserService` 接口的实现类）负责。它用 JavaParser 把每个文件的文本解析成 `CompilationUnit`（AST 语法树），再把树上的节点逐层翻译成项目自己的模型：`ParsedFile`（一个源文件）→ `ParsedClass`（一个类）→ 字段与方法（如 `ParsedMethod`）。所以「类、字段、方法」不是一次抽出来的"
+      }
+    },
+    {
+      "id": "Q20",
+      "question": "方法之间的调用关系是怎么推断出来的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4749,
+        "llmCalls": 2,
+        "tokensIn": 3118,
+        "tokensOut": 595,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 3,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 调用关系由 RelationResolver 解析，它依赖 TypeResolver 和 ProjectIndex\n\n### 结论\n\n**方法之间的调用关系由 `RelationResolver`（关系解析器）推断出来。** 它不自己维护符号表，而是把「名字怎么解析成类型」交给 `TypeResolver`，把「项目里有哪些类和方法」交给 `ProjectIndex`（项目索引），自己负责把解析结果写成图上的边。\n\n### 它怎么发生\n\n从图上看，`RelationResolver` 向下只有两条 `CALLS` 边：一条指向 `TypeResolver`，一条指向 `ProjectIn"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 13089,
+        "llmCalls": 6,
+        "tokensIn": 25901,
+        "tokensOut": 1612,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 12,
+        "sections": 5,
+        "citations": 2,
+        "citationsOffered": 3,
+        "citationsUngrounded": 1,
+        "citationsUngroundedUids": [
+          "com.example.archmind.service.ast.RelationResolverTest"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 调用关系由 `RelationResolver` 遍历 AST 解析结果，配合 `TypeResolver` 做类型消解后生成 CALLS 边。\n\n### 结论\n\n方法调用关系不是运行时采集的，而是**静态推断**：`RelationResolver`（`service.ast` 包下的关系解析器，负责把解析后的代码结构转成图里的边）遍历每个文件、每个类、每个方法，把方法体里出现的调用点解析成「调用方方法 → 被调方方法」的 `CALLS` 边。它自己不判断类型归属，遇到短名（如 `userService`、`save`）时交给 `TypeResolver` 按 Java 的 impor"
+      }
+    },
+    {
+      "id": "Q21",
+      "question": "解析结果是怎么批量写进图数据库的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4965,
+        "llmCalls": 2,
+        "tokensIn": 2900,
+        "tokensOut": 567,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 1,
+        "sections": 3,
+        "citations": 1,
+        "citationsOffered": 1,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 图里只查到写入器自身，批量写入的上游调用没解析到\n\n### 结论\n\n**从当前代码图谱能确认的只有一件事：`CodeGraphNeo4jWriter` 这个类存在，它是负责把解析后的代码图结构写进 Neo4j 图数据库的写入器。** 但「谁调用它、按什么顺序批量写入」这条链路，图里没有解析出来——以它为起点做调用链查询，返回的下游节点只有它自己（depth=0），没有任何上游或下游类节点。所以这个问题目前无法用图上的信息完整回答。\n\n### 为什么断在这里\n\n这个项目的图有已知边界：**不解析依赖注入和多态**。也就是说，如果 `CodeGraphNeo4jWriter` 是被某个 Se"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9263,
+        "llmCalls": 4,
+        "tokensIn": 14317,
+        "tokensOut": 1464,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 17,
+        "sections": 4,
+        "citations": 4,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 解析结果由 `CodeGraphNeo4jWriter.replaceProjectGraph` 在单个事务里分批 MERGE 写入 Neo4j。\n\n### 结论\n\n批量写入的入口是 `CodeGraphNeo4jWriter.replaceProjectGraph(Long, ParsedProject)`：它先建约束，再开一个写事务，先按 `projectId` 清掉旧图，然后把类节点、方法节点分批 MERGE，最后单独写边。整个过程在一个 `session.executeWrite` 事务内完成，所以是「整项目替换」而不是增量追加。\n\n### 路径：从重建到落库\n\n`CodeGra"
+      }
+    },
+    {
+      "id": "Q22",
+      "question": "怎么查一个类被谁调用、又依赖了谁？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5688,
+        "llmCalls": 2,
+        "tokensIn": 2954,
+        "tokensOut": 746,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 查类关系由 CodeGraphQueryServiceImpl 聚合，但图里只解析到它抛异常\n\n### 先给结论\n\n**查「一个类被谁调用、又依赖了谁」，在这个项目里落在 `CodeGraphQueryServiceImpl` 这个类上**——从名字和检索描述看，它是「查询代码图并聚合类关系与调用数据」的服务实现，方法名里就有 `classRelations`、`aggregateCalls`、`aggregateDepends`、`aggregateInherit`，分别对应「类关系总入口」「聚合调用方」「聚合依赖方」「聚合继承关系」。但要注意：**本次查图只解析出它一个下游节点，就是"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 8022,
+        "llmCalls": 3,
+        "tokensIn": 10859,
+        "tokensOut": 1104,
+        "toolCalls": 4,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 11,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 调 `GET /{projectId}/class/relations?uid=...`，一次返回上游（谁调用/依赖它）和下游（它调用/依赖谁）\n\n### 结论\n\n这个项目里「查一个类被谁调用、又依赖了谁」不是靠 Java 反射或静态分析现算的，而是查一张已经建好的**代码图**（存在 Neo4j 图数据库里，节点是类、边是调用/依赖/继承关系）。对外只有一个入口：`CodeGraphController.classRelations(projectId, uid)`，返回体 `ClassRelationsResponse` 里同时装了 `upstream`（上游：谁指向它）和 `dow"
+      }
+    },
+    {
+      "id": "Q23",
+      "question": "类和方法的快速查找索引是怎么建立的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6111,
+        "llmCalls": 2,
+        "tokensIn": 3070,
+        "tokensOut": 744,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 1,
+        "sections": 3,
+        "citations": 1,
+        "citationsOffered": 1,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## ProjectIndex 是索引的载体，但图里查不到它由谁构建、内部如何建索引\n\n### 先给结论\n\n**`ProjectIndex` 就是本项目里承载「类与方法快速查找」的那个索引对象**，它对外暴露了 `build`、`findClass`、`findBySimpleName`、`fileOfClass`、`classCount` 这些方法，从命名上能看出：先 `build` 建索引，之后按全限定名或简单名查类、反查类所在文件、统计类数量。\n\n但要说清「索引是怎么一步步建起来的」，**这张图给不出答案**：以 `ProjectIndex` 为起点做调用链查询，下游只有它自己一个节点（"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 10895,
+        "llmCalls": 5,
+        "tokensIn": 19390,
+        "tokensOut": 1400,
+        "toolCalls": 6,
+        "toolNames": [
+          "method-body",
+          "call-chain",
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 11,
+        "sections": 5,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 索引由 `ProjectIndex.build` 在解析完所有文件后一次性建好，是四张哈希表\n\n### 结论\n\n快速查找索引不是边解析边建的，而是**等整个项目所有文件都解析完**，再由 `ProjectIndex.build(ParsedProject)` 一次性遍历建好。它本质上是四张哈希表：全限定名 → 类、简单名 → 全限定名列表、全限定名 → 所在文件、方法签名键 → 方法。建索引的动机写在调用处注释里：后面的关系解析需要拿这份「字典」给悬空调用和短名定名。\n\n### 建立路径\n\n1. `AstParserServiceImpl.parse(List<SourceFileVie"
+      }
+    },
+    {
+      "id": "Q24",
+      "question": "一个源文件解析后用什么对象表示？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4859,
+        "llmCalls": 2,
+        "tokensIn": 2872,
+        "tokensOut": 651,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 4,
+        "sections": 3,
+        "citations": 4,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 源文件解析后由 ParsedFile 对象表示，三个解析相关类依赖它\n\n### 结论\n\n一个源文件解析完成后，用 `com.example.archmind.model.ast.ParsedFile` 这个类来表示——它承载的是**文件级**的代码信息（一个文件对应一个 `ParsedFile` 实例）。注意它只是文件这一层，类、方法这些更细的结构由别的对象承担。\n\n### 谁在用它、怎么用\n\n图里指向 `ParsedFile` 的上游依赖有三条，都是 `DEPENDS`（依赖）关系，说明这三个类在代码里直接引用了 `ParsedFile`：\n\n- `com.example.archmi"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 8373,
+        "llmCalls": 4,
+        "tokensIn": 12442,
+        "tokensOut": 1257,
+        "toolCalls": 5,
+        "toolNames": [
+          "method-body",
+          "class-relations",
+          "call-chain",
+          "class-relations",
+          "method-body"
+        ],
+        "evidenceUids": 8,
+        "sections": 5,
+        "citations": 6,
+        "citationsOffered": 8,
+        "citationsUngrounded": 2,
+        "citationsUngroundedUids": [
+          "com.example.archmind.model.ast.ParsedClass",
+          "com.example.archmind.model.ast.ParsedMethod"
+        ],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 单个源文件解析后由 `ParsedFile` 表示，多个文件汇总成 `ParsedProject`\n\n### 结论\n\n一个源文件解析完成后，用 `com.example.archmind.model.ast.ParsedFile` 表示：它承载文件级信息（`fileId`、`relativePath`、包名、import 列表）以及文件内的类型声明。整个项目解析完的产物则是 `ParsedProject`，它的 `files` 列表里装的就是一个个 `ParsedFile`。\n\n### 路径：从源码到 ParsedFile\n\n入口是 `AstParserServiceImpl.parse"
+      }
+    },
+    {
+      "id": "Q25",
+      "question": "任务状态有哪些取值，怎么判断任务已经结束？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4601,
+        "llmCalls": 2,
+        "tokensIn": 2914,
+        "tokensOut": 518,
+        "toolCalls": 1,
+        "toolNames": [
+          "method-body"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## TaskStatus 是状态常量类，isTerminal 用三个常量判断终态\n\n### 结论\n\n`TaskStatus` 是一个**只放状态常量的工具类**，本身不保存任何状态值。判断任务是否结束，靠的是它的静态方法 `isTerminal(String status)`：传入状态字符串，返回 `true` 就表示任务已经结束。\n\n### 怎么判断任务结束\n\n`isTerminal` 的实现只有一行：`return SUCCESS.equals(status) || PARTIAL.equals(status) || FAILED.equals(status);`。也就是说，**只有三种"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 12369,
+        "llmCalls": 7,
+        "tokensIn": 29596,
+        "tokensOut": 1421,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "class-relations",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 22,
+        "sections": 4,
+        "citations": 4,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 状态有 PENDING/RUNNING/SUCCESS/PARTIAL/FAILED，终态由 `TaskStatus.isTerminal` 判定。\n\n### 结论\n\n任务状态是 `TaskStatus` 里的一组字符串常量，代码里实际出现过的取值有 `PENDING`、`RUNNING`、`SUCCESS`、`PARTIAL`、`FAILED`。判断「任务是否结束」不要自己写字符串比较，统一调 `TaskStatus.isTerminal(status)`：它把 `SUCCESS`、`PARTIAL`、`FAILED` 三种视为终态，其余（`PENDING`、`RUNNING`）都算还"
+      }
+    },
+    {
+      "id": "Q26",
+      "question": "分析任务的状态和进度是怎么更新的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6209,
+        "llmCalls": 2,
+        "tokensIn": 3527,
+        "tokensOut": 825,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 10,
+        "sections": 3,
+        "citations": 10,
+        "citationsOffered": 10,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 任务状态与进度由 TaskServiceImpl 统一管理，异步执行器驱动流转\n\n### 结论\n\n**任务的状态和进度更新集中在 `TaskServiceImpl` 这个实现类里**，它是 `TaskService` 接口（定义任务提交、状态与进度流转）的唯一实现。真正跑分析的是异步执行器 `AnalysisTaskExecutor`，它反过来调用 `TaskService` 来推进状态，所以「谁改状态」和「谁跑任务」是分开的两层。\n\n### 更新是怎么发生的\n\n按图上的调用方向，流程是：\n\n- `AnalysisTaskExecutor`（异步执行项目分析、驱动整体流程的类）先调用 `"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 12411,
+        "llmCalls": 6,
+        "tokensIn": 28355,
+        "tokensOut": 2005,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 26,
+        "sections": 5,
+        "citations": 6,
+        "citationsOffered": 9,
+        "citationsUngrounded": 3,
+        "citationsUngroundedUids": [
+          "com.example.archmind.config.AsyncConfig",
+          "com.example.archmind.controller.ProjectAnalysisController",
+          "com.example.archmind.controller.TaskController"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 任务状态由执行器逐阶段推进，进度按阶段区间换算后写库并同步 Redis。\n\n### 结论\n\n分析任务的状态和进度不是由某个定时器轮询出来的，而是由异步执行器 `AnalysisTaskExecutor.run` 在跑流程时**主动推**：每进入一个阶段调一次 `TaskService.enterStage` 把状态/阶段/进度起点落库，阶段内部再通过回调把百分比交给 `reportProgress` 更新。任务状态常量集中在 `TaskStatus`（`PENDING`/`RUNNING`/`SUCCESS`/`FAILED`，`isTerminal` 判断终态），阶段与进度区间由枚举 "
+      }
+    },
+    {
+      "id": "Q27",
+      "question": "分析任务实体里包含哪些字段？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4713,
+        "llmCalls": 2,
+        "tokensIn": 2728,
+        "tokensOut": 540,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 图里只查到 Task 被 TaskServiceImpl 依赖，字段清单未解析到\n\n### 结论\n\n**当前图谱里查不到 `Task` 的字段清单。** 对 `com.example.archmind.entity.Task`（表示异步任务记录的数据实体）做关系查询，只返回一条上游依赖：`TaskServiceImpl` 依赖它。字段、属性这类结构信息不在本次查询结果里，所以「任务实体包含哪些字段」这个问题，图给不出答案。\n\n### 图上唯一确认的关系\n\n`Task` 在这个项目里被 `com.example.archmind.service.impl.TaskServiceImpl` "
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 5928,
+        "llmCalls": 4,
+        "tokensIn": 11965,
+        "tokensOut": 742,
+        "toolCalls": 3,
+        "toolNames": [
+          "method-body",
+          "class-relations",
+          "method-body"
+        ],
+        "evidenceUids": 5,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## Task 实体字段只能从使用处间接推断，图里没有字段清单\n\n### 结论\n\n`com.example.archmind.entity.Task`（表示异步任务记录的数据实体）在这个项目里**没有可切片的方法**，工具直接返回「没有找到可切片的方法」，所以拿不到它的字段声明。下面列出的字段是从唯一依赖它的 `TaskServiceImpl` 的代码里反推出来的，**不是完整字段清单**。\n\n### 能确认的字段（来自使用处）\n\n在 `TaskServiceImpl#submitAnalysis` 里新建任务时依次调用了 `setProjectId`、`setUserId`、`setType"
+      }
+    },
+    {
+      "id": "Q28",
+      "question": "查询项目最新分析任务走的是哪个接口？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5391,
+        "llmCalls": 2,
+        "tokensIn": 3590,
+        "tokensOut": 730,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 10,
+        "sections": 3,
+        "citations": 8,
+        "citationsOffered": 8,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 最新分析任务由 ProjectAnalysisController 的 latestTask 接口返回\n\n### 结论\n\n查项目最新分析任务走的是 `ProjectAnalysisController` 上的 `latestTask` 接口（同类的 `overview` 是项目分析概览，不是任务查询）。它自己不查库，而是把请求转给任务服务层 `TaskService` 的 `getLatestByProject` 去取最新一条任务。\n\n### 调用怎么走\n\n顺序是这样的：\n\n- 请求先到 `ProjectAnalysisController`，它先调 `CheckProjectUtil`"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9701,
+        "llmCalls": 6,
+        "tokensIn": 24041,
+        "tokensOut": 1016,
+        "toolCalls": 7,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 19,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 最新分析任务走 `GET /{projectId}/tasks/latest`，由 `ProjectAnalysisController.latestTask` 处理\n\n### 结论\n\n查询某个项目「最新一次分析任务」的接口是 `ProjectAnalysisController` 里的 `latestTask`，映射为 `@GetMapping(\"/{projectId}/tasks/latest\")`，返回 `Result<TaskResponse>`。它只做两件事：先校验项目归属，再把查询委托给 `TaskService.getLatestByProject(projectId, "
+      }
+    },
+    {
+      "id": "Q29",
+      "question": "系统里有哪些任务类型？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4096,
+        "llmCalls": 2,
+        "tokensIn": 2954,
+        "tokensOut": 467,
+        "toolCalls": 1,
+        "toolNames": [
+          "overview"
+        ],
+        "evidenceUids": 0,
+        "sections": 3,
+        "citations": 0,
+        "citationsOffered": 0,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [],
+        "disclosedGap": null,
+        "messagePreview": "## 本轮没有查到任何图谱证据，无法列出任务类型\n\n### 结论\n\n**这个问题目前答不了：本轮没有拿到任何可用的图谱证据。** 检索只给出了候选类（`TaskType`、`TaskStatus`、`TaskService` 等），但候选不等于查证——它们没有被查过图，我不能据此告诉你系统里到底定义了哪些任务类型，也不能编造常量值或调用关系。\n\n### 为什么给不出清单\n\n从检索描述看，最可能承载「任务类型」的是 `com.example.archmind.common.constant.TaskType`（一个存放任务类型常量的常量类），同批候选里还有 `TaskStatus`（任务状态常量"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9198,
+        "llmCalls": 5,
+        "tokensIn": 13954,
+        "tokensOut": 1043,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "class-relations",
+          "method-body",
+          "class-relations",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 1,
+        "citationsOffered": 4,
+        "citationsUngrounded": 3,
+        "citationsUngroundedUids": [
+          "com.example.archmind.common.constant.TaskStatus",
+          "com.example.archmind.entity.Task",
+          "com.example.archmind.service.impl.TaskServiceImpl"
+        ],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 项目里有 `TaskType` 常量类，但工具没取到它定义的具体任务类型值。\n\n### 结论\n\n这个项目里确实有一个专门定义任务类型的类：`com.example.archmind.common.constant.TaskType`，检索摘要说它「定义系统中各类任务类型常量」。但**具体有哪几种任务类型，我这边没有拿到证据**——工具只返回了它的私有构造器 `private TaskType(){}`（第 6 行），没有返回任何常量字段，所以不能替你列出类型清单。\n\n### 查证路径与边界\n\n我以 `TaskType` 为起点查了它的方法体、上下游关系（`class-relations`"
+      }
+    },
+    {
+      "id": "Q30",
+      "question": "任务详情是怎么查的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5537,
+        "llmCalls": 2,
+        "tokensIn": 3109,
+        "tokensOut": 737,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 6,
+        "sections": 3,
+        "citations": 6,
+        "citationsOffered": 6,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 任务详情由 TaskController 经 TaskService 接口扇出到 TaskServiceImpl 查询\n\n### 结论\n\n任务详情查询的入口是 `TaskController`（对外暴露任务详情接口的控制器），它把请求交给 `TaskService` 这个接口，图里再经由接口扇出到实现类 `TaskServiceImpl` 完成实际查询。也就是说，**控制器只负责接请求，真正的查询逻辑在 `TaskServiceImpl` 里**。\n\n### 调用是怎么走的\n\n顺序是这样的：\n\n- `TaskController` 收到任务详情请求后，调用 `TaskService` 的"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 11744,
+        "llmCalls": 7,
+        "tokensIn": 24546,
+        "tokensOut": 1493,
+        "toolCalls": 7,
+        "toolNames": [
+          "call-chain",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "call-chain"
+        ],
+        "evidenceUids": 17,
+        "sections": 4,
+        "citations": 6,
+        "citationsOffered": 7,
+        "citationsUngrounded": 1,
+        "citationsUngroundedUids": [
+          "com.example.archmind.controller.ProjectAnalysisController"
+        ],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 任务详情由 `TaskController.get` 接收请求，交给 `TaskService.get` 查询，但实现细节未解析到。\n\n### 结论\n\n任务详情查询的入口是 `TaskController` 的 `get(Long taskId)` 方法：它把路径上的 `taskId` 和当前登录用户 ID 一起交给 `taskService.get(...)`，再用 `Result.success(...)` 包成统一响应返回。也就是说，**详情查询是「按任务 ID + 当前用户」两个条件去查的**，用户身份由 `CheckProjectUtil.getCurrentUserId()`"
+      }
+    },
+    {
+      "id": "Q31",
+      "question": "项目概览是怎么生成并缓存的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6018,
+        "llmCalls": 2,
+        "tokensIn": 3114,
+        "tokensOut": 735,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 5,
+        "sections": 3,
+        "citations": 5,
+        "citationsOffered": 5,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 概览由 ProjectOverviewServiceImpl 生成，缓存走 RedisUtil\n\n### 结论\n\n**项目概览的生成与缓存都落在 `ProjectOverviewServiceImpl` 这个实现类里**：它负责组装概览内容，并通过 `RedisUtil` 把结果写进 Redis 缓存。不过图里只解析到它调用了哪些下游类，**具体哪个方法先读缓存、哪个方法调 LLM 生成，图上没有解析到**，需要你直接看源码确认。\n\n### 它往下调了谁\n\n从调用链看，`ProjectOverviewServiceImpl` 直接依赖三类下游：\n\n- `RedisUtil`（`com.e"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 10451,
+        "llmCalls": 5,
+        "tokensIn": 17881,
+        "tokensOut": 1666,
+        "toolCalls": 8,
+        "toolNames": [
+          "call-chain",
+          "call-chain",
+          "method-body",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 19,
+        "sections": 5,
+        "citations": 6,
+        "citationsOffered": 6,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 概览由 LLM 读 pom+README 生成，落库后写 Redis 缓存，读取时缓存优先\n\n### 结论\n\n项目概览的生成与缓存都集中在 `ProjectOverviewServiceImpl`（`ProjectOverviewService` 接口的实现类）：`generateOverview` 负责「读源码目录 → 取 pom/README → 裁剪 pom → 拼提示词 → 调 LLM → 落库 + 写缓存」；读取侧 `tryGetExistingOverview` 和 `projectDatabaseOverview` 都是**先查缓存、再查数据库**，后者在数据库也没有时抛 "
+      }
+    },
+    {
+      "id": "Q32",
+      "question": "项目概览数据存在哪个实体和表里？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4630,
+        "llmCalls": 2,
+        "tokensIn": 2661,
+        "tokensOut": 630,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## ProjectOverview 实体只被 ProjectOverviewServiceImpl 依赖，图里没有更多关系\n\n### 结论\n\n**`ProjectOverview` 这个实体在代码图谱里只有一个上游关系：`ProjectOverviewServiceImpl` 依赖它。** 也就是说，按图上的记录，负责生成项目概览的服务实现类是唯一直接指向这个实体的类；除此之外，图里没有查到别的类与它相连。\n\n### 这条关系怎么发生\n\n`ProjectOverviewServiceImpl` 是 `ProjectOverviewService` 接口的实现类，职责是**生成并缓存项目整体概"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 11228,
+        "llmCalls": 6,
+        "tokensIn": 18816,
+        "tokensOut": 1390,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "method-body",
+          "class-relations",
+          "class-relations",
+          "method-body",
+          "method-body",
+          "method-body",
+          "call-chain"
+        ],
+        "evidenceUids": 11,
+        "sections": 4,
+        "citations": 4,
+        "citationsOffered": 4,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 概览数据存在 `ProjectOverview` 实体，经 `ProjectOverviewMapper` 落库；具体表名未解析到。\n\n### 结论\n\n项目概览数据对应的实体是 `com.example.archmind.entity.ProjectOverview`（检索结果里标注为「表示项目概览信息的数据实体」），数据库访问走 `com.example.archmind.dao.ProjectOverviewMapper` 这个 Mapper 接口。**但具体映射到哪张表、有哪些列，本轮没有拿到证据**：实体和 Mapper 都没有可切片的方法，`saveOverview` / `s"
+      }
+    },
+    {
+      "id": "Q33",
+      "question": "核心类的描述是怎么让大模型生成的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5745,
+        "llmCalls": 2,
+        "tokensIn": 3021,
+        "tokensOut": 668,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 3,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 核心类描述由 `ClassDescriptionServiceImpl` 组装提示词并调用大模型生成\n\n### 结论\n\n让大模型生成核心类描述的入口是 `ClassDescriptionServiceImpl`（`ClassDescriptionService` 接口的实现类）。它负责挑出「核心类」、为每个类拼出提示词、调用大模型拿到描述，再把结果回写。**但要注意：图里只解析出它对外调用了两个类，真正「调大模型」的那一步在图上没有对应的下游节点**，所以下面的路径只覆盖到它周边的协作关系。\n\n### 它怎么跑起来\n\n按检索到的类说明，这个实现类里的方法大致分工是：`queryCoreC"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9190,
+        "llmCalls": 3,
+        "tokensIn": 11085,
+        "tokensOut": 1366,
+        "toolCalls": 4,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 8,
+        "sections": 6,
+        "citations": 3,
+        "citationsOffered": 4,
+        "citationsUngrounded": 1,
+        "citationsUngroundedUids": [
+          "com.example.archmind.service.ClassDescriptionService"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 先从 Neo4j 取核心类骨架，拼成提示词交给大模型，再把 JSON 结果写回图库\n\n### 结论\n\n核心类描述由 `ClassDescriptionServiceImpl`（`com.example.archmind.service.impl` 包下，实现 `ClassDescriptionService` 接口）负责。它不把源码整段丢给大模型，而是先从 Neo4j 图库里查出「核心类」的**骨架**（全限定名、类种类、继承/实现、方法签名），拼成一段中文提示词，让大模型只输出 JSON 格式的「一句话简介」，最后按 `qualifiedName` 回写到图库节点上。\n\n### 路径："
+      }
+    },
+    {
+      "id": "Q34",
+      "question": "批量补类描述的接口返回什么结构？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5316,
+        "llmCalls": 2,
+        "tokensIn": 2709,
+        "tokensOut": 633,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## `ClassDescriptionBatch` 是批量类描述的响应体，由 `ClassDescriptionServiceImpl` 依赖产出\n\n### 结论\n\n**`ClassDescriptionBatch` 是一个响应数据类（DTO），用来承载「批量类描述」的结果**，也就是一次请求里多个类的描述信息被打包在一起返回。在代码图里，它只有一个上游：`ClassDescriptionServiceImpl` 通过 `DEPENDS` 依赖它，说明是这个服务实现类在组装或返回这个响应对象。\n\n### 它是怎么被用到的\n\n触发方是 `ClassDescriptionServiceImpl`"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 8895,
+        "llmCalls": 5,
+        "tokensIn": 17412,
+        "tokensOut": 1305,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "class-relations",
+          "method-body",
+          "class-relations",
+          "call-chain",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 10,
+        "sections": 4,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 批量补类描述返回 `ClassDescriptionBatch`，外层 `items` 数组，每项含 `qualifiedName` 与 `description`。\n\n### 结论\n\n批量补类描述用的响应结构是 `com.example.archmind.dto.response.ClassDescriptionBatch`：一个包装对象，里面只有一个 `items` 列表，列表元素是内部类 `ClassDescriptionBatch.Item`，每个元素带两个字段 `qualifiedName`（类的全限定名，原样对应图里的类 uid）和 `description`（一句中文简介）"
+      }
+    },
+    {
+      "id": "Q35",
+      "question": "项目依赖关系是怎么存储的？",
+      "legacy": {
+        "outcome": "TOOL_NO",
+        "latencyMs": 1183,
+        "llmCalls": 1,
+        "tokensIn": 1184,
+        "tokensOut": 71,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 0,
+        "sections": 0,
+        "citations": 0,
+        "citationsOffered": 0,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [],
+        "disclosedGap": null,
+        "messagePreview": "这个我答不了：该类下没有方法，或指定方法不存在: com.example.archmind.dao.ProjectDependencyMapper"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 8721,
+        "llmCalls": 4,
+        "tokensIn": 11668,
+        "tokensOut": 1147,
+        "toolCalls": 6,
+        "toolNames": [
+          "method-body",
+          "method-body",
+          "class-relations",
+          "class-relations",
+          "class-relations",
+          "class-relations"
+        ],
+        "evidenceUids": 10,
+        "sections": 4,
+        "citations": 6,
+        "citationsOffered": 8,
+        "citationsUngrounded": 2,
+        "citationsUngroundedUids": [
+          "com.example.archmind.dao.ProjectDependencyMapper",
+          "com.example.archmind.entity.ProjectDependency"
+        ],
+        "uiCommands": [],
+        "disclosedGap": null,
+        "messagePreview": "## 图里只能确认依赖关系有实体和 Mapper 两层，具体表结构没解析到\n\n### 结论\n\n按项目里的类划分，依赖关系走的是「实体 + Mapper」这套持久化方式：`com.example.archmind.entity.ProjectDependency` 是表示项目依赖关系的数据实体，`com.example.archmind.dao.ProjectDependencyMapper` 是负责它持久化访问的接口。也就是说，依赖关系不是塞在 `Project` 里，而是单独一张表、由单独的 Mapper 读写。但**具体存了哪些字段、表名是什么、谁在什么时候写入**，这次没有查到。\n\n##"
+      }
+    },
+    {
+      "id": "Q36",
+      "question": "项目基本信息返回给前端是什么结构？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4643,
+        "llmCalls": 2,
+        "tokensIn": 2760,
+        "tokensOut": 592,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 3,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 项目基本信息由 ProjectResponse 承载，由 ProjectService 层产出\n\n### 结论\n\n返回给前端的项目基本信息，结构就是 `ProjectResponse` 这个类——它位于 `dto.response` 包下，是专门给前端用的响应数据对象（DTO，Data Transfer Object，只负责装数据、不参与业务逻辑）。图里能确认的是：它由 `ProjectService` 接口及其实现 `ProjectServiceImpl` 依赖产出，也就是说前端拿到的这份结构，是服务层组装好后交给它的。\n\n### 它是怎么被产出的\n\n调用方向是自下而上的：`Proje"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 9374,
+        "llmCalls": 5,
+        "tokensIn": 17457,
+        "tokensOut": 1250,
+        "toolCalls": 7,
+        "toolNames": [
+          "method-body",
+          "class-relations",
+          "method-body",
+          "class-relations",
+          "method-body",
+          "call-chain",
+          "method-body"
+        ],
+        "evidenceUids": 11,
+        "sections": 5,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 项目基本信息以 `Result<ProjectResponse>` 返回，含 10 个字段\n\n### 结论\n\n前端拿到的是统一包装 `Result<ProjectResponse>`：外层是 `Result` 的成功包装，内层 `ProjectResponse` 是项目基本信息的扁平 DTO（数据传输对象，专门给前端用的视图结构，不是数据库实体）。列表接口则是 `Result<List<ProjectResponse>>`。\n\n### 字段结构\n\n`ProjectResponse` 由 `ProjectServiceImpl#toResponse` 用 builder 逐字段拼出，共 1"
+      }
+    },
+    {
+      "id": "Q37",
+      "question": "接口统一的返回格式是怎么封装的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5278,
+        "llmCalls": 2,
+        "tokensIn": 2875,
+        "tokensOut": 679,
+        "toolCalls": 1,
+        "toolNames": [
+          "method-body"
+        ],
+        "evidenceUids": 3,
+        "sections": 3,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## Result 用三个静态 success 重载统一封装成功响应\n\n### 结论\n\n统一返回格式由 `com.example.archmind.common.result.Result` 这个类承担，它对外暴露的是**三个静态工厂方法** `success()`、`success(T)`、`success(String, T)`，调用方不需要自己 new，直接 `Result.success(...)` 就能拿到一个封装好的响应对象。\n\n### 三个重载各自做什么\n\n三个方法最终都走同一个构造器 `new Result<>(code, message, data)`，区别只在传什么：\n\n-"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 10091,
+        "llmCalls": 5,
+        "tokensIn": 17212,
+        "tokensOut": 1401,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "class-relations",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 18,
+        "sections": 4,
+        "citations": 11,
+        "citationsOffered": 11,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 统一返回靠 `Result<T>` 泛型包装类 + `ResultCode` 枚举 + 全局异常处理器三件套\n\n### 结论\n\n这个项目的接口统一返回格式由 `com.example.archmind.common.result.Result` 承担：它是一个泛型包装类 `Result<T>`，把「状态码 + 提示信息 + 业务数据」三样东西装进同一个对象，所以所有 Controller 返回的都是同一种外壳，前端只需按一套结构解析。状态码和默认文案来自 `ResultCode` 枚举，异常路径则由 `GlobalExceptionHandler` 兜底转成同样的 `Result`。\n\n"
+      }
+    },
+    {
+      "id": "Q38",
+      "question": "业务异常是怎么统一处理的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 4885,
+        "llmCalls": 2,
+        "tokensIn": 2926,
+        "tokensOut": 551,
+        "toolCalls": 1,
+        "toolNames": [
+          "call-chain"
+        ],
+        "evidenceUids": 2,
+        "sections": 3,
+        "citations": 2,
+        "citationsOffered": 2,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 业务异常由 GlobalExceptionHandler 统一捕获并转成 Result 响应\n\n### 结论\n\n这个项目的业务异常统一处理入口是 `GlobalExceptionHandler`（全局异常处理器，集中拦截各层抛出的异常），它把异常转换成 `Result`（统一响应封装类，前端拿到的固定格式返回体）再返回给调用方。也就是说，业务代码只管抛异常，不用自己拼错误响应。\n\n### 处理是怎么发生的\n\n从图上看，`GlobalExceptionHandler` 的下游只有一个类：`Result`。它通过 `CALLS` 关系调用 `Result`，也就是在处理方法里构造统一响应对象"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 10907,
+        "llmCalls": 5,
+        "tokensIn": 17745,
+        "tokensOut": 1406,
+        "toolCalls": 8,
+        "toolNames": [
+          "method-body",
+          "method-body",
+          "method-body",
+          "method-body",
+          "class-relations",
+          "call-chain",
+          "method-body",
+          "method-body"
+        ],
+        "evidenceUids": 29,
+        "sections": 5,
+        "citations": 3,
+        "citationsOffered": 3,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 业务异常由 `GlobalExceptionHandler` 统一捕获，转成 `Result.fail` 响应\n\n### 结论\n\n这个项目没有在每个 Controller 里写 try-catch，而是靠一个全局异常处理器 `GlobalExceptionHandler`（类注释：全局统一处理各类异常并返回规范响应）把异常统一翻译成 `Result` 对象返回给前端。业务代码只负责「抛」，不负责「包」。\n\n### 路径：从抛到返回\n\n1. 业务层（如 `UserServiceImpl`、`AuthServiceImpl`、`TaskServiceImpl` 等）遇到业务失败时 `thro"
+      }
+    },
+    {
+      "id": "Q39",
+      "question": "项目列表查询是由哪个服务完成的？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 5883,
+        "llmCalls": 2,
+        "tokensIn": 3582,
+        "tokensOut": 880,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 13,
+        "sections": 3,
+        "citations": 13,
+        "citationsOffered": 13,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 项目列表查询由 ProjectServiceImpl 实现，它实现了 ProjectService 接口\n\n### 结论\n\n**项目列表查询由 `ProjectServiceImpl` 完成**，它是 `ProjectService` 接口的实现类（图中有一条 `IMPLEMENTS` 关系）。`ProjectService` 是定义项目创建、列表、删除等生命周期操作的接口，`ProjectServiceImpl` 是真正写逻辑的地方，列表查询对应它的 `listMyProjects` 方法。\n\n### 它依赖什么来完成查询\n\n`ProjectServiceImpl` 在查询链路上依赖了"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 6868,
+        "llmCalls": 3,
+        "tokensIn": 9494,
+        "tokensOut": 967,
+        "toolCalls": 4,
+        "toolNames": [
+          "call-chain",
+          "method-body",
+          "method-body",
+          "call-chain"
+        ],
+        "evidenceUids": 10,
+        "sections": 4,
+        "citations": 4,
+        "citationsOffered": 9,
+        "citationsUngrounded": 5,
+        "citationsUngroundedUids": [
+          "com.example.archmind.controller.ProjectAnalysisController",
+          "com.example.archmind.controller.ProjectSourceController",
+          "com.example.archmind.dao.ProjectOverviewMapper",
+          "com.example.archmind.service.AnalysisPipelineService",
+          "com.example.archmind.service.FileTreeNodeService"
+        ],
+        "uiCommands": [
+          "SHOW_PATH"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 项目列表查询由 `ProjectServiceImpl.listMyProjects` 完成，入口是 `ProjectController`\n\n### 结论\n\n项目列表查询由 `com.example.archmind.service.impl.ProjectServiceImpl` 的 `listMyProjects(Long userId)` 方法完成。它实现了 `ProjectService` 接口（项目生命周期的服务契约，含创建、列表、删除），由 `ProjectController` 的 `myProjects` 接口对外暴露。\n\n### 调用路径\n\n`ProjectContr"
+      }
+    },
+    {
+      "id": "Q40",
+      "question": "Redis 的缓存读写操作封装在哪个工具类？",
+      "legacy": {
+        "outcome": "OK",
+        "latencyMs": 6100,
+        "llmCalls": 2,
+        "tokensIn": 3374,
+        "tokensOut": 755,
+        "toolCalls": 1,
+        "toolNames": [
+          "class-relations"
+        ],
+        "evidenceUids": 5,
+        "sections": 3,
+        "citations": 5,
+        "citationsOffered": 5,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## RedisUtil 是缓存读写封装类，被四个 ServiceImpl 调用\n\n### 结论\n\n**Redis 的缓存读写与过期操作封装在 `com.example.archmind.common.util.RedisUtil` 里**，它是 `common.util` 包下的通用工具类，对外提供 `get`、`delete`、`expire`、`getExpire` 等方法。图里没有别的类承担这个职责——同批候选中的 `RedisConfig` 只是配置 Redis 模板，不封装读写。\n\n### 谁在用它、怎么用\n\n从调用方向看，`RedisUtil` 是**被依赖的一方**，上游有四个"
+      },
+      "tools": {
+        "outcome": "OK",
+        "latencyMs": 4767,
+        "llmCalls": 2,
+        "tokensIn": 5933,
+        "tokensOut": 667,
+        "toolCalls": 2,
+        "toolNames": [
+          "method-body",
+          "class-relations"
+        ],
+        "evidenceUids": 8,
+        "sections": 4,
+        "citations": 5,
+        "citationsOffered": 5,
+        "citationsUngrounded": 0,
+        "citationsUngroundedUids": [],
+        "uiCommands": [
+          "FOCUS_NODE"
+        ],
+        "disclosedGap": null,
+        "messagePreview": "## 缓存读写封装在 `com.example.archmind.common.util.RedisUtil`\n\n### 结论\n\n是 `com.example.archmind.common.util.RedisUtil`（位于 `common.util` 包，即项目通用工具类目录）。它把 `RedisTemplate` 的取值/存值操作包成几个简单方法，业务代码不用直接碰 `RedisTemplate`。\n\n### 它怎么读写\n\n写入有两个重载：`set(String key, Object value)` 直接存；`set(String key, Object value, long ti"
+      }
+    }
+  ]
+}
