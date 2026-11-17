@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "archmind": {
+      "type": "http",
+      "url": "https://your-host/mcp",
+      "headers": { "Authorization": "Bearer ${ARCHMIND_PAT}" }
+    }
+  }
+}

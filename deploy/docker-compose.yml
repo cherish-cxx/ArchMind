@@ -12,6 +12,8 @@ services:
       # 关键：指向 compose 服务名，而不是 localhost
       - AGENT_BASE_URL=http://agent-service:8000
       - INTERNAL_TOKEN=${INTERNAL_TOKEN}
+      # R7：project_brief 里回填的 MCP 连接地址（Java 读）
+      - MCP_PUBLIC_URL=${MCP_PUBLIC_URL:-https://your-host/mcp}
     volumes:
       # 上传文件落盘目录。默认 ./code-workspace（相对 deploy/）：
       # 服务器上的旧部署就是这个位置，改掉会让已上传项目“消失”。
@@ -61,6 +63,38 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # R7：独立 MCP 进程（Streamable HTTP）。复用 agent-service 镜像，
+  # 只换启动命令；对外经 nginx /mcp。
+  mcp:
+    build:
+      context: ../agent-service
+      network: host
+    container_name: archmind-mcp
+    environment:
+      - JAVA_BASE_URL=http://backend:8080
+      - INTERNAL_TOKEN=${INTERNAL_TOKEN}
+      - REDIS_URL=redis://172.21.160.203:6379
+      - REDIS_DB=1
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - EMBED_URL=${EMBED_URL:-http://172.21.160.203:8010}
+      - QDRANT_URL=${QDRANT_URL:-http://172.21.160.203:6333}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-archmind_classes}
+      # 每个 PAT 的每分钟请求上限；缓存默认 0（吊销必须立即生效）
+      - MCP_RATE_LIMIT_PER_MINUTE=${MCP_RATE_LIMIT_PER_MINUTE:-60}
+      - MCP_CONTEXT_CACHE_SECONDS=${MCP_CONTEXT_CACHE_SECONDS:-0}
+    command: ["uvicorn", "app.mcp.asgi:app", "--host", "0.0.0.0", "--port", "8001"]
+    expose:
+      - "8001"                          # 只对内，由 nginx /mcp 反代
+    depends_on:
+      - backend
+    healthcheck:
+      # 同 agent-service：slim 镜像没有 curl/wget，用 Python 自检
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
   # R5：一次性迁移。**不在 app 的 lifespan 里跑** —— 多 worker 会并发，
   # 失败还会被 restart: unless-stopped 无限重试。
   migrate:
@@ -86,4 +120,5 @@ services:
       - "80:80"
     depends_on:
       - backend
+      - mcp                             # nginx 的 /mcp 反代目标
     restart: unless-stopped
