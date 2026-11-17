@@ -88,12 +88,17 @@ class FakeJava:
         *,
         raises: Exception | None = None,
         method_body_envelope: ToolEnvelope | None = None,
+        brief_envelope: ToolEnvelope | None = None,
     ) -> None:
         self._envelope = envelope if envelope is not None else ok_overview()
         self._raises = raises
         #: method-body 单独的信封。锁定方法时一轮会打两次 Java（主工具 + 方法源码），
         #: 用一个信封冒充两个工具，会让「代码真的进了 prompt」这条断言测不出来。
         self._method_body_envelope = method_body_envelope
+        #: brief 单独的信封：data 是 BriefResponse，和 overview 的信封不可互换。
+        self._brief_envelope = (
+            brief_envelope if brief_envelope is not None else ok_brief()
+        )
         self.calls: list[tuple[str, int, str | None]] = []
         #: 每次调用的关键字参数。用来验「slots 的 direction/depth 真的传下去了」——
         #: 这正是 P2 契约测试里「参数静默降级」那个坑的翻版，值得在 P3 也盯一次。
@@ -129,6 +134,12 @@ class FakeJava:
         return await self._record("method-body", project_id, uid,
                                   env=self._method_body_envelope, **kw)
 
+    async def project_brief(
+        self, project_id: int, target: str = "claude"
+    ) -> ToolEnvelope:
+        return await self._record("project-brief", project_id, env=self._brief_envelope,
+                                  target=target)
+
 
 # ==================== 信封构造 ====================
 
@@ -145,6 +156,23 @@ def ok_overview() -> ToolEnvelope:
         evidence=[],
         truncated=False,
         graph_rev=1,
+    )
+
+
+def ok_brief(filename: str = "CLAUDE.md", graph_rev: int = 1) -> ToolEnvelope:
+    """项目说明信封。内容里的 projectId 是 agent 复用的关键线索。"""
+    from app.models.tool import BriefResponse
+
+    return ToolEnvelope(
+        ok=True,
+        data=BriefResponse(
+            filename=filename,
+            content=f"# {filename}\nprojectId: 1\ngraphRev={graph_rev}",
+            graph_rev=graph_rev,
+        ),
+        evidence=[],
+        truncated=False,
+        graph_rev=graph_rev,
     )
 
 

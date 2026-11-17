@@ -11,6 +11,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from app.mcp.tools import (
     archmind_list_projects,
     archmind_overview,
+    archmind_project_brief,
     archmind_search_entities,
     archmind_trace_flow,
 )
@@ -31,5 +32,6 @@ def build_mcp() -> FastMCP:
     mcp.tool(name="archmind_overview")(archmind_overview)
     mcp.tool(name="archmind_search_entities")(archmind_search_entities)
     mcp.tool(name="archmind_trace_flow")(archmind_trace_flow)
+    mcp.tool(name="archmind_project_brief")(archmind_project_brief)
 
     return mcp

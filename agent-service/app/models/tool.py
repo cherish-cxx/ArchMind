@@ -341,3 +341,18 @@ class MethodBody(CamelModel):
     methods: list[MethodCode] = []
     truncated: bool                    # 同 ToolEnvelope：不给默认值
     note: str | None = None            # 降级说明
+
+
+# ==================== 工具 ⑤ project-brief ====================
+
+
+class BriefResponse(CamelModel):
+    """对应 Java BriefResponse（`/internal/mcp/brief`）。
+
+    内容是服务端渲染的 Markdown 草稿；`graph_rev` 序列化为 `graphRev`，
+    表示这份说明对应的图版本（也可能通过信封的 graphRev 提供）。
+    """
+
+    filename: str
+    content: str
+    graph_rev: int

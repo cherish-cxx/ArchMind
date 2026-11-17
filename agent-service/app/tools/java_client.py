@@ -21,6 +21,7 @@ import httpx
 
 from app.config import INTERNAL_TOKEN_HEADER, settings
 from app.models.tool import (
+    BriefResponse,
     CallChain,
     ChainDirection,
     ClassCardPage,
@@ -61,6 +62,7 @@ _PATH_METHOD_BODY = f"{_PREFIX}/method-body"
 _PATH_CLASSES_PAGE = f"{_PREFIX}/classes/page"
 _PATH_CLASSES_CARDS = f"{_PREFIX}/classes/cards"
 _PATH_DESCRIBE_STATUS = "/internal/describe/status"
+_PATH_BRIEF = "/internal/mcp/brief"
 
 
 class JavaClientError(Exception):
@@ -226,6 +228,24 @@ class JavaClient:
         if payload.get("code") != 0 or payload.get("data") is None:
             raise JavaClientError(f"describe/status 失败: {payload.get('message')}")
         return DescribeStatus.model_validate(payload["data"])
+
+    # ── R7：项目说明（MCP brief） ──────────────────────────────────────────
+
+    async def project_brief(
+        self, project_id: int, target: str
+    ) -> ToolEnvelope[BriefResponse]:
+        """项目说明（AGENTS.md / CLAUDE.md 草稿）。
+
+        `target` 由调用方校验（claude / agents），这里只透传；Java 侧渲染
+        并返回 `ToolEnvelope<BriefResponse>`。GET 查询参数，不走 `_post`
+        的 `{projectId, args}` 信封。
+        """
+        resp = await self._send(
+            "GET",
+            _PATH_BRIEF,
+            params={"projectId": project_id, "target": target},
+        )
+        return ToolEnvelope[BriefResponse].model_validate(resp.json())
 
     # ── 唯一的 HTTP 出口 ────────────────────────────────────────────────────
     # 这里是Java client的唯一HTTP出口，所有工具方法全部复用这个发送方法完成网络请求

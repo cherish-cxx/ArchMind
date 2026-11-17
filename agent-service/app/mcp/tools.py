@@ -257,3 +257,34 @@ async def archmind_trace_flow(
         }
     except McpToolError as e:
         return tool_error(e.code, e.message, e.hint)
+
+
+#: brief 支持两种客户端草稿。大小写敏感 —— 与 Java 侧 `target` 契约一致。
+_BRIEF_TARGETS = ("claude", "agents")
+
+
+async def archmind_project_brief(projectId: int, target: str = "claude") -> dict:
+    """导出项目说明草稿（AGENTS.md / CLAUDE.md），内含 projectId 供 agent 复用。
+
+    内容由 Java 侧按分析结果渲染，这里只校验参数、校验项目归属并透传。
+    未完成分析的项目返回 `tool_failed` —— 说明本身不可用，不是空内容。
+    """
+    try:
+        if target not in _BRIEF_TARGETS:
+            return tool_error("invalid_argument", "target 只能是 claude 或 agents")
+
+        ctx = await ensure_project(projectId)
+        env = await deps.services().java.project_brief(projectId, target)
+        if not env.ok or env.data is None:
+            return tool_error(
+                "tool_failed",
+                env.note or "项目说明暂不可用",
+                "请先在 ArchMind 完成项目分析",
+            )
+        return {
+            "ok": True,
+            "data": {"filename": env.data.filename, "content": env.data.content},
+            "meta": meta(ctx, truncated=env.truncated),
+        }
+    except McpToolError as e:
+        return tool_error(e.code, e.message, e.hint)
