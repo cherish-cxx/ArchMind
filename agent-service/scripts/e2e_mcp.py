@@ -64,7 +64,7 @@ def _require_ok(payload, step):
     if payload.get("ok") is not True:
         raise CheckFailed(
             f"{step}: ok != true，error={payload.get('error')!r} "
-            f"hint={payload.get('hint')!r}"
+            f"hint={(payload.get('error') or {}).get('hint')!r}"
         )
     return payload
 

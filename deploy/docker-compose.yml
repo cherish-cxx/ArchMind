@@ -13,7 +13,7 @@ services:
       - AGENT_BASE_URL=http://agent-service:8000
       - INTERNAL_TOKEN=${INTERNAL_TOKEN}
       # R7：project_brief 里回填的 MCP 连接地址（Java 读）
-      - MCP_PUBLIC_URL=${MCP_PUBLIC_URL:-https://your-host/mcp}
+      - MCP_PUBLIC_URL=${MCP_PUBLIC_URL:?MCP_PUBLIC_URL must be set}
     volumes:
       # 上传文件落盘目录。默认 ./code-workspace（相对 deploy/）：
       # 服务器上的旧部署就是这个位置，改掉会让已上传项目“消失”。

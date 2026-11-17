@@ -51,8 +51,10 @@ sync_repo() {
   return 0
 }
 
+backend_changed=false
 services=()
 if sync_repo "$BACKEND_DIR" "后端"; then
+  backend_changed=true
   # migrate 必须一起重建：它的镜像里带的是 alembic/versions，
   # 新增迁移后不重建会报 "Can't locate revision"，agent-service 因为
   # depends_on 它而根本起不来。
@@ -73,4 +75,9 @@ fi
 echo "==> 重建并启动：${services[*]}"
 cd "$DEPLOY_DIR"
 "${DC[@]}" up -d --build "${services[@]}"
+# nginx 在启动时解析一次 mcp 的容器 IP；mcp 被重建后 IP 可能变化，
+# 不重启 frontend 会让 /mcp 打到旧地址。只在后端有更新时做，避免无谓重启。
+if [ "$backend_changed" = true ]; then
+  "${DC[@]}" restart frontend
+fi
 "${DC[@]}" ps
