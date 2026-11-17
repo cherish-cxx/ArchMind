@@ -229,7 +229,7 @@ def json_dumps(obj) -> str:
 
 # ==================== 多步循环（R6 第二步）====================
 
-
+# 从MemoryHit中拿到记忆历史并进行结构化塞进上下文
 def agent_system(
     ctx: AgentContext, memories: list[MemoryHit] | None = None
 ) -> str:

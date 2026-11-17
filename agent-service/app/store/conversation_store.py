@@ -35,14 +35,15 @@ class ConversationStore:
         await self._repo.aclose()
 
     # ==================== 读 ====================
-
+    #从redi，MySQL读取当前流水的数据
     async def load_or_none(
         self, user_id: int, project_id: int, conversation_id: str
     ) -> AgentContext | None:
+        # 优先读 Redis
         ctx = await self._redis.load_or_none(user_id, project_id, conversation_id)
         if ctx is not None:
             return ctx
-
+        # 再读 MySQL
         ctx = await self._repo.load_context(user_id, project_id, conversation_id)
         if ctx is not None:
             ctx.user_id = user_id          # 老数据可能没存 user_id，回填后再进缓存

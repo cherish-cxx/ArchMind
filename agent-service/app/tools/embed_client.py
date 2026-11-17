@@ -44,16 +44,19 @@ class EmbedClient:
         """
         if not texts:
             return []
+        # 向嵌入服务的embed发起异步POST，请求体为{texts:text}；超时优先用传入的timeout，否则用默认的timeout
         try:
             resp = await self._client.post(
                 "/embed", json={"texts": texts}, timeout=timeout or self._timeout
             )
+            # 底层网络异常（服务不可达）统一缓存自定义异常EmbedError，并用from语句记录底层异常
         except httpx.TransportError as e:
             raise EmbedError(f"embed 服务不可达: {e}") from e
         if resp.status_code != 200:
             raise EmbedError(f"embed 返回 HTTP {resp.status_code}: {resp.text[:200]}")
-
+        # 解析返回的json数据，获取dense和sparse两个列表，字段缺失或空时按空列表处理
         data = resp.json()
+        # dense和sparse的长度必须和texts的长度一致，否则抛出EmbedError异常
         dense = data.get("dense") or []
         sparse = data.get("sparse") or []
         if len(dense) != len(texts) or len(sparse) != len(texts):

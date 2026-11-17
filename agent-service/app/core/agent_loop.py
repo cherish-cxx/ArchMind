@@ -232,7 +232,7 @@ async def run_agent_turn(
     ctx.begin_turn(message)
     started = time.perf_counter()
     steps: list[Step] = []
-
+    # 预检索
     retrieval = await retrieve(ctx, message, retriever, steps, on_step)
     ctx.turn.retrieval = retrieval
     if retrieval.candidates:
@@ -240,7 +240,7 @@ async def run_agent_turn(
             render_candidates(retrieval.candidates),
             uids=[c.uid for c in retrieval.candidates],
         )
-
+    #记忆召回
     memory_hits: list[MemoryHit] = []
     if memory is not None and memory.enabled:
         trigger = memory_trigger(ctx, message, retrieval)
@@ -258,6 +258,7 @@ async def run_agent_turn(
     #: —— 有 SHOW_PATH 时以前者为准，否则用户每次都会被打回焦点视图。
     nav_commands: list[UICmd] = []
 
+    # 将消息和记忆召回结果合并
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": agent_system(ctx, memory_hits)},
         *ctx.to_llm_messages(),
@@ -278,6 +279,7 @@ async def run_agent_turn(
                 break
 
             for index, call in enumerate(result.tool_calls):
+                # answer 是最后一个调用的特殊情况，同样也是终止工具
                 if call.name == ANSWER:
                     explanation = await _accept_answer(call, evidence, envelopes, java, ctx)
                     if explanation is None:
@@ -298,7 +300,7 @@ async def run_agent_turn(
                         ctx, message, explanation, envelopes, evidence, steps, started,
                         nav_commands, memory,
                     )
-
+                #校验clarify的question是否合法
                 if call.name == CLARIFY:
                     asked = _accept_clarify(call)
                     if asked is None:
@@ -313,7 +315,7 @@ async def run_agent_turn(
                     return _respond_clarify(
                         ctx, question, options, envelopes, steps, started
                     )
-
+                # 本地导航工具，页面上下文跳转
                 if call.name == NAVIGATE:
                     # 本地工具：不扣工具预算、不进缓存（back 两次就该退两级）。
                     content, command = _run_navigate(ctx, call, known, steps, on_step)
@@ -337,6 +339,7 @@ async def run_agent_turn(
                     gained = evidence_uids([env])
                     evidence |= gained           # 白名单：只认 envelope.evidence
                     known |= gained | _collect_uids(env.data)   # 起点：连 data 里的 uid 也算
+                    
     except LLMNotConfiguredError:
         raise
     except LLMError as e:
@@ -584,7 +587,8 @@ async def _force_answer(
         ctx, message, envelopes, evidence, steps, started, nav_commands, memory
     )
 
-
+# answer工具的参数校验+grounding引用白名单构造函数：
+# 闹到模型输出的answer参数，先算擦胡允许被引用的全部uid白名单，在交给parse_answer解析校验，解析失败返回None
 async def _accept_answer(
     call: ToolCall,
     evidence: set[str],
@@ -598,10 +602,15 @@ async def _accept_answer(
     读了 `method-body` 之后模型自然会引用源码里的类型，而那些类型
     在图上没有边（见 `_source_uids`）。
     """
+    # `await _source_uids(...)`：异步去查 Java 源码侧，判断这批新增 uid 是否属于**源码里出现的类 / 方法**（注释说的特殊放行规则：图数据库里没有关联边，但源码读到过的类型，也允许引用）
+    #并集，最终 `grounded` = 图检索得到的证据 uid **+ 源码里合法的源码 uid**，这就是本次回答**可以合法引用的 uid 白名单**
     grounded = evidence | await _source_uids(
         envelopes, java, ctx, _proposed_uids(call.arguments) - evidence
     )
+    #`_proposed_uids(call.arguments)`：从模型这次 answer 的参数里提取它想要引用的所有 `citedUids`
+    #`- evidence`：筛掉已经在 `evidence` 里的 uid，剩下是模型想引用、但不在证据集合里的 uid
     try:
+        #`parse_answer`：解析模型输出的answer参数，校验是否合法，合法返回ExplainResult对象，不合法返回None
         return parse_answer(call.arguments, grounded)
     except ExplainParseError as e:
         logger.warning("answer 参数不合规：%s", e)
@@ -1018,7 +1027,7 @@ async def _class_uids(java: JavaClient, ctx: AgentContext) -> set[str]:
     # 不假设 data 一定是 list[ClassNode]：走通用采集，非清单形状自然得空集
     return _collect_uids(env.data)
 
-
+#`_proposed_uids(call.arguments)`：从模型这次 answer 的参数里提取它想要引用的所有 `citedUids`
 def _proposed_uids(arguments: str) -> set[str]:
     """从 `answer` 的参数里取出模型提出的引用。只为校验用，不做别的。"""
     try:

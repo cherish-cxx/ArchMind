@@ -41,7 +41,7 @@ class Candidate:
     def kind_label(self) -> str:
         return KIND_LABELS.get(self.kind, "类")
 
-
+# frozen=True = 这个对象一旦创建，里面所有字段不能改，只读
 @dataclass(frozen=True)
 class Retrieval:
     """一次检索的完整结果。
@@ -49,7 +49,7 @@ class Retrieval:
     `attempted` 与 `reason` 必须分开：**"没查"和"查了没中"是两件事**。
     前者说明索引/服务不可用，后者说明检索质量不够，排查方向完全不同。
     """
-
+    
     candidates: list[Candidate] = field(default_factory=list)
     #: 是否真的走到了 Qdrant（embed 失败时为 False —— 根本没发出查询）
     attempted: bool = False

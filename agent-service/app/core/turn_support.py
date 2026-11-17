@@ -50,9 +50,10 @@ async def retrieve(
     `StepType` 复用 `TOOL` 而不是新增枚举值：新增值会让前端的 switch 收到
     不认识的类型。detail 里写 `retrieve(...)` 已经足够区分它和真正的工具。
     """
+    # 有focus或method_uid时不查
     if retriever is None or ctx.focus is not None or ctx.method_uid:
         return Retrieval()
-
+    # 无focus时查
     started = time.perf_counter()
     result = await retriever.search(ctx.project_id, message)
     add_step(steps, on_step, StepType.TOOL, _retrieve_detail(result), _ms(started))

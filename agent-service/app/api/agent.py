@@ -100,7 +100,7 @@ def _new_conversation_id() -> str:
 def _iso(value) -> str | None:
     return value.isoformat() if value is not None else None
 
-
+# 确定请求的锚点在这个会话上
 def _apply_focus(ctx: AgentContext, focus) -> None:
     """把请求里的锚点应用到这个会话上。
 
@@ -111,6 +111,7 @@ def _apply_focus(ctx: AgentContext, focus) -> None:
         return
     if ctx.focus is not None and ctx.focus.uid == focus.uid:
         return
+    #焦点与当前不同--旧focus压入focus_stack,再替换ctx.focus
     if ctx.focus is not None:
         ctx.focus_stack.append(ctx.focus.uid)
     ctx.focus = focus
@@ -127,7 +128,17 @@ async def _prepare_ask(
     抽出来是因为 `/ask` 与 `/ask/stream` 必须行为完全一致：
     两份拷贝迟早会漂，而漂的那一处一定是过期分支。
     """
+
+    '''
+    没有 cid
+  → 新建 AgentContext(conversation_id, project_id, user_id)
+  → budget.turns = 0
+
+有 cid
+  → store.load_or_none(user_id, project_id, cid)
+    '''
     conversation_id = req.conversation_id or _new_conversation_id()
+    
     if req.conversation_id is None:
         # 没带 cid = 新会话。这是**唯一**该走「创建」的路径。
         ctx = AgentContext(conversation_id=conversation_id, project_id=req.project_id,

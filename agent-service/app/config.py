@@ -96,6 +96,7 @@ class Settings(BaseSettings):
 
     # ── 记忆（R5）──────────────────────────────────────────────────────────
     # 总开关：关掉时既不写也不读，已有记忆保留。默认关，灰度用。
+    # enabled（已启动）
     memory_enabled: bool = False
     # 记忆用**独立集合**：和类索引共用时，重新分析按 rev 清理会把记忆一起删掉
     qdrant_memory_collection: str = "archmind_memories"

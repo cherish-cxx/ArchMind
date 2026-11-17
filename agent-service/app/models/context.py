@@ -255,19 +255,27 @@ class AgentContext(CamelModel):
         return self
 
     # ── 一轮的生命周期 ──────────────────────────────────────────────
-
+    # 定义一个函数，每次轮!接收的参数就是用户的问题question，执行完不返回结果
     def begin_turn(self, question: str) -> None:
         """每轮开头调一次：记下起点、清空本轮产物、追加用户消息。"""
+        # len(self.messages)就是现在一共多少条消息
+        # 把turn_start设置为当前的消息数量，也就是这一轮对话的下标
+        # 本轮开始的时候，消息列表卡在这个位置：
+        # 后面本轮产生的所有的信息都归于这个下标之后；等本轮结束就知道那些消息是从这一轮中生成的
         self.turn_start = len(self.messages)
+        # 建立一个本轮记录本：专门用用户存储这一轮的专属信息
         self.turn = TurnArtifacts(
-            question=question,
-            focus_before=self.focus.uid if self.focus else None,
-            method_uid=self.method_uid,
-            evidence=[],
+            question=question, #本轮用户的问题
+            focus_before=self.focus.uid if self.focus else None, #开始这一轮之前agent当时聚焦的目标id
+            method_uid=self.method_uid, #本轮要用的策略
+            evidence=[], #本轮收集到的证据，一开始是空列表，后面调用工具查到东西就往里塞
         )
-        self.budget.steps_used = 0
-        self.budget.tool_calls_this_turn = 0
-        self.budget.llm_calls_this_turn = 0
+        # agent优先：一轮最多思考多少步，调用多少次工具，最多调用多少次大模型。
+        # 新轮开始，全部归零，重新计数
+        self.budget.steps_used = 0  #已经走了多少步
+        self.budget.tool_calls_this_turn = 0  #调用了多少次工具
+        self.budget.llm_calls_this_turn = 0  #调用了多少次LLM
+        # 如果问题不是空的，就把这条用户消息，追加到全局聊天记录message列表里
         if question:
             self.messages.append(ChatMessage(role=MessageRole.USER, content=question))
 
@@ -336,7 +344,9 @@ class AgentContext(CamelModel):
             elif m.role is MessageRole.SYSTEM:
                 lines.append(f"[规则] {m.content or ''}")
         return "\n".join(lines)
-
+    """
+    内部消息模型--openAI标准消息数组的转换器
+    """
     def to_llm_messages(self) -> list[dict[str, Any]]:
         """渲染成 OpenAI 兼容的 messages（R6 的 function calling 直接用它）。"""
         out: list[dict[str, Any]] = []

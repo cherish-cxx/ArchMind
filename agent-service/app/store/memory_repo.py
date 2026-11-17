@@ -67,8 +67,11 @@ class MemoryRepo:
         用 `SELECT ... FOR UPDATE` 锁住去重键对应的行：并发下两个写入方
         至少有一个会因为唯一键失败，而不是双双插入。
         """
+        # 打开数据库会话
         async with self._db.session() as s:
+            #开启一个事务
             async with s.begin():
+                # 查询去重键对应的行
                 row = (await s.execute(
                     select(Memory)
                     .where(
@@ -80,9 +83,9 @@ class MemoryRepo:
                     )
                     .with_for_update()
                 )).scalar_one_or_none()
-
+                # 判断本次动作 入参为已有行的状态、已有行的版本号、本次的版本号
                 action = decide_merge(
-                    row.status if row else None,
+                    row.status if row else None, #A if 条件 else B---条件成立取A，否则取B，row存在时为真，没查到时row是None
                     row.graph_rev if row else 0,
                     draft.graph_rev,
                 )
