@@ -56,7 +56,10 @@ if sync_repo "$BACKEND_DIR" "后端"; then
   # migrate 必须一起重建：它的镜像里带的是 alembic/versions，
   # 新增迁移后不重建会报 "Can't locate revision"，agent-service 因为
   # depends_on 它而根本起不来。
-  services+=(backend agent-service migrate)
+  # mcp / mcp-migrate 也必须带上：mcp 复用 agent-service 镜像且不在默认
+  # 重建列表里，漏掉就永远不启动；mcp-migrate 是一次性容器，负责用
+  # mysql:8 跑 ArchMind/sql 下 Java 侧的表（如 mcp_pat），SQL 幂等可重跑。
+  services+=(backend agent-service migrate mcp mcp-migrate)
 fi
 if sync_repo "$FRONTEND_DIR" "前端"; then
   services+=(frontend)

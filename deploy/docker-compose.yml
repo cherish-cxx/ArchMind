@@ -86,7 +86,10 @@ services:
     expose:
       - "8001"                          # 只对内，由 nginx /mcp 反代
     depends_on:
-      - backend
+      backend:
+        condition: service_started
+      mcp-migrate:
+        condition: service_completed_successfully
     healthcheck:
       # 同 agent-service：slim 镜像没有 curl/wget，用 Python 自检
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
@@ -109,6 +112,23 @@ services:
       - AGENT_MYSQL_DATABASE=${AGENT_MYSQL_DATABASE:-archmind}
       - AGENT_MYSQL_USER=${AGENT_MYSQL_MIGRATE_USER:-archmind_migrate}
       - AGENT_MYSQL_PASSWORD=${AGENT_MYSQL_MIGRATE_PASSWORD:-}
+    restart: "no"
+
+  # R7：一次性的 Java 侧 SQL 迁移。alembic 只跑 Python 的 agent_* 表，
+  # mcp_pat 是 Java 管理的表；不建表则 PAT 创建时报 table doesn't exist。
+  # SQL 幂等（CREATE TABLE IF NOT EXISTS），每次 deploy 重跑安全。
+  mcp-migrate:
+    image: mysql:8
+    container_name: archmind-mcp-migrate
+    volumes:
+      - ../ArchMind/sql:/sql:ro
+    environment:
+      - MYSQL_HOST=${MYSQL_HOST:-172.21.160.203}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-archmind}
+      - MYSQL_USER=${MYSQL_USER:-archmind}
+      # 用 MYSQL_PWD 而不是 -p：避免交互式密码提示与引号转义问题
+      - MYSQL_PWD=${MYSQL_PASSWORD}
+    entrypoint: ["sh", "-c", "mysql -h \"$$MYSQL_HOST\" -u \"$$MYSQL_USER\" \"$$MYSQL_DATABASE\" < /sql/2026-11-16-mcp_pat.sql"]
     restart: "no"
 
   frontend:
