@@ -64,36 +64,40 @@ _GAP_HINTS: dict[str, str] = {
 _GAP_HINT_DEFAULT = "链路在此终止：没有可继续追踪的下游"
 
 
+def _segment_matches(segs: list[str], *names: str) -> bool:
+    """包名任一**段**等于或以前缀命中关键词。
+
+    必须按段匹配，不能按整串子串匹配：`com.example.capital` 里没有 `api`
+    段，但整串包含 "api"；`com.acme.rapid` 同理。按段才能避免这类误判。
+    """
+    return any(seg == name or seg.startswith(name) for seg in segs for name in names)
+
+
 def infer_layer(uid: str) -> str:
     """按包名/简单名推断一个类在分层架构中的角色。
 
     顺序即优先级：包名比类名更可信（`service.impl` 先命中 service），
-    因此先按「包名含关键词」判断，再看简单名后缀/正则。
+    因此先按「包名段」判断，再看简单名后缀/正则。
     推断不出来就是 `other` —— 不猜。
     """
     fqn = uid.split("#", 1)[0]
     package, _, simple = fqn.rpartition(".")
-    pkg = package.lower()
+    segs = [s.lower() for s in package.split(".") if s]
+    simple_lower = simple.lower()
 
-    if "controller" in pkg or simple.endswith("Controller"):
+    if _segment_matches(segs, "controller") or simple_lower.endswith("controller"):
         return "controller"
-    if "service" in pkg or _SERVICE_NAME.fullmatch(simple):
+    if _segment_matches(segs, "service") or _SERVICE_NAME.fullmatch(simple):
         return "service"
-    if (
-        "mapper" in pkg
-        or "repository" in pkg
-        or "dao" in pkg
-        or simple.endswith(("Mapper", "Repository", "Dao"))
+    if _segment_matches(segs, "mapper", "repository", "dao") or simple_lower.endswith(
+        ("mapper", "repository", "dao")
     ):
         return "repository"
-    if (
-        "client" in pkg
-        or "feign" in pkg
-        or "api" in pkg
-        or simple.endswith("Client")
+    if _segment_matches(segs, "client", "feign", "api") or simple_lower.endswith(
+        "client"
     ):
         return "client"
-    if "config" in pkg:
+    if _segment_matches(segs, "config"):
         return "config"
     return "other"
 
@@ -138,8 +142,9 @@ def shape_flow(data: CallChain) -> dict:
     """把 `CallChain` 按深度整理成逐层展开的调用栈。
 
     同一 depth 的节点算一个 stage，按 `module`、`uid` 排序让输出稳定
-    （agent 反复调用同一 uid 应该看到同样的顺序）。stage 的 `layer` 取
-    排序后第一个节点的层，仅作概览；判断单个类请看节点自己的 `layer`。
+    （agent 反复调用同一 uid 应该看到同样的顺序）。stage 的 `layer` 只在
+    该深度所有节点同层时给出，混层时为 `"mixed"` —— 取第一个节点会把
+    任意顺序误当成事实；判断单个类请看节点自己的 `layer`。
     不生成自然语言总结 —— 那是 agent 的活。
     """
     by_depth: dict[int, list[ChainNode]] = {}
@@ -150,10 +155,11 @@ def shape_flow(data: CallChain) -> dict:
     for depth in sorted(by_depth):
         ordered = sorted(by_depth[depth], key=lambda n: (n.module or "", n.uid))
         shaped_nodes = [_shape_node(n) for n in ordered]
+        layers = {n["layer"] for n in shaped_nodes}
         stages.append(
             {
                 "depth": depth,
-                "layer": shaped_nodes[0]["layer"],
+                "layer": layers.pop() if len(layers) == 1 else "mixed",
                 "nodes": shaped_nodes,
             }
         )

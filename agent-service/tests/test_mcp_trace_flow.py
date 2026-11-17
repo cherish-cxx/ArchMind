@@ -174,10 +174,30 @@ def test_within_stage_sorts_by_module_then_uid():
         ("com.hmall.feign.StockFeign", "client"),
         ("com.hmall.common.config.RedisConfig", "config"),
         ("com.hmall.common.util.StringUtil", "other"),
+        # 按包名段匹配，不做整串子串匹配：capital/rapid 里没有 api 段。
+        ("com.example.capital.Ledger", "other"),
+        ("com.acme.rapid.Engine", "other"),
+        ("com.hmall.api.client.CartClient", "client"),
+        ("com.foo.mapper.UserMapper", "repository"),
     ],
 )
 def test_infer_layer(uid, expected):
     assert infer_layer(uid) == expected
+
+
+def test_stage_layer_is_mixed_when_depth_holds_multiple_layers():
+    data = sample_chain(
+        [
+            node("com.hmall.service.OrderService", depth=1),
+            node("com.hmall.api.client.CartClient", depth=1),
+        ]
+    )
+
+    out = shape_flow(data)
+
+    assert out["stages"][0]["layer"] == "mixed"
+    # 节点自己的层仍然准确 —— 只有 stage 概览是 mixed。
+    assert [n["layer"] for n in out["stages"][0]["nodes"]] == ["client", "service"]
 
 
 def test_maps_gaps_to_breaks_with_hint():
@@ -337,4 +357,29 @@ async def test_max_nodes_out_of_range_is_invalid(max_nodes):
 
     assert out["ok"] is False
     assert out["error"]["code"] == "invalid_argument"
+    assert java.call_count == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"maxDepth": True},
+        {"maxNodes": True},
+        {"maxDepth": False},
+        {"maxNodes": False},
+    ],
+)
+async def test_bool_budgets_are_invalid_not_ints(kwargs):
+    """bool 是 int 的子类，会混过范围检查，必须显式拒绝。"""
+    java = FakeJava()
+    context = FakeContext()
+    configure_with_fakes(java=java, context=context)
+
+    with principal_scope(GOOD):
+        out = await archmind_trace_flow(1, "com.hmall.service.OrderService", **kwargs)
+
+    assert out["ok"] is False
+    assert out["error"]["code"] == "invalid_argument"
+    assert context.project_calls == []
     assert java.call_count == 0

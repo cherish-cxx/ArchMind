@@ -217,9 +217,21 @@ async def archmind_trace_flow(
                 "uid 不能为空",
                 "先用 archmind_search_entities 找到类，再传入 uid",
             )
-        if not isinstance(maxDepth, int) or maxDepth < 1 or maxDepth > 5:
+        # bool 是 int 的子类：True/False 会混过 isinstance 与范围检查，
+        # 必须先显式拒绝，否则 `maxDepth=True` 会被当成 1。
+        if (
+            isinstance(maxDepth, bool)
+            or not isinstance(maxDepth, int)
+            or maxDepth < 1
+            or maxDepth > 5
+        ):
             return tool_error("invalid_argument", "maxDepth 必须在 1..5")
-        if not isinstance(maxNodes, int) or maxNodes < 1 or maxNodes > 200:
+        if (
+            isinstance(maxNodes, bool)
+            or not isinstance(maxNodes, int)
+            or maxNodes < 1
+            or maxNodes > 200
+        ):
             return tool_error("invalid_argument", "maxNodes 必须在 1..200")
 
         ctx = await ensure_project(projectId)
