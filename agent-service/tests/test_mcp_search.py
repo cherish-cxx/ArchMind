@@ -25,17 +25,25 @@ GOOD = Principal(
 
 
 class FakeEmbed:
+    def __init__(self, *, raises: bool = False):
+        self._raises = raises
+
     async def embed(self, texts, *, timeout=None):
+        if self._raises:
+            raise RuntimeError("embed 服务挂了")
         return [([0.1, 0.2], {5: 0.3}) for _ in texts]
 
 
 class FakeQdrant:
-    def __init__(self, points=None):
+    def __init__(self, points=None, *, raises: bool = False):
         self._points = points or []
+        self._raises = raises
         self.calls: list[dict] = []
 
     async def query(self, project_id, dense, sparse, *, rev, limit=None, prefetch_limit=None):
         self.calls.append({"project_id": project_id, "rev": rev, "limit": limit})
+        if self._raises:
+            raise RuntimeError("qdrant 挂了")
         return self._points
 
 
@@ -83,9 +91,15 @@ def _fake_retriever(
     *,
     points=None,
     raises_on_call: int | None = None,
+    embed_fails: bool = False,
+    qdrant_fails: bool = False,
 ) -> tuple[Retriever, FakeIndexStore]:
     store = FakeIndexStore(state, raises_on_call=raises_on_call)
-    retriever = Retriever(FakeEmbed(), FakeQdrant(points), store)
+    retriever = Retriever(
+        FakeEmbed(raises=embed_fails),
+        FakeQdrant(points, raises=qdrant_fails),
+        store,
+    )
     return retriever, store
 
 
@@ -179,6 +193,27 @@ async def test_absent_or_failed_index_is_explicit_error(state, reason):
     assert out["error"]["code"] == "not_indexed"
     assert out["error"]["message"] == reason
     assert "分析" in out["error"]["hint"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", ["embed_failed", "qdrant_failed"])
+async def test_infra_failure_is_tool_failed_not_not_indexed(reason):
+    """索引是在的，只是 embed/Qdrant 挂了 —— 不能说成「没索引」。"""
+    retriever, store = _fake_retriever(
+        {"status": "ready", "activeRev": 7},
+        embed_fails=(reason == "embed_failed"),
+        qdrant_fails=(reason == "qdrant_failed"),
+    )
+    configure_with_fakes(retriever=retriever, index_store=store)
+
+    with principal_scope(GOOD):
+        out = await archmind_search_entities(1, "下单扣库存", 10)
+
+    assert out["ok"] is False
+    assert out["error"]["code"] == "tool_failed"
+    assert out["error"]["message"] == reason
+    assert "稍后重试" in out["error"]["hint"]
+    assert "建索引" not in out["error"]["hint"]
 
 
 @pytest.mark.asyncio

@@ -15,6 +15,17 @@ from app.models.base import CamelModel
 #: 检索结果为空时的提示。要指向「去 ArchMind 建索引」这个可执行动作。
 _NOT_INDEXED_HINT = "该项目尚未建立索引或索引不可用，请先在 ArchMind 完成分析并建索引"
 
+#: 检索失败时的通用提示。基础设施抖动，重试即可，不要误导用户去重建索引。
+_RETRY_HINT = "检索服务暂不可用，请稍后重试"
+
+#: 索引本身缺失/未就绪 —— 用户可执行的动作是去 ArchMind 建索引。
+_INDEX_NOT_READY_REASONS = frozenset({"absent", "not_ready", "failed"})
+
+#: 基础设施故障（Redis / embed 服务 / Qdrant）—— 用户能做的只有稍后重试。
+_SERVICE_FAILURE_REASONS = frozenset(
+    {"state_unavailable", "embed_failed", "qdrant_failed"}
+)
+
 
 class SearchCandidate(CamelModel):
     """对外暴露的语义检索候选。
@@ -119,14 +130,39 @@ async def _index_state_for_meta(
     return index
 
 
+def _empty_retrieval_error(retrieval) -> dict | None:
+    """把「空候选」翻译成对外错误；真正只是没命中时返回 None。
+
+    `reason` 必须区分两类：索引没建好（用户该去建索引）和基础设施挂了
+    （Redis / embed / Qdrant，用户只能重试）。混成一个码会把后者误导成
+    「你的项目没索引」。
+    """
+    if retrieval.candidates:
+        return None
+    reason = retrieval.reason
+    if not reason:
+        # 真发过查询、也真没命中 —— 不是错误。
+        if retrieval.attempted:
+            return None
+        reason = "index_unavailable"
+
+    if reason in _INDEX_NOT_READY_REASONS:
+        return tool_error("not_indexed", reason, _NOT_INDEXED_HINT)
+    if reason in _SERVICE_FAILURE_REASONS:
+        return tool_error("tool_failed", reason, _RETRY_HINT)
+    # 未知 reason：同样当服务问题，别臆断成索引缺失。
+    return tool_error("tool_failed", reason, _RETRY_HINT)
+
+
 async def archmind_search_entities(
     projectId: int, query: str, k: int = 10
 ) -> dict:
     """语义检索项目内的类，返回按相关度排序的候选。
 
     **空结果不是错误**：项目有索引、查询成功、只是没命中，返回 `ok=true, data=[]`。
-    真正该报错的是「索引不可用」——那种情况下空列表会被误读成「项目里没有」，
-    所以返回 `not_indexed` 并带上 reason 与处理提示。
+    真正该报错的是「检索没跑成」——那种情况下空列表会被误读成「项目里没有」。
+    错误码按 `retrieval.reason` 分流：索引缺失/未就绪 → `not_indexed`，
+    Redis / embed / Qdrant 故障 → `tool_failed`。
     """
     try:
         if not query or not query.strip():
@@ -138,21 +174,9 @@ async def archmind_search_entities(
         svc = deps.services()
         retrieval = await svc.retriever.search(projectId, query, k)
 
-        if not retrieval.candidates:
-            if not retrieval.attempted:
-                # 索引缺失/未就绪，或 embed 失败 —— 都不是「没命中」。
-                return tool_error(
-                    "not_indexed",
-                    retrieval.reason or "index_unavailable",
-                    _NOT_INDEXED_HINT,
-                )
-            if retrieval.reason:
-                # 真发过查询但 Qdrant 失败了：同样不能伪装成「没命中」。
-                return tool_error(
-                    "tool_failed",
-                    retrieval.reason,
-                    "检索服务暂不可用，请稍后重试",
-                )
+        failure = _empty_retrieval_error(retrieval)
+        if failure is not None:
+            return failure
 
         index = await _index_state_for_meta(
             svc.index_store, projectId, retrieval.partial
