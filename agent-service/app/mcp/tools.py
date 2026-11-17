@@ -8,9 +8,10 @@
 """
 
 from app.mcp import deps
-from app.mcp.format import index_meta, meta, tool_error
+from app.mcp.format import index_meta, meta, shape_flow, tool_error
 from app.mcp.principal import McpAuthError, ProjectContext, current_principal
 from app.models.base import CamelModel
+from app.models.tool import ChainDirection
 
 #: 检索结果为空时的提示。要指向「去 ArchMind 建索引」这个可执行动作。
 _NOT_INDEXED_HINT = "该项目尚未建立索引或索引不可用，请先在 ArchMind 完成分析并建索引"
@@ -194,5 +195,53 @@ async def archmind_search_entities(
             for c in retrieval.candidates
         ]
         return {"ok": True, "data": data, "meta": meta(ctx, index=index)}
+    except McpToolError as e:
+        return tool_error(e.code, e.message, e.hint)
+
+
+async def archmind_trace_flow(
+    projectId: int, uid: str, maxDepth: int = 3, maxNodes: int = 60
+) -> dict:
+    """从 `uid` 出发向下追踪调用链，按深度分层返回。
+
+    层标签是**按包名/类名推断**的（见 `format.infer_layer`），不是图上的事实；
+    每个节点都标 `inferred: true` / `layerBasis: "package-name"`。
+    `breaks` 把 gap 翻译成带中文提示的断点 —— 跨服务断点正是这套工具的重点。
+
+    参数校验先于归属校验，非法输入不该打 Java。
+    """
+    try:
+        if not isinstance(uid, str) or not uid.strip():
+            return tool_error(
+                "invalid_argument",
+                "uid 不能为空",
+                "先用 archmind_search_entities 找到类，再传入 uid",
+            )
+        if not isinstance(maxDepth, int) or maxDepth < 1 or maxDepth > 5:
+            return tool_error("invalid_argument", "maxDepth 必须在 1..5")
+        if not isinstance(maxNodes, int) or maxNodes < 1 or maxNodes > 200:
+            return tool_error("invalid_argument", "maxNodes 必须在 1..200")
+
+        ctx = await ensure_project(projectId)
+        env = await deps.services().java.call_chain(
+            projectId,
+            uid,
+            direction=ChainDirection.DOWN,
+            method_uid=None,
+            max_depth=maxDepth,
+            max_nodes=maxNodes,
+        )
+        if not env.ok or env.data is None:
+            return tool_error(
+                "tool_failed",
+                env.note or "调用链暂不可用",
+                "请确认 uid 是该项目的类，或先用 archmind_search_entities 查找",
+            )
+        return {
+            "ok": True,
+            **shape_flow(env.data),
+            "evidence": [e.model_dump(by_alias=True) for e in env.evidence],
+            "meta": meta(ctx, truncated=env.truncated),
+        }
     except McpToolError as e:
         return tool_error(e.code, e.message, e.hint)

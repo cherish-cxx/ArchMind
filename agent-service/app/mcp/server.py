@@ -12,6 +12,7 @@ from app.mcp.tools import (
     archmind_list_projects,
     archmind_overview,
     archmind_search_entities,
+    archmind_trace_flow,
 )
 
 
@@ -29,5 +30,6 @@ def build_mcp() -> FastMCP:
     mcp.tool(name="archmind_list_projects")(archmind_list_projects)
     mcp.tool(name="archmind_overview")(archmind_overview)
     mcp.tool(name="archmind_search_entities")(archmind_search_entities)
+    mcp.tool(name="archmind_trace_flow")(archmind_trace_flow)
 
     return mcp
