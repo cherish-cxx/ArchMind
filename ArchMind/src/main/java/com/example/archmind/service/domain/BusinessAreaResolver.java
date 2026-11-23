@@ -68,7 +68,7 @@ public class BusinessAreaResolver {
         boolean allKeysEmpty = keyByUid.values().stream().allMatch(String::isEmpty);
         return allKeysEmpty
                 ? resolveSingle(safeClasses, safeRoles, keyByUid, projectName)
-                : resolveByKey(safeClasses, safeRoles, keyByUid, skippedAnyTechnical);
+                : resolveByKey(safeClasses, safeRoles, keyByUid, skippedAnyTechnical, projectName);
     }
 
     /** 全部 key 为空：所有非基础设施类归一个业务领域。 */
@@ -105,7 +105,8 @@ public class BusinessAreaResolver {
     private AreaResult resolveByKey(List<ClassSnapshot> classes,
                                     Map<String, Classified> roles,
                                     Map<String, String> keyByUid,
-                                    boolean skippedAnyTechnical) {
+                                    boolean skippedAnyTechnical,
+                                    String projectName) {
         // 只有真正会落到业务领域的类才产生 key：基础设施/OTHER 角色或 key 为空的类直接归基础设施。
         // 否则会出现「有 key 但一个类都没有」的空领域。
         Map<String, String> businessKey = new LinkedHashMap<>();
@@ -140,6 +141,12 @@ public class BusinessAreaResolver {
             }
         }
 
+        // 分层项目（controller/service/dto…）中 controller 段后没有业务段，入口层会全部
+        // 落进基础设施，导致能力一个都生不出来。此时包名划分没有产出可用领域，退回单领域。
+        if (noEntryInBusinessArea(classes, roles, classToArea)) {
+            return resolveSingle(classes, roles, keyByUid, projectName);
+        }
+
         // TreeSet 已按 uid 排序，infrastructure 追加在最后。
         List<BusinessArea> areas = new ArrayList<>();
         for (String key : keys) {
@@ -160,6 +167,28 @@ public class BusinessAreaResolver {
             return false;
         }
         return classified.role() == Role.INFRASTRUCTURE || classified.role() == Role.OTHER;
+    }
+
+    /** 存在入口类，但没有任何入口落到业务领域（全被划进基础设施）时为 true。 */
+    private static boolean noEntryInBusinessArea(List<ClassSnapshot> classes,
+                                                 Map<String, Classified> roles,
+                                                 Map<String, String> classToArea) {
+        boolean hasEntry = false;
+        for (ClassSnapshot cls : classes) {
+            if (cls == null || cls.uid() == null) {
+                continue;
+            }
+            Classified classified = roles.get(cls.uid());
+            if (classified == null || classified.role() != Role.ENTRY) {
+                continue;
+            }
+            hasEntry = true;
+            String area = classToArea.get(cls.uid());
+            if (area != null && !INFRASTRUCTURE.equals(area)) {
+                return false;
+            }
+        }
+        return hasEntry;
     }
 
     /** 按段计算所有非空包名的公共前缀，返回每个类去掉前缀后的段序列。 */

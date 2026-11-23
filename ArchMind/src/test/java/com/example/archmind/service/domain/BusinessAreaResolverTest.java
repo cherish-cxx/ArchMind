@@ -39,6 +39,46 @@ class BusinessAreaResolverTest {
     }
 
     @Test
+    void layeredProjectWithSubPackageKeysFallsBackToSingleArea() {
+        // controller 段后没有业务段，但 service.agent / dto.response 会产生伪 key；
+        // 入口层全落基础设施时必须退回单领域，否则能力数为 0。
+        var roles = Map.of(
+                "com.example.archmind.controller.C",
+                new Classified("com.example.archmind.controller.C", Role.ENTRY, "annotation"),
+                "com.example.archmind.service.agent.A",
+                new Classified("com.example.archmind.service.agent.A", Role.BUSINESS, "package"),
+                "com.example.archmind.dto.response.R",
+                new Classified("com.example.archmind.dto.response.R", Role.DOMAIN_MODEL, "package"));
+        var classes = List.of(
+                cls("com.example.archmind.controller.C", "com.example.archmind.controller"),
+                cls("com.example.archmind.service.agent.A", "com.example.archmind.service.agent"),
+                cls("com.example.archmind.dto.response.R", "com.example.archmind.dto.response"));
+        var r = new BusinessAreaResolver().resolve(classes, roles, "ArchMind");
+        assertEquals("single", r.strategy());
+        assertEquals("main", r.classToArea().get("com.example.archmind.controller.C"));
+        assertEquals(List.of("ArchMind"), r.areas().stream()
+                .filter(a -> a.kind().equals("business"))
+                .map(BusinessArea::name).toList());
+    }
+
+    @Test
+    void modularProjectKeepsEntryInBusinessArea() {
+        var roles = Map.of(
+                "com.hmall.item.controller.ItemController",
+                new Classified("com.hmall.item.controller.ItemController", Role.ENTRY, "annotation"),
+                "com.hmall.user.controller.UserController",
+                new Classified("com.hmall.user.controller.UserController", Role.ENTRY, "annotation"));
+        var classes = List.of(
+                cls("com.hmall.item.controller.ItemController", "com.hmall.item.controller"),
+                cls("com.hmall.item.service.ItemService", "com.hmall.item.service"),
+                cls("com.hmall.user.controller.UserController", "com.hmall.user.controller"));
+        var r = new BusinessAreaResolver().resolve(classes, roles, "hmall");
+        assertEquals("business-modules", r.strategy());
+        assertEquals("item", r.classToArea().get("com.hmall.item.controller.ItemController"));
+        assertEquals("user", r.classToArea().get("com.hmall.user.controller.UserController"));
+    }
+
+    @Test
     void skipsTechnicalSegmentToFindBusinessKey() {
         var classes = List.of(
                 cls("com.acme.backend.controller.OrderController", "com.acme.backend.controller"),
