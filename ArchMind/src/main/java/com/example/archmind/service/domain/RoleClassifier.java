@@ -160,8 +160,10 @@ public class RoleClassifier {
         if (packageName == null || packageName.isBlank()) {
             return null;
         }
-        for (String segment : packageName.split("\\.")) {
-            Role role = PACKAGE_SEGMENT_ROLES.get(segment.toLowerCase(Locale.ROOT));
+        // 从右往左：越靠后的段越具体。`common.controller` 应判成入口而不是基础设施。
+        String[] segments = packageName.split("\\.");
+        for (int i = segments.length - 1; i >= 0; i--) {
+            Role role = PACKAGE_SEGMENT_ROLES.get(segments[i].toLowerCase(Locale.ROOT));
             if (role != null) {
                 return role;
             }

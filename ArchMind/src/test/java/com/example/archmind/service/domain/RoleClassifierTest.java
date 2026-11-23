@@ -67,6 +67,15 @@ class RoleClassifierTest {
         assertEquals(List.of("a.Aye", "z.Zed"), List.copyOf(((Map<String, Classified>) r).keySet()));
     }
 
+    @Test
+    void packageSegmentUsesMostSpecificSegment() {
+        var r = new RoleClassifier().classify(List.of(
+                cls("com.acme.common.controller.UserHandler", "com.acme.common.controller",
+                        List.of(), List.of(), "")));
+        assertEquals(Role.ENTRY, r.get("com.acme.common.controller.UserHandler").role());
+        assertEquals("package", r.get("com.acme.common.controller.UserHandler").basis());
+    }
+
     private static ClassSnapshot cls(String uid, String packageName, List<String> annotations,
                                      List<String> interfaces, String superclass) {
         String simpleName = uid.substring(uid.lastIndexOf('.') + 1);
