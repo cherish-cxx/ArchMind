@@ -39,9 +39,9 @@ class BusinessAreaResolverTest {
     }
 
     @Test
-    void layeredProjectWithSubPackageKeysFallsBackToSingleArea() {
-        // controller 段后没有业务段，但 service.agent / dto.response 会产生伪 key；
-        // 入口层全落基础设施时必须退回单领域，否则能力数为 0。
+    void layeredProjectNeverTreatsInnerSegmentsAsAreas() {
+        // service.agent / dto.response 是层内分组，不是业务领域；入口层没有业务 key 时
+        // 整个项目退化为单领域，否则入口全落基础设施、能力数为 0。
         var roles = Map.of(
                 "com.example.archmind.controller.C",
                 new Classified("com.example.archmind.controller.C", Role.ENTRY, "annotation"),
@@ -62,6 +62,25 @@ class BusinessAreaResolverTest {
     }
 
     @Test
+    void layeredProjectKeepsEveryClassOutOfBusinessAreas() {
+        var roles = Map.of(
+                "com.example.archmind.controller.C",
+                new Classified("com.example.archmind.controller.C", Role.ENTRY, "annotation"),
+                "com.example.archmind.service.impl.S",
+                new Classified("com.example.archmind.service.impl.S", Role.BUSINESS, "package"),
+                "com.example.archmind.dao.D",
+                new Classified("com.example.archmind.dao.D", Role.INFRASTRUCTURE, "package"));
+        var classes = List.of(
+                cls("com.example.archmind.controller.C", "com.example.archmind.controller"),
+                cls("com.example.archmind.service.impl.S", "com.example.archmind.service.impl"),
+                cls("com.example.archmind.dao.D", "com.example.archmind.dao"));
+        var r = new BusinessAreaResolver().resolve(classes, roles, "ArchMind");
+        assertEquals("single", r.strategy());
+        assertEquals("main", r.classToArea().get("com.example.archmind.service.impl.S"));
+        assertEquals("infrastructure", r.classToArea().get("com.example.archmind.dao.D"));
+    }
+
+    @Test
     void modularProjectKeepsEntryInBusinessArea() {
         var roles = Map.of(
                 "com.hmall.item.controller.ItemController",
@@ -79,7 +98,7 @@ class BusinessAreaResolverTest {
     }
 
     @Test
-    void skipsTechnicalSegmentToFindBusinessKey() {
+    void firstSegmentDecidesBusinessKey() {
         var classes = List.of(
                 cls("com.acme.backend.controller.OrderController", "com.acme.backend.controller"),
                 cls("com.acme.backend.cart.CartService", "com.acme.backend.cart"));

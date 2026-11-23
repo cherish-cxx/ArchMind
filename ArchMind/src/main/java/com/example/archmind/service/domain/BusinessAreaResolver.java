@@ -14,9 +14,11 @@ import java.util.TreeSet;
 /**
  * 按包名结构划业务领域，纯函数、不读库。
  *
- * <p>算法：先按段计算所有包名的公共前缀并去掉；再对每个包从左往右找第一个不属于技术词表的段
- * 作为业务 key。所有 key 都为空时退化为单领域（uid = main，name = 项目名）；
- * 存在业务 key 时每个 key 一个领域，期间只要有一个类跳过了技术段即为 technical-layered。
+ * <p>算法：先按段计算所有包名的公共前缀并去掉；剩余段的<b>第一段</b>是非技术词时作为业务 key。
+ * 第一段是技术段（controller/service/dto…）说明这个分支按层组织，key 为空——不再往更深的
+ * 段找，否则 {@code service.agent}、{@code dto.request} 这类层内分组会被误判成业务领域。
+ * 所有 key 都为空时退化为单领域（uid = main，name = 项目名）；
+ * 存在业务 key 时每个 key 一个领域，期间只要有一个类第一段是技术段即为 technical-layered。
  * 基础设施领域收 role 为 INFRASTRUCTURE/OTHER 的类、无业务 key 的类，以及映射不到业务领域的类。
  */
 public class BusinessAreaResolver {
@@ -68,7 +70,7 @@ public class BusinessAreaResolver {
         boolean allKeysEmpty = keyByUid.values().stream().allMatch(String::isEmpty);
         return allKeysEmpty
                 ? resolveSingle(safeClasses, safeRoles, keyByUid, projectName)
-                : resolveByKey(safeClasses, safeRoles, keyByUid, skippedAnyTechnical, projectName);
+                : resolveByKey(safeClasses, safeRoles, keyByUid, skippedAnyTechnical);
     }
 
     /** 全部 key 为空：所有非基础设施类归一个业务领域。 */
@@ -105,8 +107,7 @@ public class BusinessAreaResolver {
     private AreaResult resolveByKey(List<ClassSnapshot> classes,
                                     Map<String, Classified> roles,
                                     Map<String, String> keyByUid,
-                                    boolean skippedAnyTechnical,
-                                    String projectName) {
+                                    boolean skippedAnyTechnical) {
         // 只有真正会落到业务领域的类才产生 key：基础设施/OTHER 角色或 key 为空的类直接归基础设施。
         // 否则会出现「有 key 但一个类都没有」的空领域。
         Map<String, String> businessKey = new LinkedHashMap<>();
@@ -141,12 +142,6 @@ public class BusinessAreaResolver {
             }
         }
 
-        // 分层项目（controller/service/dto…）中 controller 段后没有业务段，入口层会全部
-        // 落进基础设施，导致能力一个都生不出来。此时包名划分没有产出可用领域，退回单领域。
-        if (noEntryInBusinessArea(classes, roles, classToArea)) {
-            return resolveSingle(classes, roles, keyByUid, projectName);
-        }
-
         // TreeSet 已按 uid 排序，infrastructure 追加在最后。
         List<BusinessArea> areas = new ArrayList<>();
         for (String key : keys) {
@@ -167,28 +162,6 @@ public class BusinessAreaResolver {
             return false;
         }
         return classified.role() == Role.INFRASTRUCTURE || classified.role() == Role.OTHER;
-    }
-
-    /** 存在入口类，但没有任何入口落到业务领域（全被划进基础设施）时为 true。 */
-    private static boolean noEntryInBusinessArea(List<ClassSnapshot> classes,
-                                                 Map<String, Classified> roles,
-                                                 Map<String, String> classToArea) {
-        boolean hasEntry = false;
-        for (ClassSnapshot cls : classes) {
-            if (cls == null || cls.uid() == null) {
-                continue;
-            }
-            Classified classified = roles.get(cls.uid());
-            if (classified == null || classified.role() != Role.ENTRY) {
-                continue;
-            }
-            hasEntry = true;
-            String area = classToArea.get(cls.uid());
-            if (area != null && !INFRASTRUCTURE.equals(area)) {
-                return false;
-            }
-        }
-        return hasEntry;
     }
 
     /** 按段计算所有非空包名的公共前缀，返回每个类去掉前缀后的段序列。 */
@@ -233,17 +206,16 @@ public class BusinessAreaResolver {
         return a.subList(0, i);
     }
 
-    /** 从左往右取第一个非技术段；此前每跳过一个技术段都记一次 skipped。 */
+    /** 业务 key 只能是第一段：第一段是技术段时该分支没有业务信息（层内分组不算领域）。 */
     private static KeyScan scanKey(List<String> remainder) {
-        boolean skipped = false;
-        for (String segment : remainder) {
-            if (TECHNICAL_SEGMENTS.contains(segment.toLowerCase(Locale.ROOT))) {
-                skipped = true;
-                continue;
-            }
-            return new KeyScan(segment, skipped);
+        if (remainder.isEmpty()) {
+            return new KeyScan("", false);
         }
-        return new KeyScan("", skipped);
+        String first = remainder.get(0);
+        if (TECHNICAL_SEGMENTS.contains(first.toLowerCase(Locale.ROOT))) {
+            return new KeyScan("", true);
+        }
+        return new KeyScan(first, false);
     }
 
     private record KeyScan(String key, boolean skippedTechnical) {
