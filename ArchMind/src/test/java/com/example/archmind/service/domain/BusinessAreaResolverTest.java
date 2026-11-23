@@ -62,6 +62,18 @@ class BusinessAreaResolverTest {
         assertEquals(classes.size(), r.classToArea().size());
     }
 
+    @Test
+    void subPackageStaysWithItsBusinessArea() {
+        var classes = List.of(
+                cls("com.hmall.item.ItemService", "com.hmall.item"),
+                cls("com.hmall.item.dto.ItemDTO", "com.hmall.item.dto"),
+                cls("com.hmall.trade.TradeService", "com.hmall.trade"));
+        var r = new BusinessAreaResolver().resolve(classes, Map.of(), "hmall");
+        assertEquals("business-modules", r.strategy());
+        assertEquals("item", r.classToArea().get("com.hmall.item.dto.ItemDTO"));
+        assertEquals(2, r.areas().stream().filter(a -> a.kind().equals("business")).count());
+    }
+
     private static ClassSnapshot cls(String uid, String packageName) {
         String simpleName = uid.substring(uid.lastIndexOf('.') + 1);
         return new ClassSnapshot(uid, simpleName, packageName, List.of(), List.of(), "");
