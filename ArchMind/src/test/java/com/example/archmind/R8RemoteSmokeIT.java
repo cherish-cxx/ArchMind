@@ -99,9 +99,15 @@ class R8RemoteSmokeIT {
         List<String> areaUids = map.areas().stream().map(a -> a.uid()).sorted().toList();
         assertEquals(List.of("infrastructure", "item", "order"), areaUids);
 
-        List<String> orderCaps = map.areas().stream()
-                .filter(a -> a.uid().equals("order"))
-                .flatMap(a -> a.capabilities().stream())
+        var orderArea = map.areas().stream()
+                .filter(a -> a.uid().equals("order")).findFirst().orElseThrow();
+        // 两个 Mapper 都是基础设施角色，归 infrastructure 领域，不算进业务领域类数
+        assertEquals(2, orderArea.classCount(), "订单领域只含 Controller / Service 两个类");
+        assertEquals(2, map.areas().stream()
+                .filter(a -> a.uid().equals("infrastructure")).findFirst().orElseThrow().classCount());
+        assertEquals(3, orderArea.capabilities().get(0).memberCount());
+
+        List<String> orderCaps = orderArea.capabilities().stream()
                 .map(CapabilityDto::uid).toList();
         assertEquals(List.of("POST /orders"), orderCaps);
     }
@@ -113,7 +119,17 @@ class R8RemoteSmokeIT {
         assertTrue(members.contains("demo.order.service.OrderService"));
         assertTrue(members.contains("demo.order.mapper.OrderMapper"), "基础设施类必须算成员");
         assertFalse(members.contains("demo.item.service.ItemService"), "跨领域类不能进本能力");
+
+        List<String> edges = detail.edges().stream()
+                .map(e -> e.fromUid() + "->" + e.toUid()).toList();
+        assertTrue(edges.contains("demo.order.controller.OrderController->demo.order.service.OrderService"),
+                "入口到业务类的调用边必须返回");
+        assertTrue(edges.contains("demo.order.service.OrderService->demo.order.mapper.OrderMapper"),
+                "业务到基础设施的调用边必须返回");
+
         assertEquals("item", detail.areaCalls().get(0).toAreaUid());
+        assertTrue(detail.areaCalls().get(0).fromClassUids().contains("demo.order.service.OrderService"),
+                "跨领域调用要记下来源类");
     }
 
     private void seed() {

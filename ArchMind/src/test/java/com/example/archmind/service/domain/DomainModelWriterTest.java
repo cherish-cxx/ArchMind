@@ -29,6 +29,12 @@ class DomainModelWriterTest {
         assertTrue(DomainModelWriter.WRITE_ORDER.get(1).contains("DETACH DELETE"));
     }
 
+    @Test
+    void areaCallStatementKeepsSourceClasses() {
+        String statement = DomainModelWriter.WRITE_ORDER.get(DomainModelWriter.WRITE_ORDER.size() - 1);
+        assertTrue(statement.contains("fromClassUids"));
+    }
+
     private static DomainModel consistentModel() {
         return new DomainModel(
                 List.of(new BusinessArea("item", "item", "business")),

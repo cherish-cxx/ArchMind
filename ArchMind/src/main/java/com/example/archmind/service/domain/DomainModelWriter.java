@@ -66,7 +66,11 @@ public class DomainModelWriter {
                     + "MATCH (to:BusinessArea {projectId:$pid, uid:row.toAreaUid}) "
                     + "MERGE (from)-[e:AREA_CALLS]->(to) "
                     + "SET e.count = coalesce(e.count, 0) + 1, "
-                    + "e.fromUid = row.fromClassUid, e.toUid = row.toClassUid"
+                    + "e.fromClassUids = coalesce(e.fromClassUids, []) + "
+                    + "  CASE WHEN row.fromClassUid IS NULL THEN [] "
+                    + "       WHEN row.fromClassUid IN coalesce(e.fromClassUids, []) THEN [] "
+                    + "       ELSE [row.fromClassUid] END, "
+                    + "e.toUid = row.toClassUid"
     );
 
     private final Driver driver;
