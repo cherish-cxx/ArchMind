@@ -109,6 +109,17 @@ class EndpointResolverTest {
     }
 
     @Test
+    void fallsBackToPublicMethodsWhenControllerHasNoAnnotations() {
+        ParsedProject p = project("public class OrderController {"
+                + " public void list() {} private void hidden() {} }");
+        List<ParsedEndpoint> eps = resolver.resolve(p);
+        assertEquals(1, eps.size());
+        assertEquals("manual", eps.get(0).kind());
+        assertTrue(eps.get(0).inferred());
+        assertEquals("MANUAL " + eps.get(0).handlerUid(), eps.get(0).uid());
+    }
+
+    @Test
     void httpWinsOverScheduledOnSameMethod() {
         ParsedProject p = project(
                 "@RequestMapping(\"/j\") class C {"

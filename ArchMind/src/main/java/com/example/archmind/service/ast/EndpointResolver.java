@@ -63,6 +63,7 @@ public class EndpointResolver {
     private void resolveClass(ParsedClass cls, List<ParsedEndpoint> out) {
         List<String> prefixes = classPrefixes(cls);
         boolean runner = isRunner(cls);
+        int before = out.size();
         for (ParsedMethod method : cls.getMethods()) {
             if (method == null || method.isConstructor()) {
                 continue;
@@ -87,6 +88,36 @@ public class EndpointResolver {
                         "manual", null, null, handlerUid, false));
             }
         }
+
+        // 整个类一条带注解的入口都没有，但长得像 Controller：用公开方法兜底，
+        // 否则无 Spring 注解的项目会产出 0 个能力，整个领域地图是空的。
+        if (out.size() == before && looksLikeController(cls)) {
+            for (ParsedMethod method : cls.getMethods()) {
+                if (method == null || method.isConstructor() || method.isStatic()) {
+                    continue;
+                }
+                if (!"public".equalsIgnoreCase(method.getVisibility())) {
+                    continue;
+                }
+                String uid = handlerUid(method);
+                out.add(new ParsedEndpoint("MANUAL " + uid, "manual", null, null, uid, true));
+            }
+        }
+    }
+
+    /** 名字或包名像入口层。只认 Controller/Resource/Action 与 controller/web/rest 段，避免把 DTO 的 getter 当入口。 */
+    private boolean looksLikeController(ParsedClass cls) {
+        String simple = cls.getSimpleName() == null ? "" : cls.getSimpleName();
+        if (simple.endsWith("Controller") || simple.endsWith("Resource") || simple.endsWith("Action")) {
+            return true;
+        }
+        String pkg = cls.getPackageName() == null ? "" : cls.getPackageName();
+        for (String seg : pkg.split("\\.")) {
+            if (seg.equalsIgnoreCase("controller") || seg.equalsIgnoreCase("web") || seg.equalsIgnoreCase("rest")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ==================== HTTP ====================
