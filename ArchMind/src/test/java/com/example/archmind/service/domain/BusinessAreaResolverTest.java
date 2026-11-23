@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class BusinessAreaResolverTest {
 
@@ -72,6 +73,29 @@ class BusinessAreaResolverTest {
         assertEquals("business-modules", r.strategy());
         assertEquals("item", r.classToArea().get("com.hmall.item.dto.ItemDTO"));
         assertEquals(2, r.areas().stream().filter(a -> a.kind().equals("business")).count());
+    }
+
+    @Test
+    void implSegmentIsTechnical() {
+        var classes = List.of(
+                cls("com.example.demo.service.impl.OrderServiceImpl", "com.example.demo.service.impl"),
+                cls("com.example.demo.controller.OrderController", "com.example.demo.controller"));
+        var r = new BusinessAreaResolver().resolve(classes, Map.of(), "demo");
+        assertEquals("single", r.strategy());
+        assertEquals(1, r.areas().stream().filter(a -> a.kind().equals("business")).count());
+    }
+
+    @Test
+    void neverCreatesBusinessAreaWithoutClasses() {
+        var classes = List.of(
+                cls("com.shop.order.OrderController", "com.shop.order.controller"),
+                cls("com.shop.billing.PayHelper", "com.shop.billing"));
+        var roles = Map.of(
+                "com.shop.billing.PayHelper", new Classified("com.shop.billing.PayHelper", Role.OTHER, "none"));
+        var r = new BusinessAreaResolver().resolve(classes, roles, "shop");
+        assertFalse(r.areas().stream().anyMatch(a -> a.uid().equals("billing")),
+                "只有 OTHER 角色的包不应生成空领域");
+        assertEquals(classes.size(), r.classToArea().size());
     }
 
     private static ClassSnapshot cls(String uid, String packageName) {

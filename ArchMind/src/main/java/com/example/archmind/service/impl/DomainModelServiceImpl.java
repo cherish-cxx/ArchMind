@@ -30,6 +30,9 @@ import java.util.Map;
 @Service
 public class DomainModelServiceImpl implements DomainModelService {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(DomainModelServiceImpl.class);
+
     private final GraphSnapshotDao snapshotDao;
     private final RoleClassifier roleClassifier;
     private final BusinessAreaResolver areaResolver;
@@ -83,6 +86,9 @@ public class DomainModelServiceImpl implements DomainModelService {
         reporter.report(95);
         if (!report.ok()) {
             throw new BusinessException("业务建模对账失败: " + String.join("; ", report.failures()));
+        }
+        if (!report.warnings().isEmpty()) {
+            log.warn("业务建模警告 projectId={}: {}", projectId, report.warnings());
         }
 
         writer.write(projectId, model);

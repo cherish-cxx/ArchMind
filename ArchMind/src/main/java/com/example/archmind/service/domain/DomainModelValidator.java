@@ -15,6 +15,7 @@ public class DomainModelValidator {
 
     public ValidationReport validate(DomainModel model, int totalClasses) {
         List<String> failures = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
 
         Map<String, RoleClassifier.Classified> roles = model.roles();
         if (roles == null) {
@@ -81,12 +82,13 @@ public class DomainModelValidator {
                 failures.add("empty area " + area.uid() + " has no classes");
             }
             if ("business".equals(area.kind()) && !areasWithCapability.contains(area.uid())) {
-                failures.add("business area " + area.uid() + " has no capability");
+                // 不是数据不一致，而是该领域没有可识别的入口；记录但不阻断落库。
+                warnings.add("business area " + area.uid() + " has no capability");
             }
         }
 
-        return failures.isEmpty() ? new ValidationReport(true, List.of())
-                : new ValidationReport(false, List.copyOf(failures));
+        return failures.isEmpty() ? new ValidationReport(true, List.of(), List.copyOf(warnings))
+                : new ValidationReport(false, List.copyOf(failures), List.copyOf(warnings));
     }
 
     private static boolean isBlank(String value) {

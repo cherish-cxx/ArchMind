@@ -40,7 +40,7 @@ public class BusinessAreaResolver {
             "controller", "web", "rest", "api",
             "service", "biz", "usecase", "application",
             "domain", "model", "entity", "po", "vo", "dto", "bo",
-            "mapper", "dao", "repository", "infra", "infrastructure",
+            "mapper", "dao", "repository", "impl", "infra", "infrastructure",
             "config", "common", "util", "utils", "exception", "aspect", "filter", "interceptor",
             "client", "feign", "remote", "gateway",
             "core", "base", "shared", "support");
@@ -106,8 +106,20 @@ public class BusinessAreaResolver {
                                     Map<String, Classified> roles,
                                     Map<String, String> keyByUid,
                                     boolean skippedAnyTechnical) {
+        // 只有真正会落到业务领域的类才产生 key：基础设施/OTHER 角色或 key 为空的类直接归基础设施。
+        // 否则会出现「有 key 但一个类都没有」的空领域。
+        Map<String, String> businessKey = new LinkedHashMap<>();
+        for (ClassSnapshot cls : classes) {
+            if (cls == null || cls.uid() == null) {
+                continue;
+            }
+            String key = keyByUid.getOrDefault(cls.uid(), "");
+            businessKey.put(cls.uid(),
+                    (isInfrastructureRole(roles.get(cls.uid())) || key.isEmpty()) ? "" : key);
+        }
+
         TreeSet<String> keys = new TreeSet<>();
-        for (String key : keyByUid.values()) {
+        for (String key : businessKey.values()) {
             if (!key.isEmpty()) {
                 keys.add(key);
             }
@@ -119,15 +131,13 @@ public class BusinessAreaResolver {
             if (cls == null || cls.uid() == null) {
                 continue;
             }
-            String key = keyByUid.getOrDefault(cls.uid(), "");
-            String areaUid;
-            if (isInfrastructureRole(roles.get(cls.uid())) || key.isEmpty() || !keys.contains(key)) {
-                areaUid = INFRASTRUCTURE;
+            String key = businessKey.getOrDefault(cls.uid(), "");
+            if (key.isEmpty()) {
+                classToArea.put(cls.uid(), INFRASTRUCTURE);
                 hasInfrastructure = true;
             } else {
-                areaUid = key;
+                classToArea.put(cls.uid(), key);
             }
-            classToArea.put(cls.uid(), areaUid);
         }
 
         // TreeSet 已按 uid 排序，infrastructure 追加在最后。
