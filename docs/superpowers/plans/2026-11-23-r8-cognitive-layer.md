@@ -39,7 +39,7 @@
 
 | 标签 | uid 示例 | 属性 |
 |---|---|---|
-| `:Endpoint:CodeNode` | `POST /orders` | `httpMethod`、`path`、`handlerUid`、`kind`（http/scheduled/mq/event/manual）、`inferred` |
+| `:Endpoint:CodeNode` | `POST /orders` | `httpMethod`、`path`、`handlerUid`、`kind`（http/scheduled/mq/event/manual）、`inferred`；唯一键是 `(projectId, uid, handlerUid)`，同一路径被多个类实现时各存一份 |
 | `:BusinessArea:CodeNode` | `item` / `infrastructure` | `name`、`kind`（business/infrastructure）、`description` |
 | `:Capability:CodeNode` | `POST /orders` | `name`、`areaUid`、`entryUid`、`description` |
 | `:Class:CodeNode`（已有，加字段） | 全限定名 | 新增 `annotationNames`、`role`、`roleBasis` |
@@ -541,7 +541,7 @@ Expected: 编译失败。
 
 1. 计算所有包名的公共前缀（按段），去掉得到 remainder。
 2. 对每个包，从左往右找**第一个不在技术词表里的段**，作为业务 key；全被跳过则 key 为空。
-3. 技术词表（只用于领域划分，不影响 role）：`controller web rest api service biz usecase application domain model entity po vo dto bo mapper dao repository impl infra infrastructure config common util utils exception aspect filter interceptor client feign remote gateway core base shared support`。
+3. 技术词表（只用于领域划分，不影响 role）：`controller web rest api service biz usecase application domain model entity po vo dto bo mapper dao repository impl infra infrastructure config common util utils exception aspect filter filters interceptor client feign remote gateway fallback core base shared support query router routers`。
    只有**最终会落到业务领域**的类才产生 key；role 为 `INFRASTRUCTURE`/`OTHER` 的类即使有 key 也不建领域，否则会出现「有 key 但一个类都没有」的空领域。
 4. 所有 key 都为空 → `strategy = single`，全部非基础设施类归一个业务领域（uid = `main`，name = 项目名）。
 5. 存在非空 key → 每个不同的 key 一个业务领域（uid/name = key）；至少有一个类跳过过技术段时 `strategy = technical-layered`，否则 `business-modules`。
