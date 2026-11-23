@@ -39,6 +39,9 @@ public class ParsedMethod {
     private boolean isConstructor;
     private boolean isAbstract;
 
+    /** 方法上声明的注解，源码顺序 */
+    private List<ParsedAnnotation> annotations = new ArrayList<>();
+
     /** A 阶段抽出的悬空调用，C 阶段的原料 */
     private List<ParsedCall> calls = new ArrayList<>();
 

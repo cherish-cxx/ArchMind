@@ -41,6 +41,9 @@ public class ParsedClass {
     /** 原始短名，如 ["Serializable"]，C 阶段消解后产 IMPLEMENTS 边 */
     private List<String> implementsTypes = new ArrayList<>();
 
+    /** 类上声明的注解，源码顺序 */
+    private List<ParsedAnnotation> annotations = new ArrayList<>();
+
     private List<ParsedField> fields = new ArrayList<>();
 
     private List<ParsedMethod> methods = new ArrayList<>();

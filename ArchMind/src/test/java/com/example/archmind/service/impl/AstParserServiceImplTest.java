@@ -187,6 +187,30 @@ class AstParserServiceImplTest {
     }
 
     @Test
+    void extractsClassAndMethodAnnotations() {
+        String src = """
+            package demo;
+            @RestController
+            @RequestMapping({"/orders", "/o"})
+            public class OrderController {
+                @PostMapping("/{id}/cancel")
+                public void cancel() {}
+            }
+            """;
+        ParsedProject p = parse(src);
+        ParsedClass c = p.getFiles().get(0).getClasses().get(0);
+        assertEquals(List.of("RestController", "RequestMapping"),
+                c.getAnnotations().stream().map(ParsedAnnotation::name).toList());
+        assertEquals(List.of("/orders", "/o"), c.getAnnotations().get(1).values());
+        assertEquals(List.of("PostMapping"),
+                c.getMethods().get(0).getAnnotations().stream().map(ParsedAnnotation::name).toList());
+    }
+
+    private ParsedProject parse(String src) {
+        return parser.parse(List.of(new SourceFileView(1L, "Demo.java", src)));
+    }
+
+    @Test
     void localVariableShadowsField() {
         String src = """
                 package com.x;

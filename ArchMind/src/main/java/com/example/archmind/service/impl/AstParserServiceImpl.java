@@ -15,13 +15,16 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.AccessSpecifier;
+import com.github.javaparser.ast.nodeTypes.NodeWithAnnotations;
 import com.github.javaparser.ast.nodeTypes.NodeWithRange;
 import com.github.javaparser.ast.nodeTypes.modifiers.NodeWithAccessModifiers;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -139,6 +142,7 @@ public class AstParserServiceImpl implements AstParserService {
         pc.setAbstract(decl.isAbstract());
         pc.setExtendsTypes(decl.getExtendedTypes().stream().map(t -> t.getNameAsString()).toList());
         pc.setImplementsTypes(decl.getImplementedTypes().stream().map(t -> t.getNameAsString()).toList());
+        pc.setAnnotations(annotationsOf(decl));
         extractFields(pc, decl);
         extractMethods(pc, decl);
         return pc;
@@ -156,6 +160,7 @@ public class AstParserServiceImpl implements AstParserService {
         pc.setAbstract(false);
         pc.setExtendsTypes(decl.getImplementedTypes().stream().map(t -> t.getNameAsString()).toList());
         // 枚举的 implements 存到 extendsTypes（枚举隐式 extends Enum，这里只取显式 implements）
+        pc.setAnnotations(annotationsOf(decl));
         extractFields(pc, decl);
         extractEnumMethods(pc, decl);
         return pc;
@@ -216,6 +221,7 @@ public class AstParserServiceImpl implements AstParserService {
         pm.setReturnType(md.getType().asString());
         pm.setStatic(md.isStatic());
         pm.setAbstract(md.isAbstract());
+        pm.setAnnotations(annotationsOf(md));
 
         // 参数
         for (var p : md.getParameters()) {
@@ -242,6 +248,7 @@ public class AstParserServiceImpl implements AstParserService {
         pm.setReturnType(null);
         pm.setStatic(false);
         pm.setAbstract(false);
+        pm.setAnnotations(annotationsOf(cd));
 
         for (var p : cd.getParameters()) {
             pm.getParams().add(new ParsedParam(p.getNameAsString(), p.getType().asString()));
@@ -368,6 +375,19 @@ public class AstParserServiceImpl implements AstParserService {
     }
 
     // ==================== 工具方法 ====================
+
+    /** 抽一个节点上的注解：名字取源码写法，values 取注解内所有字符串字面量（源码顺序，去重） */
+    private List<ParsedAnnotation> annotationsOf(NodeWithAnnotations<?> node) {
+        List<ParsedAnnotation> result = new ArrayList<>();
+        for (var ann : node.getAnnotations()) {
+            List<String> values = ann.findAll(StringLiteralExpr.class).stream()
+                    .map(StringLiteralExpr::asString)
+                    .distinct()
+                    .toList();
+            result.add(new ParsedAnnotation(ann.getNameAsString(), values));
+        }
+        return result;
+    }
 
     private String buildQualifiedName(String pkg, String simpleName, String enclosing) {
         String base = pkg.isEmpty() ? simpleName : pkg + "." + simpleName;
