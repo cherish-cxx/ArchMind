@@ -206,6 +206,14 @@ class AstParserServiceImplTest {
                 c.getMethods().get(0).getAnnotations().stream().map(ParsedAnnotation::name).toList());
     }
 
+    @Test
+    void populatesEndpointsOnParsedProject() {
+        ParsedProject p = parse(
+                "@RestController @RequestMapping(\"/orders\") class C { @PostMapping(\"/x\") void create() {} }");
+        assertEquals(List.of("POST /orders/x"),
+                p.getEndpoints().stream().map(ParsedEndpoint::uid).toList());
+    }
+
     private ParsedProject parse(String src) {
         return parser.parse(List.of(new SourceFileView(1L, "Demo.java", src)));
     }

@@ -2,6 +2,7 @@ package com.example.archmind.service.impl;
 
 import com.example.archmind.model.ast.*;
 import com.example.archmind.service.ast.AstParserService;
+import com.example.archmind.service.ast.EndpointResolver;
 import com.example.archmind.service.ast.RelationResolver;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
@@ -75,6 +76,8 @@ public class AstParserServiceImpl implements AstParserService {
         ProjectIndex index = ProjectIndex.build(project);
         // C：关系解析——拿字典给悬空调用与短名定名，产出边
         project.setEdges(new RelationResolver(index).resolve(project));
+        // 入口：类级前缀 + 方法级映射拼出 HTTP 路由，以及非 HTTP 触发点
+        project.setEndpoints(new EndpointResolver().resolve(project));
         return project;
     }
 

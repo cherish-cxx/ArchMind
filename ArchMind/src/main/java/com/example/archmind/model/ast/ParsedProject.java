@@ -16,4 +16,7 @@ public class ParsedProject {
 
     /** C 阶段消解产出的关系边，parse() 返回时已填好 */
     private List<ParsedEdge> edges = new ArrayList<>();
+
+    /** 入口节点（HTTP 路由、定时 / MQ / 事件 / 启动任务），parse() 返回时已填好 */
+    private List<ParsedEndpoint> endpoints = new ArrayList<>();
 }

@@ -1,8 +1,10 @@
 package com.example.archmind.dao.neo4j;
 
 import com.example.archmind.model.ast.EdgeType;
+import com.example.archmind.model.ast.ParsedAnnotation;
 import com.example.archmind.model.ast.ParsedClass;
 import com.example.archmind.model.ast.ParsedEdge;
+import com.example.archmind.model.ast.ParsedEndpoint;
 import com.example.archmind.model.ast.ParsedFile;
 import com.example.archmind.model.ast.ParsedMethod;
 import com.example.archmind.model.ast.ParsedProject;
@@ -69,7 +71,8 @@ public class CodeGraphNeo4jWriter {
             MERGE (c:Class:CodeNode {projectId: row.projectId, uid: row.uid})
             SET c.name = row.name, c.kind = row.kind, c.packageName = row.packageName,
                 c.fileId = row.fileId, c.filePath = row.filePath, c.startLine = row.startLine,
-                c.endLine = row.endLine, c.visibility = row.visibility, c.isAbstract = row.isAbstract
+                c.endLine = row.endLine, c.visibility = row.visibility, c.isAbstract = row.isAbstract,
+                c.annotationNames = row.annotationNames
             """;
 
     private static final String MERGE_METHOD = """
@@ -111,13 +114,29 @@ public class CodeGraphNeo4jWriter {
             SET e.via = row.via
             """;
 
+    /** 入口节点：必带 :CodeNode，重建时随 CLEAR 一起清掉，不留孤儿 */
+    private static final String MERGE_ENDPOINT = """
+            UNWIND $rows AS row
+            MERGE (e:Endpoint:CodeNode {projectId: row.projectId, uid: row.uid})
+            SET e.kind = row.kind, e.httpMethod = row.httpMethod, e.path = row.path,
+                e.handlerUid = row.handlerUid, e.inferred = row.inferred
+            """;
+
+    /** 入口指向处理方法；必须在 Method 写完之后执行，否则 MATCH 落空 */
+    private static final String MERGE_HANDLED_BY = """
+            UNWIND $rows AS row
+            MATCH (e:Endpoint {projectId: row.projectId, uid: row.uid})
+            MATCH (m:Method {projectId: row.projectId, uid: row.handlerUid})
+            MERGE (e)-[:HANDLED_BY]->(m)
+            """;
+
     private final Driver driver;
 
     public CodeGraphNeo4jWriter(Driver driver) {
         this.driver = driver;
     }
 
-    /** 清旧图 → 写节点 → 写边 → 递增图版本，整个流程在一个写事务里。重跑安全（先清后写 + MERGE）。 */
+    /** 清旧图 → 写节点 → 写边 → 写入口 → 递增图版本，整个流程在一个写事务里。重跑安全（先清后写 + MERGE）。 */
     public void replaceProjectGraph(Long projectId, ParsedProject project) {
         ensureConstraints();
         Long rev;
@@ -127,16 +146,20 @@ public class CodeGraphNeo4jWriter {
                 writeInBatches(tx, MERGE_CLASS, classRows(projectId, project));
                 writeInBatches(tx, MERGE_METHOD, methodRows(projectId, project));
                 writeEdges(tx, projectId, project.getEdges());
+                // 入口最后写：HANDLED_BY 需要被指向的 Method 已存在
+                List<Map<String, Object>> endpoints = endpointRows(projectId, project);
+                writeInBatches(tx, MERGE_ENDPOINT, endpoints);
+                writeInBatches(tx, MERGE_HANDLED_BY, endpoints);
                 return tx.run(MERGE_GRAPH_META, Map.of("pid", projectId))
                         .single().get("rev").asLong();
             });
         }
-        log.info("Neo4j 图写入完成 projectId={}, graphRev={}, classes={}, methods={}, edges={}",
+        log.info("Neo4j 图写入完成 projectId={}, graphRev={}, classes={}, methods={}, edges={}, endpoints={}",
                 projectId, rev, project.getFiles().stream().mapToInt(f -> f.getClasses().size()).sum(),
                 project.getFiles().stream()
                         .flatMap(f -> f.getClasses().stream())
                         .mapToInt(c -> c.getMethods().size()).sum(),
-                project.getEdges().size());
+                project.getEdges().size(), project.getEndpoints().size());
     }
 
     /**
@@ -189,7 +212,8 @@ public class CodeGraphNeo4jWriter {
         writeInBatches(tx, MERGE_DEPENDS, grouped.getOrDefault(EdgeType.DEPENDS, List.of()));
     }
 
-    private List<Map<String, Object>> classRows(Long projectId, ParsedProject project) {
+    /** 包级私有便于同包单测直接校验行数据；外部仍只走 replaceProjectGraph */
+    List<Map<String, Object>> classRows(Long projectId, ParsedProject project) {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (ParsedFile pf : project.getFiles()) {
             for (ParsedClass pc : pf.getClasses()) {
@@ -205,8 +229,29 @@ public class CodeGraphNeo4jWriter {
                 row.put("endLine", pc.getEndLine());
                 row.put("visibility", pc.getVisibility());
                 row.put("isAbstract", pc.isAbstract());
+                // 只存注解名，保持源码顺序；domain 阶段按名字做 role 判定
+                row.put("annotationNames", pc.getAnnotations().stream()
+                        .map(ParsedAnnotation::name)
+                        .toList());
                 rows.add(row);
             }
+        }
+        return rows;
+    }
+
+    /** 包级私有便于同包单测直接校验行数据 */
+    List<Map<String, Object>> endpointRows(Long projectId, ParsedProject project) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (ParsedEndpoint ep : project.getEndpoints()) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("projectId", projectId);
+            row.put("uid", ep.uid());
+            row.put("kind", ep.kind());
+            row.put("httpMethod", ep.httpMethod());
+            row.put("path", ep.path());
+            row.put("handlerUid", ep.handlerUid());
+            row.put("inferred", ep.inferred());
+            rows.add(row);
         }
         return rows;
     }
