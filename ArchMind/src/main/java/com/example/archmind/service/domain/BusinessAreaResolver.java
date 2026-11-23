@@ -42,8 +42,8 @@ public class BusinessAreaResolver {
             "domain", "model", "entity", "po", "vo", "dto", "bo",
             "mapper", "dao", "repository", "impl", "infra", "infrastructure",
             "config", "common", "util", "utils", "exception", "aspect", "filter", "interceptor",
-            "client", "feign", "remote", "gateway",
-            "core", "base", "shared", "support");
+            "client", "feign", "remote", "gateway", "fallback",
+            "core", "base", "shared", "support", "query", "filters", "router", "routers");
 
     public AreaResult resolve(List<ClassSnapshot> classes,
                               Map<String, Classified> roles,

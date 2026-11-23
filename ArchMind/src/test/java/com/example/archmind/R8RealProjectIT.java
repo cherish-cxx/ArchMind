@@ -62,6 +62,12 @@ class R8RealProjectIT {
 
     @Test
     void analyzeEveryDemoProject() throws Exception {
+        String explicit = System.getProperty("r8.project");
+        if (explicit != null && !explicit.isBlank()) {
+            runOne(Path.of(explicit), PID_BASE);
+            return;
+        }
+
         List<Path> projects = new ArrayList<>();
         try (var stream = Files.list(DEMOS)) {
             stream.filter(Files::isDirectory).sorted().forEach(projects::add);
@@ -101,6 +107,18 @@ class R8RealProjectIT {
                     .map(a -> a.uid() + "(" + a.kind() + ")").toList());
             System.out.printf("capabilities=%s%n", caps.capabilities().stream()
                     .map(Capability::uid).toList());
+            if (System.getProperty("r8.project") != null) {
+                System.out.printf("endpoints=%s%n", snapshot.endpoints().stream()
+                        .map(e -> e.uid() + " -> " + areas.classToArea().get(owner(e.handlerUid())))
+                        .toList());
+                for (String uid : List.of("com.hmall.cart.controller.CartController",
+                        "com.hmall.item.controller.ItemController",
+                        "com.hmall.controller.ItemController")) {
+                    System.out.printf("debug %s role=%s area=%s%n", uid,
+                            roles.get(uid) == null ? "null" : roles.get(uid).role(),
+                            areas.classToArea().get(uid));
+                }
+            }
             System.out.printf("areaCalls=%d validation=%s%s warnings=%s%n", caps.areaCalls().size(),
                     report.ok() ? "OK" : "FAIL", report.ok() ? "" : " " + report.failures(),
                     report.warnings());
@@ -124,6 +142,10 @@ class R8RealProjectIT {
         List<SourceFileView> views = new ArrayList<>();
         try (var stream = Files.walk(project)) {
             List<Path> files = stream.filter(p -> p.toString().endsWith(".java")).sorted().toList();
+            // 有标准 Maven 布局时只看主源码，跳过测试代码
+            if (files.stream().anyMatch(R8RealProjectIT::isMainSource)) {
+                files = files.stream().filter(R8RealProjectIT::isMainSource).toList();
+            }
             long id = 1;
             for (Path file : files) {
                 views.add(new SourceFileView(id++, project.relativize(file).toString().replace('\\', '/'),
@@ -131,6 +153,15 @@ class R8RealProjectIT {
             }
         }
         return views;
+    }
+
+    private static String owner(String methodUid) {
+        int hash = methodUid.indexOf('#');
+        return hash < 0 ? methodUid : methodUid.substring(0, hash);
+    }
+
+    private static boolean isMainSource(Path path) {
+        return path.toString().replace('\\', '/').contains("/src/main/java/");
     }
 
     private void clean(long projectId) {

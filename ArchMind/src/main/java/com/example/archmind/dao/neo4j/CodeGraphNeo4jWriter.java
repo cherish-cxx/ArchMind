@@ -114,18 +114,20 @@ public class CodeGraphNeo4jWriter {
             SET e.via = row.via
             """;
 
-    /** 入口节点：必带 :CodeNode，重建时随 CLEAR 一起清掉，不留孤儿 */
+    /** 入口节点：必带 :CodeNode，重建时随 CLEAR 一起清掉，不留孤儿。
+     *  uid 用「动词 + 路径」，但同一路径可能被多个类实现（单体与微服务并存），
+     *  所以唯一键必须再带上 handlerUid，否则后写的会覆盖先写的。 */
     private static final String MERGE_ENDPOINT = """
             UNWIND $rows AS row
-            MERGE (e:Endpoint:CodeNode {projectId: row.projectId, uid: row.uid})
+            MERGE (e:Endpoint:CodeNode {projectId: row.projectId, uid: row.uid, handlerUid: row.handlerUid})
             SET e.kind = row.kind, e.httpMethod = row.httpMethod, e.path = row.path,
-                e.handlerUid = row.handlerUid, e.inferred = row.inferred
+                e.inferred = row.inferred
             """;
 
     /** 入口指向处理方法；必须在 Method 写完之后执行，否则 MATCH 落空 */
     private static final String MERGE_HANDLED_BY = """
             UNWIND $rows AS row
-            MATCH (e:Endpoint {projectId: row.projectId, uid: row.uid})
+            MATCH (e:Endpoint {projectId: row.projectId, uid: row.uid, handlerUid: row.handlerUid})
             MATCH (m:Method {projectId: row.projectId, uid: row.handlerUid})
             MERGE (e)-[:HANDLED_BY]->(m)
             """;

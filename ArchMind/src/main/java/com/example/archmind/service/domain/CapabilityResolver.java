@@ -46,6 +46,12 @@ public class CapabilityResolver {
         Set<String> gaps = new LinkedHashSet<>();
 
         List<EndpointSnapshot> safeEndpoints = endpoints == null ? List.of() : endpoints;
+        // 同一路径可能有多份实现（单体与微服务并存）。按 uid + handler 排序后只取第一份，
+        // 保证结果稳定；基础设施那份通常被后面的 entryArea 检查跳过。
+        safeEndpoints = new ArrayList<>(safeEndpoints);
+        safeEndpoints.sort(Comparator.comparing(EndpointSnapshot::uid)
+                .thenComparing(EndpointSnapshot::handlerUid));
+        Set<String> seenCapabilityUids = new LinkedHashSet<>();
         for (EndpointSnapshot endpoint : safeEndpoints) {
             if (endpoint == null || endpoint.uid() == null || endpoint.handlerUid() == null) {
                 continue;
@@ -53,6 +59,9 @@ public class CapabilityResolver {
             String entryClass = owner(endpoint.handlerUid());
             String entryArea = safeAreas.get(entryClass);
             if (entryArea == null || entryArea.isBlank() || INFRASTRUCTURE_AREA.equals(entryArea)) {
+                continue;
+            }
+            if (!seenCapabilityUids.add(endpoint.uid())) {
                 continue;
             }
 
