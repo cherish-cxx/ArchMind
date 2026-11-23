@@ -14,7 +14,3 @@ public record DomainModel(List<BusinessArea> areas, List<Capability> capabilitie
                           List<AreaCall> areaCalls, Map<String, String> classToArea,
                           Map<String, Classified> roles) {
 }
-
-/** 对账结果；ok 为 false 时 failures 列出全部具体原因。 */
-record ValidationReport(boolean ok, List<String> failures) {
-}

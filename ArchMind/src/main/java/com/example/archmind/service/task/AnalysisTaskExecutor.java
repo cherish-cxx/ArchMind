@@ -49,6 +49,11 @@ public class AnalysisTaskExecutor {
             pipeline.describeStage(projectId,
                     pct -> taskService.reportProgress(taskId, projectId, AnalysisStage.DESCRIBE, pct));
 
+            // 阶段五：业务建模（结构先算：role / 业务领域 / 能力，对账后写回派生节点与边）
+            taskService.enterStage(taskId, projectId, AnalysisStage.DOMAIN);
+            pipeline.domainStage(projectId,
+                    pct -> taskService.reportProgress(taskId, projectId, AnalysisStage.DOMAIN, pct));
+
             taskService.markSuccess(taskId, overview);
             success = true;
             log.info("分析任务完成 taskId={}, projectId={}", taskId, projectId);

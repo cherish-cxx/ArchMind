@@ -1,10 +1,11 @@
 package com.example.archmind.common.constant;
 
 public enum AnalysisStage {
-    SCAN("文件扫描", 0, 10),
-    AST("AST 提取", 10, 50),
-    OVERVIEW("概况生成", 50, 80),
-    DESCRIBE("核心类描述", 80, 100);
+    SCAN("文件扫描", 0, 5),
+    AST("AST 提取", 5, 45),
+    OVERVIEW("概况生成", 45, 58),
+    DESCRIBE("核心类描述", 58, 75),
+    DOMAIN("业务建模", 75, 100);
 
     private final String label;
     private final int start;

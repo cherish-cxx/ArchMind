@@ -18,4 +18,7 @@ public interface AnalysisPipelineService {
 
     /** 阶段四：核心类简要描述（挑核心类 → LLM 批量生成一句话简介 → 写回图节点） */
     void describeStage(Long projectId, ProgressReporter reporter);
+
+    /** 阶段五：业务建模（读图快照 → role / 业务领域 / 能力 → 对账 → 写回派生节点与边） */
+    void domainStage(Long projectId, ProgressReporter reporter);
 }

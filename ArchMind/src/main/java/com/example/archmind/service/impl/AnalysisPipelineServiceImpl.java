@@ -6,6 +6,7 @@ import com.example.archmind.service.ClassDescriptionService;
 import com.example.archmind.service.ProgressReporter;
 import com.example.archmind.service.ProjectOverviewService;
 import com.example.archmind.service.ast.CodeGraphService;
+import com.example.archmind.service.domain.DomainModelService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ public class AnalysisPipelineServiceImpl implements AnalysisPipelineService {
     private final ProjectOverviewService projectOverviewService;
     private final CodeGraphService codeGraphService;
     private final ClassDescriptionService classDescriptionService;
+    private final DomainModelService domainModelService;
 
     @Override
     public void scanStage(Long projectId, ProgressReporter reporter) {
@@ -47,5 +49,11 @@ public class AnalysisPipelineServiceImpl implements AnalysisPipelineService {
     @Override
     public void describeStage(Long projectId, ProgressReporter reporter) {
         classDescriptionService.describeCoreClasses(projectId, reporter);
+    }
+
+    @Override
+    public void domainStage(Long projectId, ProgressReporter reporter) {
+        domainModelService.build(projectId, reporter);
+        reporter.report(100);
     }
 }
