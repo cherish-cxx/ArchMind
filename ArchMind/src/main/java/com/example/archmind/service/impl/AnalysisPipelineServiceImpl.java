@@ -6,6 +6,7 @@ import com.example.archmind.service.ClassDescriptionService;
 import com.example.archmind.service.ProgressReporter;
 import com.example.archmind.service.ProjectOverviewService;
 import com.example.archmind.service.ast.CodeGraphService;
+import com.example.archmind.service.domain.DomainDescriptionService;
 import com.example.archmind.service.domain.DomainModelService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ public class AnalysisPipelineServiceImpl implements AnalysisPipelineService {
     private final CodeGraphService codeGraphService;
     private final ClassDescriptionService classDescriptionService;
     private final DomainModelService domainModelService;
+    private final DomainDescriptionService domainDescriptionService;
 
     @Override
     public void scanStage(Long projectId, ProgressReporter reporter) {
@@ -54,6 +56,12 @@ public class AnalysisPipelineServiceImpl implements AnalysisPipelineService {
     @Override
     public void domainStage(Long projectId, ProgressReporter reporter) {
         domainModelService.build(projectId, reporter);
+        reporter.report(100);
+    }
+
+    @Override
+    public void domainDescriptionStage(Long projectId, ProgressReporter reporter) {
+        domainDescriptionService.describe(projectId, reporter);
         reporter.report(100);
     }
 }

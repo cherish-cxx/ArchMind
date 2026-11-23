@@ -54,6 +54,11 @@ public class AnalysisTaskExecutor {
             pipeline.domainStage(projectId,
                     pct -> taskService.reportProgress(taskId, projectId, AnalysisStage.DOMAIN, pct));
 
+            // 阶段六：领域描述（结构定型后，用已有类描述批量生成领域与能力说明）
+            taskService.enterStage(taskId, projectId, AnalysisStage.DOMAIN_DESCRIBE);
+            pipeline.domainDescriptionStage(projectId,
+                    pct -> taskService.reportProgress(taskId, projectId, AnalysisStage.DOMAIN_DESCRIBE, pct));
+
             taskService.markSuccess(taskId, overview);
             success = true;
             log.info("分析任务完成 taskId={}, projectId={}", taskId, projectId);

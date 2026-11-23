@@ -21,4 +21,7 @@ public interface AnalysisPipelineService {
 
     /** 阶段五：业务建模（读图快照 → role / 业务领域 / 能力 → 对账 → 写回派生节点与边） */
     void domainStage(Long projectId, ProgressReporter reporter);
+
+    /** 阶段六：领域描述（读领域/能力/成员类描述 → LLM 批量写回领域与能力描述） */
+    void domainDescriptionStage(Long projectId, ProgressReporter reporter);
 }

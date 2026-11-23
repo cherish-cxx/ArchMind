@@ -5,7 +5,8 @@ public enum AnalysisStage {
     AST("AST 提取", 5, 45),
     OVERVIEW("概况生成", 45, 58),
     DESCRIBE("核心类描述", 58, 75),
-    DOMAIN("业务建模", 75, 100);
+    DOMAIN("业务建模", 75, 88),
+    DOMAIN_DESCRIBE("领域描述", 88, 100);
 
     private final String label;
     private final int start;
