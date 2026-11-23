@@ -111,12 +111,13 @@ class R8RealProjectIT {
                 System.out.printf("endpoints=%s%n", snapshot.endpoints().stream()
                         .map(e -> e.uid() + " -> " + areas.classToArea().get(owner(e.handlerUid())))
                         .toList());
-                for (String uid : List.of("com.hmall.cart.controller.CartController",
-                        "com.hmall.item.controller.ItemController",
-                        "com.hmall.controller.ItemController")) {
-                    System.out.printf("debug %s role=%s area=%s%n", uid,
-                            roles.get(uid) == null ? "null" : roles.get(uid).role(),
-                            areas.classToArea().get(uid));
+                List<com.example.archmind.service.domain.GraphSnapshot.ClassSnapshot> all = snapshot.classes();
+                int step = Math.max(1, all.size() / 20);
+                for (int i = 0, n = 0; i < all.size() && n < 20; i += step, n++) {
+                    var cls = all.get(i);
+                    System.out.printf("sample %s | %s | %s%n", cls.uid(),
+                            roles.get(cls.uid()) == null ? "?" : roles.get(cls.uid()).role(),
+                            areas.classToArea().get(cls.uid()));
                 }
             }
             System.out.printf("areaCalls=%d validation=%s%s warnings=%s%n", caps.areaCalls().size(),
