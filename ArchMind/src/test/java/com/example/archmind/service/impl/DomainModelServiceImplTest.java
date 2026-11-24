@@ -70,7 +70,8 @@ class DomainModelServiceImplTest {
         when(snapshotDao.load(1L)).thenReturn(snapshot);
         when(roleClassifier.classify(snapshot.classes())).thenReturn(roles);
         when(projectMapper.selectById(1L)).thenReturn(null);
-        when(areaResolver.resolve(snapshot.classes(), roles, "project-1"))
+        when(areaResolver.resolve(snapshot.classes(), roles, "project-1",
+                snapshot.endpoints(), snapshot.calls()))
                 .thenReturn(new BusinessAreaResolver.AreaResult(
                         List.of(new BusinessArea("a", "a", "business")),
                         Map.of("a.A", "a"), "single"));

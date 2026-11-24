@@ -1,14 +1,23 @@
 package com.example.archmind.service.domain;
 
+import com.example.archmind.service.domain.GraphSnapshot.CallEdgeSnapshot;
 import com.example.archmind.service.domain.GraphSnapshot.ClassSnapshot;
+import com.example.archmind.service.domain.GraphSnapshot.EndpointSnapshot;
 import com.example.archmind.service.domain.RoleClassifier.Classified;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
@@ -20,6 +29,10 @@ import java.util.TreeSet;
  * 所有 key 都为空时退化为单领域（uid = main，name = 项目名）；
  * 存在业务 key 时每个 key 一个领域，期间只要有一个类第一段是技术段即为 technical-layered。
  * 基础设施领域收 role 为 INFRASTRUCTURE/OTHER 的类、无业务 key 的类，以及映射不到业务领域的类。
+ *
+ * <p>包名划分不能把入口放进业务领域时（技术分层单体），改用 Controller 策略：按入口类名
+ * （去掉 Controller/Resource/Action 后缀）划分领域，非入口类沿 CALLS 按到达它的入口数多数归属。
+ * 没有端点或包名策略已经能放下入口时保持包名结果。
  */
 public class BusinessAreaResolver {
 
@@ -36,6 +49,10 @@ public class BusinessAreaResolver {
     public static final String STRATEGY_BUSINESS_MODULES = "business-modules";
     public static final String STRATEGY_TECHNICAL_LAYERED = "technical-layered";
     public static final String STRATEGY_SINGLE = "single";
+    public static final String STRATEGY_CONTROLLER_MODULES = "controller-modules";
+
+    /** 入口层类名后缀；剥离后作为领域 key。 */
+    private static final List<String> CONTROLLER_SUFFIXES = List.of("Controller", "Resource", "Action");
 
     /** 只用于领域划分的技术段词表，与 role 分类互不影响。 */
     private static final Set<String> TECHNICAL_SEGMENTS = Set.of(
@@ -50,9 +67,34 @@ public class BusinessAreaResolver {
     public AreaResult resolve(List<ClassSnapshot> classes,
                               Map<String, Classified> roles,
                               String projectName) {
+        return resolve(classes, roles, projectName, List.of(), List.of());
+    }
+
+    /**
+     * 两套策略：包名能划分出承载入口的业务领域时保持原样；否则退回按入口层 Controller 名划分。
+     * 没有入口时不触发 Controller 策略，保证纯包名调用的行为不变。
+     */
+    public AreaResult resolve(List<ClassSnapshot> classes,
+                              Map<String, Classified> roles,
+                              String projectName,
+                              List<EndpointSnapshot> endpoints,
+                              List<CallEdgeSnapshot> calls) {
         List<ClassSnapshot> safeClasses = classes == null ? List.of() : classes;
         Map<String, Classified> safeRoles = roles == null ? Map.of() : roles;
 
+        AreaResult packageResult = resolveByPackage(safeClasses, safeRoles, projectName);
+        if (!shouldTryControllerModules(packageResult, safeRoles, endpoints)) {
+            return packageResult;
+        }
+        AreaResult controllerResult = resolveByControllers(safeClasses, safeRoles,
+                endpoints == null ? List.of() : endpoints,
+                calls == null ? List.of() : calls);
+        return controllerResult == null ? packageResult : controllerResult;
+    }
+
+    private AreaResult resolveByPackage(List<ClassSnapshot> safeClasses,
+                                        Map<String, Classified> safeRoles,
+                                        String projectName) {
         List<List<String>> remainders = computeRemainders(safeClasses);
 
         Map<String, String> keyByUid = new LinkedHashMap<>();
@@ -155,6 +197,218 @@ public class BusinessAreaResolver {
                 ? STRATEGY_TECHNICAL_LAYERED
                 : STRATEGY_BUSINESS_MODULES;
         return new AreaResult(List.copyOf(areas), classToArea, strategy);
+    }
+
+    // ==================== Controller 策略 ====================
+
+    /** 仅当包名策略没能把入口放进业务领域（single，或入口全在基础设施）时才尝试。 */
+    private static boolean shouldTryControllerModules(AreaResult packageResult,
+                                                      Map<String, Classified> roles,
+                                                      List<EndpointSnapshot> endpoints) {
+        if (endpoints == null || endpoints.isEmpty()) {
+            return false;
+        }
+        boolean hasEntryEndpoint = false;
+        boolean entryInBusinessArea = false;
+        for (EndpointSnapshot endpoint : endpoints) {
+            if (endpoint == null || endpoint.handlerUid() == null) {
+                continue;
+            }
+            String ownerClass = CapabilityResolver.owner(endpoint.handlerUid());
+            Classified classified = roles.get(ownerClass);
+            if (classified == null || classified.role() != Role.ENTRY) {
+                continue;
+            }
+            hasEntryEndpoint = true;
+            String area = packageResult.classToArea().get(ownerClass);
+            if (area != null && !INFRASTRUCTURE.equals(area)) {
+                entryInBusinessArea = true;
+                break;
+            }
+        }
+        if (!hasEntryEndpoint) {
+            return false;
+        }
+        return STRATEGY_SINGLE.equals(packageResult.strategy()) || !entryInBusinessArea;
+    }
+
+    /** 无法从入口类派生出 key 时返回 null，调用方保留包名结果。 */
+    private static AreaResult resolveByControllers(List<ClassSnapshot> classes,
+                                                   Map<String, Classified> roles,
+                                                   List<EndpointSnapshot> endpoints,
+                                                   List<CallEdgeSnapshot> calls) {
+        Map<String, ClassSnapshot> classByUid = new LinkedHashMap<>();
+        for (ClassSnapshot cls : classes) {
+            if (cls != null && cls.uid() != null) {
+                classByUid.put(cls.uid(), cls);
+            }
+        }
+
+        // 入口类 → 领域 key
+        Map<String, String> keyByClass = new LinkedHashMap<>();
+        for (EndpointSnapshot endpoint : endpoints) {
+            if (endpoint == null || endpoint.handlerUid() == null) {
+                continue;
+            }
+            String ownerClass = CapabilityResolver.owner(endpoint.handlerUid());
+            Classified classified = roles.get(ownerClass);
+            if (classified == null || classified.role() != Role.ENTRY) {
+                continue;
+            }
+            ClassSnapshot cls = classByUid.get(ownerClass);
+            if (cls == null) {
+                continue;
+            }
+            String key = controllerKey(cls.name());
+            if (key != null) {
+                keyByClass.put(ownerClass, key);
+            }
+        }
+        if (keyByClass.isEmpty()) {
+            return null;
+        }
+
+        // 每个领域的种子方法：属于该领域入口类的 endpoint handler
+        List<EndpointSnapshot> sortedEndpoints = new ArrayList<>();
+        for (EndpointSnapshot endpoint : endpoints) {
+            if (endpoint != null && endpoint.uid() != null && endpoint.handlerUid() != null) {
+                sortedEndpoints.add(endpoint);
+            }
+        }
+        sortedEndpoints.sort(Comparator.comparing(EndpointSnapshot::uid)
+                .thenComparing(EndpointSnapshot::handlerUid));
+        Map<String, TreeSet<String>> seedsByArea = new TreeMap<>();
+        for (EndpointSnapshot endpoint : sortedEndpoints) {
+            String key = keyByClass.get(CapabilityResolver.owner(endpoint.handlerUid()));
+            if (key != null) {
+                seedsByArea.computeIfAbsent(key, k -> new TreeSet<>()).add(endpoint.handlerUid());
+            }
+        }
+
+        // 类 → (领域 → 到达它的种子数)，按种子去重
+        Map<String, List<String>> adjacency = CapabilityResolver.indexCalls(calls);
+        Map<String, Map<String, Integer>> weightByClass = new HashMap<>();
+        for (Map.Entry<String, TreeSet<String>> areaSeeds : seedsByArea.entrySet()) {
+            for (String seed : areaSeeds.getValue()) {
+                for (String classUid : reachableClasses(seed, adjacency, roles)) {
+                    weightByClass.computeIfAbsent(classUid, key -> new HashMap<>())
+                            .merge(areaSeeds.getKey(), 1, Integer::sum);
+                }
+            }
+        }
+
+        Map<String, String> classToArea = new LinkedHashMap<>();
+        boolean hasInfrastructure = false;
+        for (ClassSnapshot cls : classes) {
+            if (cls == null || cls.uid() == null) {
+                continue;
+            }
+            String area = keyByClass.get(cls.uid());
+            if (area == null) {
+                area = isInfrastructureRole(roles.get(cls.uid()))
+                        ? INFRASTRUCTURE
+                        : winner(weightByClass.get(cls.uid()));
+                if (area == null) {
+                    area = INFRASTRUCTURE;
+                }
+            }
+            classToArea.put(cls.uid(), area);
+            hasInfrastructure |= INFRASTRUCTURE.equals(area);
+        }
+
+        List<BusinessArea> areas = new ArrayList<>();
+        for (String key : new TreeSet<>(keyByClass.values())) {
+            areas.add(new BusinessArea(key, key, BUSINESS));
+        }
+        if (hasInfrastructure) {
+            areas.add(new BusinessArea(INFRASTRUCTURE, INFRASTRUCTURE, INFRASTRUCTURE));
+        }
+        return new AreaResult(List.copyOf(areas), classToArea, STRATEGY_CONTROLLER_MODULES);
+    }
+
+    /** 从入口方法出发收集可达类；EXTERNAL 与其它 ENTRY 类不进入也不再展开。 */
+    private static Set<String> reachableClasses(String seedMethodUid,
+                                                Map<String, List<String>> adjacency,
+                                                Map<String, Classified> roles) {
+        Set<String> reached = new LinkedHashSet<>();
+        Set<String> visitedMethods = new HashSet<>();
+        Deque<String> queue = new ArrayDeque<>();
+        visitedMethods.add(seedMethodUid);
+        queue.add(seedMethodUid);
+        reached.add(CapabilityResolver.owner(seedMethodUid));
+
+        while (!queue.isEmpty()) {
+            String methodUid = queue.poll();
+            for (String callee : adjacency.getOrDefault(methodUid, List.of())) {
+                if (!visitedMethods.add(callee)) {
+                    continue;
+                }
+                String targetClass = CapabilityResolver.owner(callee);
+                Classified classified = roles.get(targetClass);
+                if (classified != null && (classified.role() == Role.EXTERNAL
+                        || classified.role() == Role.ENTRY)) {
+                    continue;
+                }
+                reached.add(targetClass);
+                queue.add(callee);
+            }
+        }
+        return reached;
+    }
+
+    /** 唯一次数最多的领域；没有权重或并列时返回 null（留基础设施）。 */
+    private static String winner(Map<String, Integer> weights) {
+        if (weights == null || weights.isEmpty()) {
+            return null;
+        }
+        String best = null;
+        int bestWeight = -1;
+        boolean tie = false;
+        for (Map.Entry<String, Integer> entry : weights.entrySet()) {
+            int weight = entry.getValue();
+            if (weight > bestWeight) {
+                best = entry.getKey();
+                bestWeight = weight;
+                tie = false;
+            } else if (weight == bestWeight) {
+                tie = true;
+            }
+        }
+        return tie ? null : best;
+    }
+
+    /** 完整 Controller 名转领域 key；保留名加 -module，测试类不参与。 */
+    static String controllerKey(String simpleName) {
+        if (simpleName == null || simpleName.isBlank() || simpleName.contains("$")
+                || simpleName.endsWith("Test") || simpleName.endsWith("Tests")) {
+            return null;
+        }
+        String base = simpleName;
+        for (String suffix : CONTROLLER_SUFFIXES) {
+            if (base.endsWith(suffix)) {
+                if (base.length() == suffix.length()) {
+                    return null;
+                }
+                base = base.substring(0, base.length() - suffix.length());
+                break;
+            }
+        }
+        String key = kebab(base);
+        if (key.isEmpty()) {
+            return null;
+        }
+        return SINGLE_AREA_UID.equals(key) || INFRASTRUCTURE.equals(key) ? key + "-module" : key;
+    }
+
+    /** CamelCase → kebab-case：McpPat → mcp-pat，DomainMap → domain-map。 */
+    private static String kebab(String name) {
+        String spaced = name
+                .replaceAll("(?<=[a-z0-9])(?=[A-Z])", "-")
+                .replaceAll("(?<=[A-Z])(?=[A-Z][a-z])", "-");
+        return spaced.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+", "")
+                .replaceAll("-+$", "");
     }
 
     private static boolean isInfrastructureRole(Classified classified) {

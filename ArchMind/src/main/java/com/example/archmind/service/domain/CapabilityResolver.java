@@ -89,7 +89,7 @@ public class CapabilityResolver {
     }
 
     /** fromMethodUid → 目标方法 uid 列表，保持调用边输入顺序。 */
-    private static Map<String, List<String>> indexCalls(List<CallEdgeSnapshot> calls) {
+    static Map<String, List<String>> indexCalls(List<CallEdgeSnapshot> calls) {
         Map<String, List<String>> adjacency = new LinkedHashMap<>();
         if (calls == null) {
             return adjacency;
@@ -161,7 +161,7 @@ public class CapabilityResolver {
     }
 
     /** 方法 uid 形如 owner#signature，owner 即所属类 uid。 */
-    private static String owner(String methodUid) {
+    static String owner(String methodUid) {
         return methodUid.split("#")[0];
     }
 

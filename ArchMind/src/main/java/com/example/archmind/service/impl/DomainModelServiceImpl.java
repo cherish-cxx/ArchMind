@@ -71,7 +71,8 @@ public class DomainModelServiceImpl implements DomainModelService {
         reporter.report(40);
 
         BusinessAreaResolver.AreaResult areaResult =
-                areaResolver.resolve(snapshot.classes(), roles, projectName(projectId));
+                areaResolver.resolve(snapshot.classes(), roles, projectName(projectId),
+                        snapshot.endpoints(), snapshot.calls());
         reporter.report(60);
 
         Capability.CapabilityResult capabilityResult = capabilityResolver.resolve(
