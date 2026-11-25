@@ -138,8 +138,13 @@ class MethodBrief(CamelModel):
     is_constructor: bool | None = None
 
 
-class Upstream(CamelModel):
-    """谁指向这个类。三类关系分开给，语义不同（调用/依赖/继承）。"""
+class UpstreamSummary(CamelModel):
+    """谁指向这个类（**索引卡片**用的摘要形态）。
+
+    只有 uid 字符串 + 全量计数，没有 evidence —— 列表由 Java 侧按 cap 截断。
+    与工具 ③ `ClassRelations` 里的 `Upstream` **不是同一个类型**：
+    那个装的是 `RelatedClass`（带 relationType 与 evidence），别混用。
+    """
 
     callers: list[str] = []
     caller_count: int = 0
@@ -149,8 +154,8 @@ class Upstream(CamelModel):
     subclass_count: int = 0
 
 
-class Downstream(CamelModel):
-    """这个类指向谁。"""
+class DownstreamSummary(CamelModel):
+    """这个类指向谁（**索引卡片**用的摘要形态）。"""
 
     callees: list[str] = []
     callee_count: int = 0
@@ -168,8 +173,8 @@ class ClassCard(ClassNode):
 
     method_count: int = 0
     methods: list[MethodBrief] = []
-    upstream: Upstream = Upstream()
-    downstream: Downstream = Downstream()
+    upstream: UpstreamSummary = UpstreamSummary()
+    downstream: DownstreamSummary = DownstreamSummary()
     methods_truncated: bool = False
     upstream_truncated: bool = False
     downstream_truncated: bool = False
@@ -251,7 +256,11 @@ class RelatedClass(CamelModel):
 
 
 class Upstream(CamelModel):
-    """谁指向我"""
+    """谁指向我（**class-relations** 工具用的关系形态）。
+
+    与索引卡片里的 `UpstreamSummary` 是两套形状：这里每项是 `RelatedClass`
+    （带 relationType 与 evidence），且 Java 会显式发 null，所以全为 `| None`。
+    """
 
     callers: list[RelatedClass] | None = None       # 谁调我
     dependents: list[RelatedClass] | None = None    # 谁依赖我
@@ -259,7 +268,7 @@ class Upstream(CamelModel):
 
 
 class Downstream(CamelModel):
-    """我指向谁"""
+    """我指向谁（**class-relations** 工具用的关系形态）。"""
 
     callees: list[RelatedClass] | None = None       # 我调谁
     dependencies: list[RelatedClass] | None = None  # 我依赖谁
