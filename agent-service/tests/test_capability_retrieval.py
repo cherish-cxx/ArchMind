@@ -183,13 +183,64 @@ async def test_capability_state_read_failure_only_affects_capability():
     assert cap_qdrant.calls == []
 
 
-async def test_class_state_read_failure_still_returns_state_unavailable():
-    r = Retriever(FakeEmbed(), FakeQdrant(), FakeIndexStore(None, raises=RuntimeError("redis")),
-                  capability_qdrant=FakeQdrant(),
+async def test_class_state_read_failure_keeps_healthy_capability_path():
+    """类状态读不到，但能力索引健康：embed 一次、只查能力。"""
+    embed = FakeEmbed()
+    class_qdrant = FakeQdrant([_class_point()])
+    cap_qdrant = FakeQdrant([_cap_point()])
+    r = Retriever(embed, class_qdrant, FakeIndexStore(None, raises=RuntimeError("redis")),
+                  capability_qdrant=cap_qdrant,
                   capability_store=FakeIndexStore({"activeRev": 7}))
+    result = await r.search(1, "怎么下单")
+
+    assert result.candidates == []
+    assert result.attempted is False
+    assert result.reason == "state_unavailable"
+    assert [c.uid for c in result.capabilities] == ["POST /orders"]
+    assert result.capability_reason is None
+    assert len(embed.calls) == 1
+    assert class_qdrant.calls == []
+    assert cap_qdrant.calls[0]["rev"] == 7
+
+
+async def test_class_state_read_failure_without_capability_returns_before_embed():
+    """三参数构造（能力没接线）：维持 R4 的「state_unavailable、不 embed」。"""
+    embed = FakeEmbed()
+    r = Retriever(embed, FakeQdrant(), FakeIndexStore(None, raises=RuntimeError("redis")))
     result = await r.search(1, "问题")
 
     assert result.reason == "state_unavailable"
+    assert result.capabilities == []
+    assert result.capability_reason is None
+    assert embed.calls == []
+
+
+async def test_class_state_read_failure_with_inactive_capability_returns_before_embed():
+    embed = FakeEmbed()
+    r = Retriever(embed, FakeQdrant(), FakeIndexStore(None, raises=RuntimeError("redis")),
+                  capability_qdrant=FakeQdrant(),
+                  capability_store=FakeIndexStore({"status": "failed"}))
+    result = await r.search(1, "问题")
+
+    assert result.reason == "state_unavailable"
+    assert result.capabilities == []
+    assert result.capability_reason == "failed"
+    assert embed.calls == []
+
+
+async def test_class_qdrant_failure_keeps_capability_candidates():
+    """反向隔离：类查询挂了，能力命中照常返回。"""
+    class_qdrant = FakeQdrant(raises=RuntimeError("down"))
+    cap_qdrant = FakeQdrant([_cap_point()])
+    r = Retriever(FakeEmbed(), class_qdrant, FakeIndexStore({"activeRev": 7}),
+                  capability_qdrant=cap_qdrant,
+                  capability_store=FakeIndexStore({"activeRev": 7}))
+    result = await r.search(1, "怎么下单")
+
+    assert result.candidates == []
+    assert result.attempted is True
+    assert result.reason == "qdrant_failed"
+    assert [c.uid for c in result.capabilities] == ["POST /orders"]
     assert result.capability_reason is None
 
 
@@ -211,12 +262,27 @@ async def test_embed_failure_marks_both_sides():
 def test_to_capability_never_raises_on_bad_payload():
     assert to_capability(SimpleNamespace(payload=None, score=0.1)) is None
     assert to_capability(SimpleNamespace(payload={"uid": "x"}, score=0.1)) is None
-    # 字段类型坏了也不能抛 —— 宁可丢这一个点
+    # 计数类型坏了不丢点 —— 退回默认值 0
     bad = SimpleNamespace(
         payload={"uid": "x", "entryUid": "a.C", "memberCount": "not-a-number"},
         score=0.1,
     )
-    assert to_capability(bad) is None
+    assert to_capability(bad).member_count == 0
+
+
+def test_to_capability_requires_non_empty_string_entry_uid():
+    # description 坏类型 + entryUid 不是字符串：整点丢弃
+    assert to_capability(_cap_point(description=123, entryUid=[])) is None
+    assert to_capability(_cap_point(entryUid="")) is None
+
+
+def test_to_capability_ignores_non_string_text_fields():
+    c = to_capability(_cap_point(description=123, name=456, areaName=[], areaUid=789))
+    assert c is not None
+    assert c.description is None
+    assert c.name == "POST /orders"
+    assert c.area_name == ""
+    assert c.area_uid == ""
 
 
 def test_to_capability_defaults_and_score():
@@ -265,13 +331,23 @@ def test_retrieve_detail_counts_both_kinds():
     assert _retrieve_detail(result) == "retrieve(1 classes, 1 capabilities)"
 
 
+def test_retrieve_detail_keeps_class_failure_with_capabilities():
+    result = Retrieval(
+        capabilities=[_capability(), _capability("GET /orders", "a.OrderController")],
+        attempted=True,
+        reason="qdrant_failed",
+    )
+    assert _retrieve_detail(result) == "retrieve(failed:qdrant_failed, 2 capabilities)"
+
+
 # ==================== 已知实体与轮首注入 ====================
 
 
-def test_seed_known_includes_capability_entry_uid():
+def test_seed_known_includes_capability_entry_uid_only():
     ctx = AgentContext(conversation_id="c1", project_id=7)
     known = _seed_known(ctx, Retrieval(capabilities=[_capability()]))
     assert "a.OrderController" in known
+    assert "POST /orders" not in known, "能力 uid 是入口的标签，不是可查询的实体"
 
 
 class _FixedRetriever:

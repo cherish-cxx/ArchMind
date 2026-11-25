@@ -55,16 +55,23 @@ class Retriever:
 
     async def search(self, project_id: int, query: str, k: int | None = None) -> Retrieval:
         """问题文本进，候选类 + 候选能力出。任何失败都退化成空候选。"""
-        # 类状态失败维持 R4 行为：整体不可查，立刻返回（现有测试的契约）。
+        # 两路状态独立读取：任一路读失败只影响自己。
+        class_state: dict | None = None
+        class_state_failed = False
         try:
-            state = await self._store.get_state(project_id)
+            class_state = await self._store.get_state(project_id)
         except Exception as e:
-            # 连状态都读不到（Redis 抖动）—— 和"没索引"同样处理，绝不往上抛
-            self._warn_throttled("state", "读取索引状态失败，本轮无候选: %s", e)
-            return Retrieval(reason="state_unavailable")
+            # 类状态读不到：类是主目标，但不能因此掐掉健康的能力检索。
+            self._warn_throttled("state", "读取索引状态失败，本轮无类候选: %s", e)
+            class_state_failed = True
 
-        class_rev = (state or {}).get("activeRev")
-        class_status = (state or {}).get("status") or "absent"
+        class_rev = (class_state or {}).get("activeRev")
+        if class_state_failed:
+            class_status = "state_unavailable"
+        else:
+            class_status = (class_state or {}).get("status") or "absent"
+        # 只有一边有 activeRev 时另一边记 absent；状态没读到则如实记 state_unavailable。
+        class_missing_reason = "state_unavailable" if class_state_failed else "absent"
 
         cap_state: dict | None = None
         cap_state_failed = False
@@ -83,27 +90,32 @@ class Retriever:
             cap_status = "state_unavailable"
         else:
             cap_status = (cap_state or {}).get("status") or "absent"
-        # 只有一边有 activeRev 时，另一边记 absent；但「状态根本没读到」
-        # 要如实记 state_unavailable，不能伪装成「没索引」。
         cap_missing_reason = "state_unavailable" if cap_state_failed else "absent"
 
-        # 两边都没有 activeRev 才是真正"没得查"。只有一边有时，
-        # 仍然 embed 一次并只查那一边，另一边记 absent。
-        if class_rev is None and cap_rev is None:
+        if class_state_failed:
+            # 能力健康才继续 embed 并只查能力；否则维持 R4「立刻返回、不 embed」。
+            if not (self._capability_enabled and cap_rev is not None):
+                return Retrieval(
+                    reason="state_unavailable",
+                    capability_reason=(cap_status if self._capability_enabled else None),
+                )
+        elif class_rev is None and cap_rev is None:
+            # 两边都没有 activeRev 才是真正"没得查"。只有一边有时，
+            # 仍然 embed 一次并只查那一边，另一边记 absent。
             return Retrieval(
                 reason=class_status,
                 capability_reason=(cap_status if self._capability_enabled else None),
             )
 
         partial = None
-        if (state or {}).get("partial"):
-            partial = f"{state.get('actual')}/{state.get('expected')}"
+        if not class_state_failed and (class_state or {}).get("partial"):
+            partial = f"{class_state.get('actual')}/{class_state.get('expected')}"
 
         vectors = await self._embed_query(query)
         if vectors is None:
             # embed 是两路共用的：只要那一路本来要查，就记 embed_failed。
             return Retrieval(
-                reason=("embed_failed" if class_rev is not None else "absent"),
+                reason=("embed_failed" if class_rev is not None else class_missing_reason),
                 capability_reason=(
                     ("embed_failed" if cap_rev is not None else cap_missing_reason)
                     if self._capability_enabled
@@ -141,7 +153,7 @@ class Retriever:
                 ]
                 attempted, class_reason = True, None
         else:
-            candidates, attempted, class_reason = [], False, "absent"
+            candidates, attempted, class_reason = [], False, class_missing_reason
 
         # ── 能力这一路（独立原因，互不覆盖）──
         capabilities: list[CapabilityCandidate] = []
@@ -234,29 +246,56 @@ def to_candidate(point) -> Candidate | None:
     )
 
 
+def _text(value, default=None):
+    """只接受非空字符串；其他类型一律退回 default（绝不 `str()` 强转）。"""
+    return value if isinstance(value, str) else default
+
+
+def _int(value, default: int = 0) -> int:
+    """int-like 才收：bool 不算，浮点只收整数值，其余退回 default。"""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return default
+
+
+def _float(value, default: float = 0.0) -> float:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    return default
+
+
 def to_capability(point) -> CapabilityCandidate | None:
     """Qdrant 的 ScoredPoint → CapabilityCandidate。
 
-    缺 `uid` 或 `entryUid` 的点丢弃 —— 没有入口类，能力候选就不可执行。
+    `uid` / `entryUid` 必须是**非空字符串**（没有入口类，能力候选就不可执行）；
+    其余字段按类型收：文本只收字符串，计数只收 int-like，坏类型退回默认值。
     **绝不抛异常**：一个坏 payload 不能把整轮检索打挂。
     """
     try:
         payload = point.payload or {}
-        uid = payload.get("uid")
-        entry_uid = payload.get("entryUid")
+        if not isinstance(payload, dict):
+            return None
+        uid = _text(payload.get("uid"))
+        entry_uid = _text(payload.get("entryUid"))
         if not uid or not entry_uid:
             return None
         return CapabilityCandidate(
             uid=uid,
-            name=payload.get("name") or uid,
-            description=payload.get("description"),
-            area_uid=payload.get("areaUid") or "",
-            area_name=payload.get("areaName") or "",
+            name=_text(payload.get("name")) or uid,
+            description=_text(payload.get("description")),
+            area_uid=_text(payload.get("areaUid"), ""),
+            area_name=_text(payload.get("areaName"), ""),
             entry_uid=entry_uid,
-            entry_kind=payload.get("entryKind"),
-            member_count=int(payload.get("memberCount") or 0),
-            rev=int(payload.get("rev") or 0),
-            score=float(getattr(point, "score", 0.0) or 0.0),
+            entry_kind=_text(payload.get("entryKind")),
+            member_count=_int(payload.get("memberCount")),
+            rev=_int(payload.get("rev")),
+            score=_float(getattr(point, "score", 0.0)),
         )
     except Exception:  # noqa: BLE001 —— payload 形状不可控，宁愿丢这一个点
         return None
