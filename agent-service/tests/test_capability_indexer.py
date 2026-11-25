@@ -4,12 +4,13 @@
 同款，只是分页接口换成 `capability_cards_page`。
 """
 
-import pytest
+import uuid
 
 from app.core.capability_indexer import CapabilityIndexer, capability_card_text
 from app.core.indexer import StaleGraphError
 from app.models.capability import CapabilityCard, CapabilityCardPage, CapabilityMember
 from app.models.tool import DescribeStatus, ToolEnvelope
+from app.store.index_store import IndexStore
 
 
 def _card(uid="POST /orders", desc="下单并扣减库存", members=None):
@@ -175,7 +176,6 @@ async def test_point_id_payload_and_count_check():
     await indexer._run(1, "token")
 
     point = qdrant.points[0]
-    import uuid
     assert point.id == str(uuid.uuid5(
         uuid.NAMESPACE_URL, "archmind:cap:1:POST /orders"))
     payload = point.payload
@@ -188,3 +188,13 @@ async def test_point_id_payload_and_count_check():
     assert payload["members"][0]["role"] == "ENTRY"
     assert store.state["count"] == 1
     assert store.state["activeRev"] == 7
+
+
+def test_namespaced_index_keys_are_isolated():
+    """能力索引的 Redis 键必须与类索引隔离；空命名空间保持 R4 原键。"""
+    plain = IndexStore(client=object())
+    scoped = IndexStore(client=object(), namespace="capability")
+    assert plain._state_key(7) == "archmind:index:state:7"
+    assert plain._lock_key(7) == "archmind:index:lock:7"
+    assert scoped._state_key(7) == "archmind:index:capability:state:7"
+    assert scoped._lock_key(7) == "archmind:index:capability:lock:7"
