@@ -340,6 +340,16 @@ def test_retrieve_detail_keeps_class_failure_with_capabilities():
     assert _retrieve_detail(result) == "retrieve(failed:qdrant_failed, 2 capabilities)"
 
 
+def test_retrieve_detail_labels_skipped_class_with_capabilities():
+    """类这一路根本没查（attempted=False）—— 是跳过，不是失败。"""
+    result = Retrieval(
+        capabilities=[_capability(), _capability("GET /orders", "a.OrderController")],
+        attempted=False,
+        reason="absent",
+    )
+    assert _retrieve_detail(result) == "retrieve(skipped:absent, 2 capabilities)"
+
+
 # ==================== 已知实体与轮首注入 ====================
 
 

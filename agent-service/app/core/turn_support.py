@@ -64,7 +64,9 @@ def _retrieve_detail(result: Retrieval) -> str:
     # 有能力命中时才换格式；没有能力命中时与 R4 的字符串逐字相同。
     capabilities = getattr(result, "capabilities", ()) or ()
     if capabilities:
-        # 类检索失败不能被能力命中掩盖：失败原因仍然要出现在步骤里。
+        # 有能力命中时格式要带上能力数；「跳过」和「查询失败」不能混为一谈。
+        if not result.attempted:
+            return f"retrieve(skipped:{result.reason}, {len(capabilities)} capabilities)"
         if result.reason:
             return f"retrieve(failed:{result.reason}, {len(capabilities)} capabilities)"
         return (
