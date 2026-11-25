@@ -1,9 +1,6 @@
 """能力卡片契约：路径、camelCase 参数、null 字段解析。"""
 
-import json
-
 import httpx
-import pytest
 
 from app.config import INTERNAL_TOKEN_HEADER
 from app.tools.java_client import JavaClient
@@ -57,3 +54,21 @@ async def test_capability_cards_page_is_get_with_camel_case_params():
     assert captured["params"] == {"projectId": "7", "afterUid": "POST /orders", "limit": "50"}
     assert page.data.items[0].uid == "POST /orders"
     assert page.data.items[0].members[1].role == "BUSINESS"
+
+
+async def test_capability_uid_with_hash_survives_query_encoding():
+    """Review Focus #1：uid 含 `#` 时也必须原样到达服务端，不能被切掉或再编码。"""
+    captured: dict = {}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(req.url.params)
+        return httpx.Response(200, json=_ENVELOPE)
+
+    c = JavaClient()
+    c._client = httpx.AsyncClient(
+        base_url="http://mock", transport=httpx.MockTransport(handler),
+        headers={INTERNAL_TOKEN_HEADER: "t"}, trust_env=False)
+
+    await c.capability_cards_page(7, after_uid="SCHEDULED a.Job#run()", limit=50)
+
+    assert captured["params"]["afterUid"] == "SCHEDULED a.Job#run()"
