@@ -540,6 +540,11 @@ async def evict(req: EvictRequest, request: Request,
         await request.app.state.indexer.delete_project(req.project_id)
     except Exception:
         logger.warning("清理向量索引失败 projectId=%s", req.project_id, exc_info=True)
+    # R8：能力索引是独立集合，尽力而为地一起清掉；失败同样只告警。
+    try:
+        await request.app.state.capability_indexer.delete_project(req.project_id)
+    except Exception:
+        logger.warning("清理能力索引失败 projectId=%s", req.project_id, exc_info=True)
     # R5：记忆随项目一起清。先删索引点再删行 —— 行删了点还在的话，
     # 过滤条件再怎么错也查不到已删项目的记忆。
     try:

@@ -23,3 +23,11 @@ def test_app_boots_and_health_ok() -> None:
         resp = c.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+def test_app_exposes_capability_indexer():
+    """R8：能力集合/状态/索引器由 lifespan 装配，关停时也要能正常释放。"""
+    with TestClient(app) as c:
+        assert hasattr(app.state, "capability_indexer")
+        assert hasattr(app.state, "capability_qdrant")
+        assert c.get("/health").status_code == 200

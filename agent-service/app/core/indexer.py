@@ -99,13 +99,17 @@ class Indexer:
         embed: EmbedClient,
         qdrant: QdrantStore,
         store: IndexStore,
+        *,
+        semaphore: asyncio.Semaphore | None = None,
     ) -> None:
         self._java = java
         self._embed = embed
         self._qdrant = qdrant
         self._store = store
-        # 全局一次只跑一个索引：embed 容器只有 3 核，并发只会互相拖慢
-        self._semaphore = asyncio.Semaphore(1)
+        # 全局一次只跑一个索引：embed 容器只有 3 核，并发只会互相拖慢。
+        # `semaphore` 由装配方注入时（main.lifespan），类与能力索引共用同一个实例 ——
+        # `/internal/index` 会同时启动两条链路，各持一把锁等于让 embed 并发。
+        self._semaphore = semaphore or asyncio.Semaphore(1)
         # 持有 task 引用，避免被 GC；按 projectId 记，删除项目时可以定向取消
         self._tasks: dict[int, asyncio.Task] = {}
 

@@ -69,13 +69,17 @@ class CapabilityIndexer:
         embed: EmbedClient,
         qdrant: QdrantStore,
         store: IndexStore,
+        *,
+        semaphore: asyncio.Semaphore | None = None,
     ) -> None:
         self._java = java
         self._embed = embed
         self._qdrant = qdrant
         self._store = store
-        # 与类索引共用的资源约束：embed 容器只有 3 核，一次只跑一个索引任务
-        self._semaphore = asyncio.Semaphore(1)
+        # embed 容器只有 3 核，一次只该跑一个索引任务。`/internal/index` 会同时
+        # 启动类与能力两条链路，所以装配方（main.lifespan）把**同一个**信号量
+        # 注入两个索引器；未注入时退化为各自一把，保持单测的独立构造方式可用。
+        self._semaphore = semaphore or asyncio.Semaphore(1)
         # 持有 task 引用，避免被 GC；按 projectId 记，删除项目时可以定向取消
         self._tasks: dict[int, asyncio.Task] = {}
 

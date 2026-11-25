@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from app.api.agent import router as agent_router
 from app.api.index import router as index_router
 from app.config import settings
+from app.core.capability_indexer import CapabilityIndexer
 from app.core.distiller import MemoryDistiller
 from app.core.indexer import Indexer
 from app.core.llm import LLMClient
@@ -53,14 +54,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.embed_client = EmbedClient()
     app.state.qdrant = QdrantStore()
     app.state.index_store = IndexStore()
+    # R8：类与能力索引共用一个信号量。`/internal/index` 会同时启动两条链路，
+    # 各自持一把锁等于让两次 embed 并发打到只有 3 核的容器上。
+    app.state.index_semaphore = asyncio.Semaphore(1)
     app.state.indexer = Indexer(
         app.state.java_client, app.state.embed_client,
         app.state.qdrant, app.state.index_store,
+        semaphore=app.state.index_semaphore,
+    )
+    # R8：能力索引走独立集合 + 独立 Redis 命名空间，失败不碰类索引。
+    app.state.capability_qdrant = QdrantStore(
+        collection=settings.qdrant_capability_collection
+    )
+    app.state.capability_index_store = IndexStore(namespace="capability")
+    app.state.capability_indexer = CapabilityIndexer(
+        app.state.java_client, app.state.embed_client,
+        app.state.capability_qdrant, app.state.capability_index_store,
+        semaphore=app.state.index_semaphore,
     )
     # R4：检索客户端。和 indexer 共用 embed/qdrant 实例 ——
     # 连接池是实例级的，各建一个等于把复用丢了。
     app.state.retriever = Retriever(
         app.state.embed_client, app.state.qdrant, app.state.index_store,
+        capability_qdrant=app.state.capability_qdrant,
+        capability_store=app.state.capability_index_store,
     )
     # R5：记忆。独立集合 + 同一次 embed 出来的向量 —— 模型共用，集合隔离。
     # 和 indexer 一样，构造时不联网；MySQL 不可达时记忆路径退化为"没有记忆"。
@@ -84,14 +101,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await app.state.distill_task
     await app.state.memory_distiller.aclose()
     await app.state.indexer.aclose()
+    await app.state.capability_indexer.aclose()
     await app.state.java_client.aclose()
     await app.state.llm_client.aclose()
     await app.state.context_store.aclose()
     await app.state.embed_client.aclose()
     await app.state.qdrant.aclose()
+    await app.state.capability_qdrant.aclose()
     # memory_repo 和 conversation_repo 共用 Database，不重复 dispose
     await app.state.memory_store.aclose()
     await app.state.index_store.aclose()
+    await app.state.capability_index_store.aclose()
 
 
 app = FastAPI(title="ArchMind Agent Service", version="0.1.0", lifespan=lifespan)
