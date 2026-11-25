@@ -1,9 +1,14 @@
 package com.example.archmind;
 
+import com.example.archmind.dto.response.ArchitectureGroupDto;
+import com.example.archmind.dto.response.ArchitectureLayerDto;
+import com.example.archmind.dto.response.ArchitectureLayerEdgeDto;
+import com.example.archmind.dto.response.ArchitectureLayersResponse;
 import com.example.archmind.dto.response.CapabilityDetailResponse;
 import com.example.archmind.dto.response.CapabilityDto;
 import com.example.archmind.dto.response.DomainMapResponse;
 import com.example.archmind.dto.response.MemberDto;
+import com.example.archmind.service.domain.ArchitectureQueryService;
 import com.example.archmind.service.domain.BusinessAreaResolver;
 import com.example.archmind.service.domain.Capability;
 import com.example.archmind.service.domain.CapabilityResolver;
@@ -51,6 +56,8 @@ class R8RemoteSmokeIT {
     private GraphSnapshotDao snapshotDao;
     @Autowired
     private DomainQueryService domainQueryService;
+    @Autowired
+    private ArchitectureQueryService architectureQueryService;
 
     @BeforeEach
     void requireExplicitOptIn() {
@@ -66,6 +73,7 @@ class R8RemoteSmokeIT {
             runPipeline();
             assertDomainMap();
             assertCapabilityDetail();
+            assertArchitectureLayers();
         } finally {
             clean();
         }
@@ -130,6 +138,43 @@ class R8RemoteSmokeIT {
         assertEquals("item", detail.areaCalls().get(0).toAreaUid());
         assertTrue(detail.areaCalls().get(0).fromClassUids().contains("demo.order.service.OrderService"),
                 "跨领域调用要记下来源类");
+    }
+
+    private void assertArchitectureLayers() {
+        ArchitectureLayersResponse resp = architectureQueryService.architecture(SMOKE_PROJECT_ID);
+
+        assertEquals(6, resp.classCount());
+        assertEquals(List.of("entry", "business", "domain-model",
+                        "infrastructure", "external", "other"),
+                resp.layers().stream().map(ArchitectureLayerDto::key).toList());
+        assertEquals(2, layer(resp, "entry").classCount());
+        assertEquals(2, layer(resp, "business").classCount());
+        assertEquals(2, layer(resp, "infrastructure").classCount());
+        assertEquals(0, layer(resp, "domain-model").classCount());
+        assertEquals(0, layer(resp, "other").classCount());
+
+        assertEquals(List.of("order", "item"),
+                layer(resp, "business").groups().stream().map(ArchitectureGroupDto::key).toList());
+        assertEquals("mapper", layer(resp, "infrastructure").groups().get(0).key());
+
+        // OrderService → ItemService 是业务层内部调用，不能算跨层边
+        assertEquals(2, resp.edges().size());
+        assertEquals(2, edgeCount(resp, "entry", "business"));
+        assertEquals(1, edgeCount(resp, "business", "infrastructure"));
+        assertTrue(resp.edges().stream()
+                        .flatMap(e -> e.samples().stream())
+                        .anyMatch(s -> s.fromUid().equals("demo.order.controller.OrderController")),
+                "入口 → 业务的样例必须包含真实来源类");
+    }
+
+    private static ArchitectureLayerDto layer(ArchitectureLayersResponse resp, String key) {
+        return resp.layers().stream().filter(l -> l.key().equals(key)).findFirst().orElseThrow();
+    }
+
+    private static int edgeCount(ArchitectureLayersResponse resp, String from, String to) {
+        return resp.edges().stream()
+                .filter(e -> e.fromLayer().equals(from) && e.toLayer().equals(to))
+                .mapToInt(ArchitectureLayerEdgeDto::count).findFirst().orElse(0);
     }
 
     private void seed() {
