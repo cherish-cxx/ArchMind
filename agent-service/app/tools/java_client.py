@@ -20,6 +20,7 @@ from typing import Any, TypeVar
 import httpx
 
 from app.config import INTERNAL_TOKEN_HEADER, settings
+from app.models.capability import CapabilityCardPage
 from app.models.tool import (
     BriefResponse,
     CallChain,
@@ -61,6 +62,7 @@ _PATH_CALL_CHAIN = f"{_PREFIX}/call-chain"
 _PATH_METHOD_BODY = f"{_PREFIX}/method-body"
 _PATH_CLASSES_PAGE = f"{_PREFIX}/classes/page"
 _PATH_CLASSES_CARDS = f"{_PREFIX}/classes/cards"
+_PATH_CAPABILITY_CARDS = f"{_PREFIX}/capabilities/cards"
 _PATH_DESCRIBE_STATUS = "/internal/describe/status"
 _PATH_BRIEF = "/internal/mcp/brief"
 
@@ -220,6 +222,21 @@ class JavaClient:
             params["afterUid"] = after_uid
         resp = await self._send("GET", _PATH_CLASSES_CARDS, params=params)
         return ToolEnvelope[ClassCardPage].model_validate(resp.json())
+
+    async def capability_cards_page(
+        self, project_id: int, after_uid: str | None = None, limit: int = DEFAULT_PAGE_SIZE
+    ) -> ToolEnvelope[CapabilityCardPage]:
+        """索引专用：一页能力卡片（领域 + 入口 + 成员类摘要）。
+
+        `after_uid` 是**不透明**的能力 uid（可能含空格、`/`、`#`），原样放进
+        query 交给 httpx 编码 —— 不要自己 `quote`，也不要 trim 或切分。
+        分页与 rev 语义和 `class_cards_page` 一致；调用方仍需在每页校验 rev。
+        """
+        params: dict[str, Any] = {"projectId": project_id, "limit": limit}
+        if after_uid:
+            params["afterUid"] = after_uid
+        resp = await self._send("GET", _PATH_CAPABILITY_CARDS, params=params)
+        return ToolEnvelope[CapabilityCardPage].model_validate(resp.json())
 
     async def describe_status(self, project_id: int) -> DescribeStatus:
         """描述覆盖情况。只有 `pending == 0` 且分析完成才允许建索引。"""
