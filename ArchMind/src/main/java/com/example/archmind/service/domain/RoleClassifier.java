@@ -45,20 +45,20 @@ public class RoleClassifier {
         ANNOTATION_ROLES.put("TableName", Role.DOMAIN_MODEL);
         ANNOTATION_ROLES.put("FeignClient", Role.EXTERNAL);
 
-        for (String seg : List.of("controller", "web", "rest")) {
+        for (String seg : List.of("controller", "web", "rest", "listener")) {
             PACKAGE_SEGMENT_ROLES.put(seg, Role.ENTRY);
         }
         for (String seg : List.of("service", "biz", "usecase", "application")) {
             PACKAGE_SEGMENT_ROLES.put(seg, Role.BUSINESS);
         }
-        for (String seg : List.of("domain", "model", "entity", "po", "vo", "dto", "bo")) {
+        for (String seg : List.of("domain", "model", "entity", "po", "vo", "dto", "bo", "enums")) {
             PACKAGE_SEGMENT_ROLES.put(seg, Role.DOMAIN_MODEL);
         }
         for (String seg : List.of("mapper", "dao", "repository", "infra", "config", "common",
-                "util", "exception", "aspect", "filter", "interceptor")) {
+                "util", "utils", "exception", "aspect", "filter", "filters", "interceptor")) {
             PACKAGE_SEGMENT_ROLES.put(seg, Role.INFRASTRUCTURE);
         }
-        for (String seg : List.of("client", "feign", "remote", "gateway")) {
+        for (String seg : List.of("client", "feign", "remote")) {
             PACKAGE_SEGMENT_ROLES.put(seg, Role.EXTERNAL);
         }
 

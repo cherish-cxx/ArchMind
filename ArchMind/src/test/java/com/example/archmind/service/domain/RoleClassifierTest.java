@@ -76,6 +76,48 @@ class RoleClassifierTest {
         assertEquals("package", r.get("com.acme.common.controller.UserHandler").basis());
     }
 
+    @Test
+    void treatsUtilsPluralAsInfrastructure() {
+        var r = new RoleClassifier().classify(List.of(
+                cls("com.hmall.utils.JwtTool", "com.hmall.utils", List.of("Component"), List.of(), "")));
+        assertEquals(Role.INFRASTRUCTURE, r.get("com.hmall.utils.JwtTool").role());
+        assertEquals("package", r.get("com.hmall.utils.JwtTool").basis());
+    }
+
+    @Test
+    void treatsEnumsPackageAsDomainModel() {
+        var r = new RoleClassifier().classify(List.of(
+                cls("com.hmall.enums.PayChannel", "com.hmall.enums", List.of("Getter"), List.of(), "")));
+        assertEquals(Role.DOMAIN_MODEL, r.get("com.hmall.enums.PayChannel").role());
+        assertEquals("package", r.get("com.hmall.enums.PayChannel").basis());
+    }
+
+    @Test
+    void gatewayFiltersAreInfrastructureNotExternal() {
+        var r = new RoleClassifier().classify(List.of(
+                cls("com.hmall.gateway.filters.MyGlobalFilter", "com.hmall.gateway.filters",
+                        List.of("Component"), List.of(), "")));
+        assertEquals(Role.INFRASTRUCTURE, r.get("com.hmall.gateway.filters.MyGlobalFilter").role());
+    }
+
+    @Test
+    void listenerPackageIsEntry() {
+        var r = new RoleClassifier().classify(List.of(
+                cls("com.hmall.trade.listener.PayStatusListener", "com.hmall.trade.listener",
+                        List.of("Component"), List.of(), "")));
+        assertEquals(Role.ENTRY, r.get("com.hmall.trade.listener.PayStatusListener").role());
+        assertEquals("package", r.get("com.hmall.trade.listener.PayStatusListener").basis());
+    }
+
+    @Test
+    void stillTreatsClientPackagesAsExternal() {
+        var r = new RoleClassifier().classify(List.of(
+                cls("com.hmall.item.client.ItemClient", "com.hmall.item.client", List.of(), List.of(), ""),
+                cls("com.hmall.api.client.FallbackFactory", "com.hmall.api.client", List.of(), List.of(), "")));
+        assertEquals(Role.EXTERNAL, r.get("com.hmall.item.client.ItemClient").role());
+        assertEquals(Role.EXTERNAL, r.get("com.hmall.api.client.FallbackFactory").role());
+    }
+
     private static ClassSnapshot cls(String uid, String packageName, List<String> annotations,
                                      List<String> interfaces, String superclass) {
         String simpleName = uid.substring(uid.lastIndexOf('.') + 1);
