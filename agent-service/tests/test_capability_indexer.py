@@ -4,7 +4,10 @@
 同款，只是分页接口换成 `capability_cards_page`。
 """
 
+import asyncio
 import uuid
+
+import pytest
 
 from app.core.capability_indexer import CapabilityIndexer, capability_card_text
 from app.core.indexer import StaleGraphError
@@ -91,6 +94,7 @@ class FakeQdrant:
 class FakeStore:
     def __init__(self):
         self.state: dict | None = None
+        self.released = False
 
     async def get_state(self, project_id: int) -> dict | None:
         return self.state
@@ -102,7 +106,7 @@ class FakeStore:
         return "token"
 
     async def release_lock(self, project_id: int, token: str) -> None:
-        pass
+        self.released = True
 
 
 def _status(rev: int = 7) -> DescribeStatus:
@@ -198,3 +202,25 @@ def test_namespaced_index_keys_are_isolated():
     assert plain._lock_key(7) == "archmind:index:lock:7"
     assert scoped._state_key(7) == "archmind:index:capability:state:7"
     assert scoped._lock_key(7) == "archmind:index:capability:lock:7"
+
+
+async def test_cancelled_while_queued_still_releases_lock():
+    """排队等 semaphore 时被取消（/admin/evict）：锁必须释放，且不写状态。
+
+    否则锁会占满 TTL，delete_project 拿不到锁，留下孤儿能力点与状态。
+    """
+    store = FakeStore()
+    indexer = CapabilityIndexer(FakeJava(_status(), {}), FakeEmbed(), FakeQdrant(), store)
+    blocker = asyncio.Semaphore(1)
+    await blocker.acquire()
+    indexer._semaphore = blocker
+
+    task = asyncio.create_task(indexer._run(1, "token"))
+    await asyncio.sleep(0)  # 让任务真正阻塞在 semaphore.acquire() 上
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert store.released is True
+    assert store.state is None

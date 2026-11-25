@@ -133,22 +133,26 @@ class CapabilityIndexer:
             await asyncio.gather(*self._tasks.values(), return_exceptions=True)
 
     async def _run(self, project_id: int, token: str) -> None:
-        async with self._semaphore:
-            try:
-                await self._index(project_id)
-            except Exception as e:
-                logger.exception("能力索引失败 projectId=%s", project_id)
-                # **保留 activeRev**：失败的是这一版，不是整个项目。
-                # 覆盖掉它会让一个还能用旧能力索引的项目彻底失去检索能力。
-                previous = await self._store.get_state(project_id) or {}
-                await self._store.set_state(project_id, {
-                    **previous,
-                    "status": "failed",
-                    "pendingRev": None,
-                    "error": str(e)[:500],
-                })
-            finally:
-                await self._store.release_lock(project_id, token)
+        # 锁的释放在 semaphore 之外：任务可能在排队等 semaphore 时被取消
+        # （如 /admin/evict），那时还没进任何 try/finally。若把 release 放在
+        # 里面，锁会一直占着到 TTL 过期，delete_project 就永远拿不到。
+        try:
+            async with self._semaphore:
+                try:
+                    await self._index(project_id)
+                except Exception as e:
+                    logger.exception("能力索引失败 projectId=%s", project_id)
+                    # **保留 activeRev**：失败的是这一版，不是整个项目。
+                    # 覆盖掉它会让一个还能用旧能力索引的项目彻底失去检索能力。
+                    previous = await self._store.get_state(project_id) or {}
+                    await self._store.set_state(project_id, {
+                        **previous,
+                        "status": "failed",
+                        "pendingRev": None,
+                        "error": str(e)[:500],
+                    })
+        finally:
+            await self._store.release_lock(project_id, token)
 
     async def _index(self, project_id: int) -> None:
         status = await self._java.describe_status(project_id)
