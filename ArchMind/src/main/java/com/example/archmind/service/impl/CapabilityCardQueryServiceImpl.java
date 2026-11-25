@@ -37,10 +37,9 @@ public class CapabilityCardQueryServiceImpl implements CapabilityCardQueryServic
      * 入口类型（Endpoint 与能力同 uid），每条能力一行。
      */
     static final String CAPABILITY_PAGE = """
-            MATCH (cap:Capability:CodeNode {projectId:$pid})
+            MATCH (cap:Capability:CodeNode {projectId:$pid})-[:IN_AREA]->(a:BusinessArea {projectId:$pid})
             WHERE $afterUid IS NULL OR cap.uid > $afterUid
-            WITH cap ORDER BY cap.uid LIMIT $limit
-            MATCH (cap)-[:IN_AREA]->(a:BusinessArea {projectId:$pid})
+            WITH cap, a ORDER BY cap.uid LIMIT $limit
             OPTIONAL MATCH (cap)<-[p:PART_OF_CAPABILITY]-(c:Class {projectId:$pid})
             WITH cap, a, count(c) AS memberCount
             OPTIONAL MATCH (e:Endpoint {projectId:$pid}) WHERE e.uid = cap.uid
