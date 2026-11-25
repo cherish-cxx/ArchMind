@@ -45,7 +45,12 @@ from app.core.turn_support import (
     ui_commands_for,
 )
 from app.core.memory import MemoryService
-from app.core.prompt import agent_system, render_candidates, render_tool_result
+from app.core.prompt import (
+    agent_system,
+    render_candidates,
+    render_capabilities,
+    render_tool_result,
+)
 from app.core.retriever import Retriever
 from app.core.step_sink import add_step as _add_step
 from app.models.context import AgentContext, ChatMessage, MessageRole, ToolCall, ToolResult
@@ -239,6 +244,13 @@ async def run_agent_turn(
         ctx.append_retrieval(
             render_candidates(retrieval.candidates),
             uids=[c.uid for c in retrieval.candidates],
+        )
+    # 能力候选单独一条 retrieval 消息；为空时完全不出现，保持「没命中就逐字不变」。
+    # uids 用 entry_uid：那才是能照抄去调工具的入口类。
+    if getattr(retrieval, "capabilities", None):
+        ctx.append_retrieval(
+            render_capabilities(retrieval.capabilities),
+            uids=[c.entry_uid for c in retrieval.capabilities],
         )
     #记忆召回
     memory_hits: list[MemoryHit] = []
@@ -960,6 +972,9 @@ def _seed_known(ctx: AgentContext, retrieval: Any) -> set[str]:
         known.add(owner_of(ctx.method_uid))
     for candidate in getattr(retrieval, "candidates", ()) or ():
         known.add(candidate.uid)
+    # 能力候选本身不是类 uid；能当起点的只有入口类。
+    for cap in getattr(retrieval, "capabilities", ()) or ():
+        known.add(cap.entry_uid)
     return known
 
 

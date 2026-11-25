@@ -61,6 +61,13 @@ async def retrieve(
 
 
 def _retrieve_detail(result: Retrieval) -> str:
+    # 有能力命中时才换格式；没有能力命中时与 R4 的字符串逐字相同。
+    capabilities = getattr(result, "capabilities", ()) or ()
+    if capabilities:
+        return (
+            f"retrieve({len(result.candidates)} classes, "
+            f"{len(capabilities)} capabilities)"
+        )
     if not result.attempted:
         return f"retrieve(skipped:{result.reason})"
     if result.reason:

@@ -15,7 +15,7 @@ import json
 from app.core.memory import render_memories
 from app.models.context import AgentContext
 from app.models.memory import MemoryHit
-from app.models.retrieval import Candidate
+from app.models.retrieval import Candidate, CapabilityCandidate
 from app.models.tool import (
     CallChain,
     ClassRelations,
@@ -87,6 +87,32 @@ def _candidates_block(candidates: list[Candidate] | None) -> str:
 def render_candidates(candidates: list[Candidate] | None) -> str:
     """检索候选渲染成文本 —— 供循环写进 retrieval 消息。"""
     return _candidates_block(candidates)
+
+
+def _capabilities_block(caps: list[CapabilityCandidate] | None) -> str:
+    """能力候选渲染成一段给模型看的文本。
+
+    **候选为空时返回空串** —— 没有能力命中时消息与 R8 之前逐字相同。
+    块首明确写「候选，不是证据」：能力 uid 和类 uid 一样不能进 citedUids，
+    只有 `entry_uid` 可以照抄去调工具。
+    """
+    if not caps:
+        return ""
+    lines = ["本项目检索到的业务能力（候选，不是证据；入口类 uid 可照抄）："]
+    for i, c in enumerate(caps, 1):
+        desc = (c.description or "").strip().replace("\n", " ")
+        if len(desc) > 60:
+            desc = desc[:60] + "…"
+        lines.append(
+            f"{i}. {c.name or c.uid}（{c.uid}）| 领域：{c.area_name or c.area_uid}"
+            f" | 入口：{c.entry_uid} | {c.member_count} 个类 | {desc}"
+        )
+    return "\n".join(lines)
+
+
+def render_capabilities(caps: list[CapabilityCandidate] | None) -> str:
+    """能力候选渲染成文本 —— 供循环写进第二条 retrieval 消息。"""
+    return _capabilities_block(caps)
 
 
 # ==================== 工具结果渲染 ====================
