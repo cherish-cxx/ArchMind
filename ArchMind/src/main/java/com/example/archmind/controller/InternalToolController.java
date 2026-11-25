@@ -4,6 +4,7 @@ import com.example.archmind.common.exception.BusinessException;
 import com.example.archmind.common.util.CheckProjectUtil;
 import com.example.archmind.dto.request.InternalToolRequest;
 import com.example.archmind.dto.response.CallChainResponse;
+import com.example.archmind.dto.response.CapabilityCardPageResponse;
 import com.example.archmind.dto.response.ClassCardPageResponse;
 import com.example.archmind.dto.response.ClassNodeDTO;
 import com.example.archmind.dto.response.ClassPageResponse;
@@ -20,6 +21,7 @@ import com.example.archmind.service.ast.CodeGraphQueryService;
 import com.example.archmind.service.ast.GraphRevService;
 import com.example.archmind.service.ast.MethodBodyService;
 import com.example.archmind.service.ast.RelationDirection;
+import com.example.archmind.service.domain.CapabilityCardQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -63,6 +65,7 @@ public class InternalToolController {
     private final MethodBodyService methodBodyService;
     private final GraphRevService graphRevService;
     private final CheckProjectUtil checkProjectUtil;
+    private final CapabilityCardQueryService capabilityCardQueryService;
 
     /** 这个项目是做什么的。数据源是 project_overview 表，不碰图 —— 未落图的项目也能答 */
     @PostMapping("/overview")
@@ -151,6 +154,25 @@ public class InternalToolController {
             return stamp(ToolEnvelope.success(data), projectId);
         } catch (BusinessException e) {
             log.warn("classes/cards 返回失败 projectId={}: {}", projectId, e.getMessage());
+            return stamp(ToolEnvelope.failure(e.getMessage()), projectId);
+        }
+    }
+
+    /**
+     * 索引服务专用：按能力 uid 游标分页拉取带描述的能力卡片。
+     * 每页最多 200，响应带 rev；调用方发现 rev 变化要中止重来。
+     */
+    @GetMapping("/capabilities/cards")
+    public ToolEnvelope<CapabilityCardPageResponse> capabilityCardsPage(
+            @RequestParam Long projectId,
+            @RequestParam(required = false) String afterUid,
+            @RequestParam(defaultValue = "200") int limit) {
+        try {
+            checkProjectUtil.checkProjectExists(projectId);
+            return stamp(ToolEnvelope.success(
+                    capabilityCardQueryService.listCapabilityCardsPage(projectId, afterUid, limit)), projectId);
+        } catch (BusinessException e) {
+            log.warn("capabilities/cards 返回失败 projectId={}: {}", projectId, e.getMessage());
             return stamp(ToolEnvelope.failure(e.getMessage()), projectId);
         }
     }
