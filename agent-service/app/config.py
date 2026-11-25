@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     embed_url: str = "http://localhost:8010"
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "archmind_classes"
+    # 能力索引独立集合：与类索引分开，能力索引失败/重建不碰类集合
+    qdrant_capability_collection: str = "archmind_capabilities"
     # 一页 200 个类、一次 embed 32 条、一次 upsert 64 个点 —— 都是保守值
     index_page_size: int = 200
     index_embed_batch: int = 32

@@ -20,8 +20,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_STATE_PREFIX = "archmind:index:state:"
-_LOCK_PREFIX = "archmind:index:lock:"
+_PREFIX = "archmind:index:"
 
 _RELEASE_LOCK = """
 if redis.call('get', KEYS[1]) == ARGV[1] then
@@ -33,24 +32,31 @@ end
 
 
 class IndexStore:
-    def __init__(self, client: redis.asyncio.Redis | None = None) -> None:
+    def __init__(
+        self,
+        client: redis.asyncio.Redis | None = None,
+        *,
+        namespace: str = "",
+    ) -> None:
         self._redis = client or redis.asyncio.from_url(
             settings.redis_url,
             db=settings.redis_db,
             password=settings.redis_password or None,
             decode_responses=True,
         )
+        # namespace 为空时保持 R4 现有键：archmind:index:state:{pid} / ...:lock:{pid}。
+        # 能力索引用 namespace="capability"，键变成
+        # archmind:index:capability:state:{pid} / ...:lock:{pid}，两套状态互不干扰。
+        self._prefix = f"{_PREFIX}{namespace}:" if namespace else _PREFIX
 
     async def aclose(self) -> None:
         await self._redis.aclose()
 
-    @staticmethod
-    def _state_key(project_id: int) -> str:
-        return f"{_STATE_PREFIX}{project_id}"
+    def _state_key(self, project_id: int) -> str:
+        return f"{self._prefix}state:{project_id}"
 
-    @staticmethod
-    def _lock_key(project_id: int) -> str:
-        return f"{_LOCK_PREFIX}{project_id}"
+    def _lock_key(self, project_id: int) -> str:
+        return f"{self._prefix}lock:{project_id}"
 
     async def get_state(self, project_id: int) -> dict | None:
         raw = await self._redis.get(self._state_key(project_id))
